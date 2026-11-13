@@ -122,14 +122,17 @@ export default async function HomePage() {
       </section>
 
       {/* 3. Bestsellers */}
+      {bestsellers.length ? (
       <section className="bg-muted/50 py-16 sm:py-20">
         <Container>
           <SectionHeading eyebrow="Most loved" title="Bestsellers" description="The rides families choose again and again." href="/shop?sort=rating" />
           <ProductGrid products={bestsellers} />
         </Container>
       </section>
+      ) : null}
 
       {/* 4. New arrivals */}
+      {newArrivals.length ? (
       <section className="py-16 sm:py-20">
         <Container>
           <SectionHeading eyebrow="Just landed" title="New arrivals" href="/shop?sort=newest" />
@@ -144,8 +147,10 @@ export default async function HomePage() {
           </ul>
         </div>
       </section>
+      ) : null}
 
       {/* 5. Special offers */}
+      {offers.length ? (
       <section className="py-4 sm:py-8">
         <Container>
           <div className="grid overflow-hidden rounded-3xl bg-deep lg:grid-cols-[1fr_1.6fr]">
@@ -168,8 +173,10 @@ export default async function HomePage() {
           </div>
         </Container>
       </section>
+      ) : null}
 
       {/* 6. Featured brands */}
+      {brands.length ? (
       <section className="py-16 sm:py-20">
         <Container>
           <SectionHeading eyebrow="Trusted makers" title="Featured brands" align="center" />
@@ -188,6 +195,7 @@ export default async function HomePage() {
           </ul>
         </Container>
       </section>
+      ) : null}
 
       {/* 7. Why choose KING DAY */}
       <section className="bg-royal-50/60 py-16 sm:py-20">
@@ -211,6 +219,7 @@ export default async function HomePage() {
       </section>
 
       {/* 8. Customer reviews */}
+      {reviews.length ? (
       <section className="py-16 sm:py-20">
         <Container>
           <SectionHeading eyebrow="Happy little royals" title="What parents say" description={source === "preview" ? "Sample reviews shown in preview mode." : undefined} align="center" />
@@ -229,6 +238,7 @@ export default async function HomePage() {
           </ul>
         </Container>
       </section>
+      ) : null}
 
       {/* 9. Promotional banners */}
       <section className="pb-16 sm:pb-20">

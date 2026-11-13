@@ -44,7 +44,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .select(
         `id, name, slug, short_description, description, highlights, age_range, video_path, is_featured,
          seo_title, seo_description, published_at, created_at,
-         category:categories(slug, name, parent:categories!categories_parent_id_fkey(slug)),
+         category:categories(slug, name, parent:parent_id(slug)),
          brand:brands(slug, name),
          product_variants(id, sku, name, options, mrp, price, is_default, is_active, position, inventory(on_hand, reserved)),
          product_images(storage_path, alt, position),
@@ -55,7 +55,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .limit(1000),
     supabase
       .from("categories")
-      .select("slug, name, description, image_path, seo_title, seo_description, sort_order, parent:categories!categories_parent_id_fkey(slug)")
+      .select("slug, name, description, image_path, seo_title, seo_description, sort_order, parent:parent_id(slug)")
       .eq("is_active", true)
       .order("sort_order"),
     supabase.from("brands").select("slug, name, description, logo_path").eq("is_active", true).order("name"),

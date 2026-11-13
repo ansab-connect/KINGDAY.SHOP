@@ -3,6 +3,11 @@
 These steps connect KING DAY to a Supabase project. Everything in the database
 (tables, rules, buckets) comes from the files in `supabase/`; do not create tables by hand.
 
+## Current project
+
+- Project: `kingday-shop` · region South Asia (Mumbai) `ap-south-1` · ref `dfvealcuylvqazonqzys`
+- Database setup applied 2026-11-13 (all migrations + seed); redirect URLs configured.
+
 ## 1. Create the project
 
 1. Create a project at supabase.com (region: Mumbai `ap-south-1` is closest to customers in India).
@@ -40,7 +45,11 @@ Then run `supabase/seed.sql` once, in the SQL editor or with `psql`. It contains
 - **URL configuration**
   - Site URL: `http://localhost:3000` (later `https://kingday.shop`).
   - Redirect URLs: add `http://localhost:3000/auth/confirm` and `https://kingday.shop/auth/confirm`.
-- **Email templates.** Use the token-hash links. They work even when the email is opened on a different device.
+- **Email templates.** Supabase only allows editing templates once custom SMTP is set up (planned for launch,
+  Phase 12). Until then the default templates are used: their links carry a PKCE `code`, which
+  `/auth/confirm` already handles. Limitation: the link must be opened **in the same browser** used to
+  sign up or request the reset. After SMTP is configured, switch to the token-hash templates below,
+  which work on any device.
   - Confirm signup:
     `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/account`
   - Reset password:
