@@ -50,3 +50,32 @@ Dashboard charts are small hand-written SVG components. This avoids a dependency
   auto-submits when a control changes.
 - Cart, checkout, account, wishlist and policy pages are honest placeholders until their phases.
   Policy text must be written and approved by KING DAY.
+
+## 2026-11-13 — Phase 4: Supabase schema, RLS and auth
+
+- **Migrations** live in `supabase/migrations` (9 files). `supabase/seed.sql` holds reference data only.
+  `npm run test:db` applies every migration to an in-memory Postgres 17 (PGlite) with small
+  Supabase stand-ins (`supabase/tests/supabase-stubs.sql`), then runs 41 checks against the
+  security rules and business rules. No Docker is needed.
+- **Business rules are enforced in the database, not only in the app:**
+  - unique SKU per variant, and price ≤ MRP
+  - stock that can't go negative: `adjust_stock()` locks the row, and an append-only ledger records every change
+  - price snapshots on order items
+  - fixed order totals, which must add up correctly
+  - allowed order-status transitions, logged to history
+  - payment status settable only by the service role (staff may record COD collection)
+  - reviews forced to "pending" until moderated
+  - coupons never readable by customers
+- **Cost prices** live in `variant_costs`, a separate staff-only table, because RLS works on rows, not columns.
+- **Session refresh:** `src/proxy.ts`, as Supabase recommends for Next 16, limited by a matcher to
+  routes that use the session. OpenNext 1.20.15+ bundles Node-runtime proxies. Open issue #1373
+  (large proxy bundles) must be checked against the Workers size limit in Phase 12. If it's
+  too big, the proxy can be removed: authorisation never depends on it.
+- **Authorisation happens in each page, not only the layout.** A production check showed that a
+  check in the admin layout alone still let page content be rendered and sent, because Next.js
+  renders layouts and pages independently. Every admin page is wrapped in `<StaffOnly>`, server
+  actions use `assertStaff()`, and RLS enforces the same rules a third time.
+- **No Supabase keys:** the admin is open with a banner only under `next dev`. Any production build
+  without keys shows "Admin unavailable" and sends no data.
+- **Auth links** use `/auth/confirm` with token-hash email templates, so a link opened on another
+  device still works. PKCE `code` links are also accepted.

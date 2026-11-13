@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { signOut } from "@/features/auth/actions";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const previewNotifications = [
@@ -25,8 +26,20 @@ const previewNotifications = [
   { id: 3, title: "Payment received", detail: "KD-1449 · Razorpay", time: "3 hrs ago" },
 ];
 
-export function AdminHeader() {
+const roleLabel: Record<string, string> = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  staff: "Staff",
+  customer: "Customer",
+};
+
+export type AdminHeaderUser = { name: string; email: string | null; role: string } | null;
+
+export function AdminHeader({ user }: { user: AdminHeaderUser }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const name = user?.name ?? "Preview Admin";
+  const role = user ? (roleLabel[user.role] ?? user.role) : "Development preview";
+  const initials = name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "KD";
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:px-6">
@@ -87,18 +100,18 @@ export function AdminHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-10 gap-2 px-2" aria-label="Account menu">
               <Avatar className="size-8">
-                <AvatarFallback className="bg-royal text-xs font-semibold text-white">KD</AvatarFallback>
+                <AvatarFallback className="bg-royal text-xs font-semibold text-white">{initials}</AvatarFallback>
               </Avatar>
               <span className="hidden text-left leading-tight sm:block">
-                <span className="block text-sm font-medium">Store Admin</span>
-                <span className="block text-xs text-muted-foreground">Super Admin</span>
+                <span className="block max-w-36 truncate text-sm font-medium">{name}</span>
+                <span className="block text-xs text-muted-foreground">{role}</span>
               </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <span className="block">Store Admin</span>
-              <span className="block text-xs font-normal text-muted-foreground">Sign-in arrives in Phase 4</span>
+              <span className="block truncate">{name}</span>
+              <span className="block truncate text-xs font-normal text-muted-foreground">{user?.email ?? role}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
@@ -115,9 +128,20 @@ export function AdminHeader() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
-              <LogOut /> Sign out
-            </DropdownMenuItem>
+            {user ? (
+              <form action={signOut}>
+                <input type="hidden" name="next" value="/admin/login" />
+                <DropdownMenuItem asChild>
+                  <button type="submit" className="w-full">
+                    <LogOut /> Sign out
+                  </button>
+                </DropdownMenuItem>
+              </form>
+            ) : (
+              <DropdownMenuItem disabled>
+                <LogOut /> Sign out
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

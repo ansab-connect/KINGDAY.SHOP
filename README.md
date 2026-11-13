@@ -9,7 +9,7 @@ cycles, toys and baby accessories.
 - Customer website: `/`
 - Admin panel: `/admin`
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DECISIONS.md](docs/DECISIONS.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DECISIONS.md](docs/DECISIONS.md) and [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 
 ## Requirements
 
@@ -33,6 +33,7 @@ npm run dev                  # http://localhost:3000
 | `npm run preview` | Build with OpenNext and run locally in the Workers runtime (`.dev.vars`) |
 | `npm run deploy` | Build and deploy to Cloudflare Workers (requires approval, not yet configured) |
 | `npm run cf-typegen` | Generate `cloudflare-env.d.ts` binding types |
+| `npm run test:db` | Apply all migrations to a local Postgres and run the RLS/business-rule checks |
 
 ## Environment & secrets
 
@@ -42,6 +43,6 @@ npm run dev                  # http://localhost:3000
 
 ## Roadmap
 
-1. Foundation ✅ · 2. Admin panel UI ✅ · 3. Storefront UI ✅ · 4. Supabase (schema, RLS, auth, storage) ·
+1. Foundation ✅ · 2. Admin panel UI ✅ · 3. Storefront UI ✅ · 4. Supabase (schema, RLS, auth, storage) ✅ ·
 5. Products · 6. Inventory · 7. Customers · 8. Cart/Checkout/Razorpay/COD · 9. Orders ·
 10. Analytics · 11. Security & testing · 12. Deployment
