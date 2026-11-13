@@ -31,6 +31,17 @@ export function formatPercent(value: number, digits = 1): string {
   return `${sign}${value.toFixed(digits)}%`;
 }
 
+const dateFmt = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+const dateTimeFmt = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+
+export function formatDate(d: Date): string {
+  return dateFmt.format(d);
+}
+
+export function formatDateTime(d: Date): string {
+  return dateTimeFmt.format(d);
+}
+
 export function discountPercent(mrpPaise: number, sellingPaise: number): number {
   if (mrpPaise <= 0 || sellingPaise >= mrpPaise) return 0;
   return Math.round(((mrpPaise - sellingPaise) / mrpPaise) * 100);
