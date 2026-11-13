@@ -39,12 +39,14 @@ export async function ProductListing({
 }) {
   const parsed = parseFilters(await searchParams);
   const filters: ProductFilters = { ...parsed, ...fixed };
-  const { items, total, page, pageCount } = getProducts(filters);
+  const [{ items, total, page, pageCount }, categories, brands, bounds] = await Promise.all([
+    getProducts(filters),
+    getCategories(),
+    getBrands(),
+    getPriceBounds(),
+  ]);
   const href = (patch: Partial<ProductFilters>) => buildHref(basePath, filters, fixed, { page: 1, ...patch });
 
-  const categories = getCategories();
-  const brands = getBrands();
-  const bounds = getPriceBounds();
 
   const chips: { label: string; href: string }[] = [];
   if (filters.q) chips.push({ label: `“${filters.q}”`, href: href({ q: undefined }) });

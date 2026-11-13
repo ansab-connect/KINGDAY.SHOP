@@ -32,7 +32,7 @@ export function ProductCard({ product, priority = false }: { product: StoreProdu
         ) : null}
       </div>
       <div className="mt-3 flex flex-1 flex-col gap-1.5 px-0.5">
-        <p className="text-[0.7rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{product.brand.name}</p>
+        <p className="text-[0.7rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{product.brand?.name ?? product.category.name}</p>
         <h3 className="line-clamp-2 font-heading text-[0.95rem] leading-snug font-semibold text-deep">
           <Link href={`/products/${product.slug}`} className="after:absolute after:inset-0 focus-visible:outline-none">
             {product.name}

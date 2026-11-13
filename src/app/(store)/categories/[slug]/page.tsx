@@ -5,19 +5,21 @@ import { PageHero } from "@/components/store/page-hero";
 import { Container } from "@/components/store/section";
 import { ListingSkeleton } from "@/components/store/shop/listing-skeleton";
 import { ProductListing } from "@/components/store/shop/product-listing";
-import { getCategories, getCategoryBySlug } from "@/features/catalog/queries";
+import { getAllCategories, getCategoryBySlug } from "@/features/catalog/queries";
 
-export function generateStaticParams() {
-  return getCategories().map((c) => ({ slug: c.slug }));
+export async function generateStaticParams() {
+  const all = await getAllCategories();
+  // Cache Components requires at least one param; an unknown slug renders the 404 page.
+  return all.length ? all.map((c) => ({ slug: c.slug })) : [{ slug: "all" }];
 }
 
 export async function generateMetadata({ params }: PageProps<"/categories/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const category = getCategoryBySlug(slug);
+  const category = await getCategoryBySlug(slug);
   if (!category) return { title: "Category not found" };
   return {
-    title: `${category.name} for Kids`,
-    description: `${category.description} Shop ${category.name.toLowerCase()} at KING DAY.`,
+    title: category.seoTitle ?? `${category.name} for Kids`,
+    description: category.seoDescription ?? `${category.description} Shop ${category.name.toLowerCase()} at KING DAY.`,
     alternates: { canonical: `/categories/${category.slug}` },
     openGraph: { title: `${category.name} | KING DAY`, description: category.description },
   };
@@ -25,7 +27,7 @@ export async function generateMetadata({ params }: PageProps<"/categories/[slug]
 
 async function CategoryContent({ params, searchParams }: Pick<PageProps<"/categories/[slug]">, "params" | "searchParams">) {
   const { slug } = await params;
-  const category = getCategoryBySlug(slug);
+  const category = await getCategoryBySlug(slug);
   if (!category) notFound();
 
   return (

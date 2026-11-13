@@ -11,6 +11,7 @@ import { siteConfig } from "@/config/site";
 import { storeContact, whyChoose } from "@/config/storefront";
 import {
   getBestsellers,
+  getCatalogSource,
   getBrands,
   getCategories,
   getFeaturedReviews,
@@ -27,14 +28,18 @@ export const metadata: Metadata = {
 
 const whyIcons = { shield: ShieldCheck, check: Check, lock: Lock, chat: MessageCircle } as const;
 
-export default function HomePage() {
-  const categories = getCategories();
-  const bestsellers = getBestsellers(4);
-  const newArrivals = getNewArrivals(8);
-  const offers = getOfferProducts(3);
-  const topDiscount = Math.max(...getOfferProducts(20).map((p) => discountPercent(p.mrp, p.price)), 0);
-  const brands = getBrands();
-  const reviews = getFeaturedReviews(3);
+export default async function HomePage() {
+  const [categories, bestsellers, newArrivals, allOffers, brands, reviews, source] = await Promise.all([
+    getCategories(),
+    getBestsellers(4),
+    getNewArrivals(8),
+    getOfferProducts(20),
+    getBrands(),
+    getFeaturedReviews(3),
+    getCatalogSource(),
+  ]);
+  const offers = allOffers.slice(0, 3);
+  const topDiscount = Math.max(...allOffers.map((p) => discountPercent(p.mrp, p.price)), 0);
 
   return (
     <>
@@ -208,7 +213,7 @@ export default function HomePage() {
       {/* 8. Customer reviews */}
       <section className="py-16 sm:py-20">
         <Container>
-          <SectionHeading eyebrow="Happy little royals" title="What parents say" description="Sample reviews shown in preview mode." align="center" />
+          <SectionHeading eyebrow="Happy little royals" title="What parents say" description={source === "preview" ? "Sample reviews shown in preview mode." : undefined} align="center" />
           <ul className="grid gap-4 md:grid-cols-3">
             {reviews.map((r) => (
               <li key={r.id} className="relative flex flex-col rounded-2xl border bg-white p-6">

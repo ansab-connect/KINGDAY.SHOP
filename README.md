@@ -33,6 +33,7 @@ npm run dev                  # http://localhost:3000
 | `npm run preview` | Build with OpenNext and run locally in the Workers runtime (`.dev.vars`) |
 | `npm run deploy` | Build and deploy to Cloudflare Workers (requires approval, not yet configured) |
 | `npm run cf-typegen` | Generate `cloudflare-env.d.ts` binding types |
+| `npm test` | Unit tests (validation schemas, catalogue mapping) |
 | `npm run test:db` | Apply all migrations to a local Postgres and run the RLS/business-rule checks |
 
 ## Environment & secrets

@@ -328,6 +328,100 @@ await test("wishlists are private", async () => {
   await expectError(`insert into public.wishlist_items (wishlist_id, product_id) values ($1, $2)`, [w, productId], /row-level security/);
 });
 
+console.log("Product management (save_product)");
+const scooterCat = (await rows(`select id from public.categories where slug = 'scooters'`))[0].id;
+const payload = (over = {}) => ({
+  name: "Comet Scooter",
+  slug: "comet-scooter",
+  category_id: scooterCat,
+  status: "draft",
+  highlights: ["Foldable", "  ", "Light-up wheels"],
+  variants: [
+    { sku: "kd-com-red", name: "Red", options: { colour: "Red" }, mrp: 1299900, price: 1099900, opening_stock: 8 },
+    { sku: "KD-COM-BLU", name: "Blue", options: { colour: "Blue" }, mrp: 1299900, price: 1049900, is_default: true },
+  ],
+  attributes: [{ name: "Max load", value: "50 kg" }, { name: "", value: "ignored" }],
+  ...over,
+});
+let comet;
+await test("staff create a product with variants, opening stock and specs in one call", async () => {
+  await user(staff);
+  comet = (await rows(`select public.save_product($1::jsonb) as id`, [JSON.stringify(payload())]))[0].id;
+  const v = await rows(`select v.sku, v.is_default, i.on_hand from public.product_variants v
+    join public.inventory i on i.variant_id = v.id where v.product_id = $1 order by v.position`, [comet]);
+  assert(v.length === 2 && v[0].sku === "KD-COM-RED" && v[0].on_hand === 8, `variants ${JSON.stringify(v)}`);
+  assert(v[1].is_default && !v[0].is_default, "default variant wrong");
+  const ledger = await rows(`select type, quantity from public.stock_movements m join public.product_variants v on v.id = m.variant_id where v.product_id = $1`, [comet]);
+  assert(ledger.length === 1 && ledger[0].type === "opening", "opening stock not in ledger");
+  const p = await rows(`select highlights, created_by from public.products where id = $1`, [comet]);
+  assert(p[0].highlights.length === 2 && p[0].created_by === staff, "highlights/created_by wrong");
+  assert((await rows(`select * from public.product_attributes where product_id = $1`, [comet])).length === 1, "attributes wrong");
+});
+await test("updating a product edits variants and deactivates removed ones", async () => {
+  await user(staff);
+  const current = await rows(`select id, sku from public.product_variants where product_id = $1 order by position`, [comet]);
+  const red = current.find((x) => x.sku === "KD-COM-RED");
+  await db.query(`select public.save_product($1::jsonb)`, [JSON.stringify(payload({
+    id: comet,
+    status: "active",
+    variants: [
+      { id: red.id, sku: "KD-COM-RED", name: "Racing Red", mrp: 1299900, price: 999900 },
+      { sku: "KD-COM-GRN", name: "Green", mrp: 1299900, price: 1099900, opening_stock: 0 },
+    ],
+    attributes: [{ name: "Deck", value: "Anti-slip" }],
+  }))]);
+  const v = await rows(`select sku, name, price, is_active, is_default from public.product_variants where product_id = $1 order by sku`, [comet]);
+  const by = Object.fromEntries(v.map((x) => [x.sku, x]));
+  assert(by["KD-COM-RED"].price === 999900 && by["KD-COM-RED"].name === "Racing Red", "red not updated");
+  assert(by["KD-COM-RED"].is_default, "first kept variant should become default");
+  assert(by["KD-COM-BLU"].is_active === false, "removed variant should be deactivated");
+  assert(by["KD-COM-GRN"]?.is_active, "new variant missing");
+  const p = await rows(`select status, published_at from public.products where id = $1`, [comet]);
+  assert(p[0].status === "active" && p[0].published_at, "not published");
+  const a = await rows(`select name from public.product_attributes where product_id = $1`, [comet]);
+  assert(a.length === 1 && a[0].name === "Deck", "attributes not replaced");
+});
+await test("save_product rejects price above MRP and rolls back everything", async () => {
+  await user(staff);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(payload({
+    slug: "bad-scooter",
+    variants: [{ sku: "KD-BAD-1", mrp: 100000, price: 200000 }],
+  }))], /price_le_mrp/);
+  assert((await rows(`select id from public.products where slug = 'bad-scooter'`)).length === 0, "partial product left behind");
+});
+await test("save_product rejects duplicate slugs and SKUs", async () => {
+  await user(staff);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(payload())], /duplicate key/);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(payload({
+    slug: "another-scooter", variants: [{ sku: "KD-COM-RED", mrp: 100, price: 100 }],
+  }))], /duplicate key/);
+});
+await test("save_product refuses a variant from another product", async () => {
+  await user(staff);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(payload({
+    id: comet, variants: [{ id: variantId, sku: "KD-TEST-001", mrp: 2899900, price: 2349900 }],
+  }))], /does not belong/);
+});
+await test("customers and anonymous users cannot save products", async () => {
+  await user(alice);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(payload({ slug: "x-y" }))], /not authorized/);
+  await anon();
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(payload({ slug: "x-z" }))], /permission denied/);
+});
+await test("staff can reorder product images", async () => {
+  await user(staff);
+  const ids = (await rows(`insert into public.product_images (product_id, storage_path, position) values
+    ($1, 'products/a.webp', 0), ($1, 'products/b.webp', 1) returning id`, [comet])).map((r) => r.id);
+  await db.query(`select public.reorder_product_images($1, $2::uuid[])`, [comet, [ids[1], ids[0]]]);
+  const r = await rows(`select storage_path from public.product_images where product_id = $1 order by position`, [comet]);
+  assert(r[0].storage_path === "products/b.webp", "reorder failed");
+});
+await test("staff cannot delete products (admin only)", async () => {
+  await user(staff);
+  const r = await rows(`delete from public.products where id = $1 returning id`, [comet]);
+  assert(r.length === 0, "staff deleted a product");
+});
+
 console.log("Settings & purchasing");
 await test("only public settings are visible to customers", async () => {
   await anon();

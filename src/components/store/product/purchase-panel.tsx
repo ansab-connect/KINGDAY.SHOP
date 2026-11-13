@@ -3,51 +3,97 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Heart, Info, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
+import { Price } from "@/components/store/price";
+import type { StoreVariant } from "@/features/catalog/types";
+import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
 
 type Props = {
   name: string;
-  sku: string;
-  stock: number;
-  colours: { name: string; hex: string }[];
-  /** Pre-built WhatsApp link prefix (without the message), or null when not configured. */
+  shortDescription: string;
+  variants: StoreVariant[];
+  defaultVariantId: string;
+  /** Digits-only WhatsApp number, or null when not configured. */
   whatsappNumber: string | null;
   productUrl: string;
 };
 
 /**
- * Variant / quantity selection and purchase actions. Cart and checkout are wired
- * in Phase 8; prices are never taken from this component: the server re-reads them.
+ * Variant / quantity selection and purchase actions. The displayed price follows
+ * the selected variant, but it is display-only: checkout (Phase 8) re-reads the
+ * price for the variant ID from the database.
  */
-export function PurchasePanel({ name, sku, stock, colours, whatsappNumber, productUrl }: Props) {
-  const [colour, setColour] = useState(colours[0]?.name ?? "");
+export function PurchasePanel({ name, shortDescription, variants, defaultVariantId, whatsappNumber, productUrl }: Props) {
+  const [variantId, setVariantId] = useState(defaultVariantId);
   const [qty, setQty] = useState(1);
   const [notice, setNotice] = useState(false);
-  const out = stock <= 0;
-  const maxQty = Math.max(1, Math.min(stock, 5));
+  const variant = variants.find((v) => v.id === variantId) ?? variants[0];
+  const out = variant.stock <= 0;
+  const maxQty = Math.max(1, Math.min(variant.stock, 5));
+  const showPicker = variants.length > 1;
+  const pickerLabel = variants.every((v) => v.colour) ? "Colour" : "Option";
 
-  const waMessage = `Hi KING DAY, I'm interested in ${name} (SKU ${sku})${colour ? `, colour: ${colour}` : ""}, quantity ${qty}. ${productUrl}`;
+  const waMessage = `Hi KING DAY, I'm interested in ${name} (${variant.name}, SKU ${variant.sku}), quantity ${qty}. ${productUrl}`;
   const waHref = whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(waMessage)}` : null;
 
   return (
     <div className="flex flex-col gap-6">
-      {colours.length ? (
+      <div>
+        <Price price={variant.price} mrp={variant.mrp} size="lg" />
+        <p className="mt-1 text-xs text-muted-foreground">
+          MRP inclusive of all taxes · SKU <span className="font-medium text-deep">{variant.sku}</span>
+        </p>
+      </div>
+
+      {shortDescription ? <p className="text-base leading-relaxed text-muted-foreground">{shortDescription}</p> : null}
+
+      {showPicker ? (
         <fieldset>
           <legend className="text-sm font-medium text-deep">
-            Colour: <span className="font-normal text-muted-foreground">{colour}</span>
+            {pickerLabel}: <span className="font-normal text-muted-foreground">{variant.colour ?? variant.name}</span>
           </legend>
           <div className="mt-3 flex flex-wrap gap-2.5">
-            {colours.map((c) => (
-              <label key={c.name} className="relative cursor-pointer" title={c.name}>
-                <input type="radio" name="colour" value={c.name} checked={colour === c.name} onChange={() => setColour(c.name)} className="peer sr-only" />
-                <span className="sr-only">{c.name}</span>
-                <span
-                  aria-hidden
-                  className="block size-9 rounded-full ring-1 ring-black/10 ring-offset-2 transition-all peer-checked:ring-2 peer-checked:ring-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring"
-                  style={{ backgroundColor: c.hex }}
-                />
-              </label>
-            ))}
+            {variants.map((v) => {
+              const swatch = swatchFor(v.colour);
+              const label = v.colour ?? v.name;
+              return (
+                <label key={v.id} className="relative cursor-pointer" title={`${v.name}${v.stock <= 0 ? " (out of stock)" : ""}`}>
+                  <input
+                    type="radio"
+                    name="variant"
+                    value={v.id}
+                    checked={variantId === v.id}
+                    onChange={() => {
+                      setVariantId(v.id);
+                      setQty(1);
+                    }}
+                    className="peer sr-only"
+                  />
+                  {swatch ? (
+                    <>
+                      <span className="sr-only">{label}{v.stock <= 0 ? " (out of stock)" : ""}</span>
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "block size-9 rounded-full ring-1 ring-black/10 ring-offset-2 transition-all peer-checked:ring-2 peer-checked:ring-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+                          v.stock <= 0 && "opacity-40",
+                        )}
+                        style={{ backgroundColor: swatch }}
+                      />
+                    </>
+                  ) : (
+                    <span
+                      className={cn(
+                        "inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium text-deep transition-colors peer-checked:border-royal peer-checked:bg-royal-50 peer-checked:text-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+                        v.stock <= 0 && "text-muted-foreground line-through",
+                      )}
+                    >
+                      {label}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
           </div>
         </fieldset>
       ) : null}
@@ -62,8 +108,8 @@ export function PurchasePanel({ name, sku, stock, colours, whatsappNumber, produ
             <Plus className="size-4" />
           </button>
         </div>
-        <p className={cn("text-sm font-medium", out ? "text-danger" : stock <= 5 ? "text-warning" : "text-success")}>
-          {out ? "Out of stock" : stock <= 5 ? `Only ${stock} left` : "In stock, ready to ship"}
+        <p className={cn("text-sm font-medium", out ? "text-danger" : variant.stock <= 5 ? "text-warning" : "text-success")}>
+          {out ? "Out of stock" : variant.stock <= 5 ? `Only ${variant.stock} left` : "In stock, ready to ship"}
         </p>
       </div>
 

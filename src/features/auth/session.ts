@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { cache } from "react";
 import { z } from "zod";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -85,6 +86,9 @@ export type AdminAccess =
  */
 export async function requireStaff(minimum: StaffRole = "staff"): Promise<AdminAccess> {
   if (!isSupabaseConfigured) {
+    // Admin pages are never prerendered. Without this, a build with no Supabase keys
+    // would treat the gate as static content and fail on routes with URL params.
+    await connection();
     return process.env.NODE_ENV === "development" ? { status: "preview" } : { status: "unconfigured" };
   }
   const user = await getCurrentUser();

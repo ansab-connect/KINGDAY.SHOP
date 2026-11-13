@@ -1,32 +1,94 @@
 import type { Metadata } from "next";
-import { Plus, Star } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Package, Plus, Search, Star } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { PreviewNotice } from "@/components/admin/preview-notice";
+import { StaffOnly } from "@/components/admin/staff-only";
 import { Pill, StockBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { listProducts, type AdminProductRow } from "@/features/catalog/admin-repo";
 import { previewProducts } from "@/features/preview/data";
+import { isSupabaseConfigured } from "@/lib/env";
 import { discountPercent, formatPaise } from "@/lib/format";
-import { StaffOnly } from "@/components/admin/staff-only";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Products" };
 
 const statusTone = { active: "success", draft: "warning", archived: "neutral" } as const;
+const statusLabel = { active: "Active", draft: "Draft", archived: "Archived" } as const;
+const FILTERS = [
+  { value: "", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "draft", label: "Drafts" },
+  { value: "archived", label: "Archived" },
+];
 
-function ProductsPageContent() {
+type Row = AdminProductRow & { href: string | null };
+
+async function loadRows(q: string, status: string): Promise<Row[]> {
+  if (isSupabaseConfigured) {
+    return (await listProducts({ q, status })).map((p) => ({ ...p, href: `/admin/products/${p.id}` }));
+  }
+  return previewProducts
+    .filter((p) => (!status || p.status === status) && (!q || p.name.toLowerCase().includes(q.toLowerCase())))
+    .map((p) => ({
+      id: p.id, name: p.name, slug: p.id, status: p.status, is_featured: p.featured, category: p.category, brand: p.brand,
+      sku: p.sku, variant_count: p.variants, mrp: p.mrp, price: p.price, stock: p.stock, image_url: null, updated_at: "", href: null,
+    }));
+}
+
+async function ProductsContent({ searchParams }: { searchParams: PageProps<"/admin/products">["searchParams"] }) {
+  const params = await searchParams;
+  const q = typeof params.q === "string" ? params.q.slice(0, 80) : "";
+  const status = typeof params.status === "string" && ["active", "draft", "archived"].includes(params.status) ? params.status : "";
+  const rows = await loadRows(q, status);
+  const qs = (s: string) => {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (s) sp.set("status", s);
+    const str = sp.toString();
+    return str ? `/admin/products?${str}` : "/admin/products";
+  };
+
   return (
     <>
       <PageHeader
         title="Products"
-        description={`${previewProducts.length} products · pricing, SKUs, variants and visibility`}
+        description={`${rows.length} product${rows.length === 1 ? "" : "s"} · pricing, SKUs, variants and visibility`}
         actions={
-          <Button disabled title="Product editor arrives in Phase 5">
-            <Plus aria-hidden /> Add product
+          <Button asChild>
+            <Link href="/admin/products/new"><Plus aria-hidden /> Add product</Link>
           </Button>
         }
       />
-      <PreviewNotice phase={5} />
+      {!isSupabaseConfigured ? <PreviewNotice phase={5} /> : null}
+
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <nav aria-label="Filter by status" className="flex gap-1.5 overflow-x-auto">
+          {FILTERS.map((f) => (
+            <Link
+              key={f.value}
+              href={qs(f.value)}
+              aria-current={status === f.value ? "page" : undefined}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium",
+                status === f.value ? "border-royal bg-royal text-white" : "bg-card text-muted-foreground hover:text-royal",
+              )}
+            >
+              {f.label}
+            </Link>
+          ))}
+        </nav>
+        <form action="/admin/products" className="relative sm:w-72" role="search">
+          {status ? <input type="hidden" name="status" value={status} /> : null}
+          <label htmlFor="product-search" className="sr-only">Search products</label>
+          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input id="product-search" name="q" type="search" defaultValue={q} placeholder="Search by name…" className="h-10 w-full rounded-lg border bg-card pr-3 pl-9 text-sm outline-none focus:border-royal-300 focus:ring-3 focus:ring-royal-100" />
+        </form>
+      </div>
+
       <Card className="py-0 shadow-card">
         <CardContent className="px-0">
           <Table>
@@ -39,39 +101,58 @@ function ProductsPageContent() {
                 <TableHead className="hidden text-right md:table-cell">Discount</TableHead>
                 <TableHead className="hidden sm:table-cell">Stock</TableHead>
                 <TableHead className="hidden xl:table-cell">Variants</TableHead>
-                <TableHead className="pr-6">Status</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-10 pr-6"><span className="sr-only">Edit</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {previewProducts.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="pl-6">
-                    <div className="flex items-center gap-3">
-                      <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-lg bg-royal-50 font-heading text-sm font-bold text-royal">
-                        {p.name[0]}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="flex items-center gap-1.5 font-medium text-deep">
-                          <span className="max-w-56 truncate">{p.name}</span>
-                          {p.featured ? <Star aria-label="Featured" className="size-3.5 fill-gold text-gold" /> : null}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{p.sku} · {p.brand}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden text-muted-foreground lg:table-cell">{p.category}</TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular line-through sm:table-cell decoration-muted-foreground/40">{formatPaise(p.mrp)}</TableCell>
-                  <TableCell className="text-right font-medium tabular">{formatPaise(p.price)}</TableCell>
-                  <TableCell className="hidden text-right tabular md:table-cell">
-                    <span className="font-medium text-gold-700">{discountPercent(p.mrp, p.price)}%</span>
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell"><StockBadge stock={p.stock} reorderLevel={p.reorderLevel} /></TableCell>
-                  <TableCell className="hidden tabular xl:table-cell">{p.variants}</TableCell>
-                  <TableCell className="pr-6">
-                    <Pill tone={statusTone[p.status]}>{p.status[0].toUpperCase() + p.status.slice(1)}</Pill>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-16 text-center">
+                    <Package aria-hidden className="mx-auto size-8 text-royal-300" />
+                    <p className="mt-3 font-medium text-deep">{q || status ? "No products match" : "No products yet"}</p>
+                    <Link href="/admin/products/new" className="mt-2 inline-block text-sm font-medium text-royal hover:underline">Add your first product</Link>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                rows.map((p) => (
+                  <TableRow key={p.id} className={p.href ? "relative" : undefined}>
+                    <TableCell className="pl-6">
+                      <div className="flex items-center gap-3">
+                        <span aria-hidden className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-royal-50 font-heading text-sm font-bold text-royal">
+                          {p.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- admin thumbnail
+                            <img src={p.image_url} alt="" className="size-full object-cover" />
+                          ) : (
+                            p.name[0]
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1.5 font-medium text-deep">
+                            {p.href ? (
+                              <Link href={p.href} className="max-w-56 truncate after:absolute after:inset-0 hover:text-royal">{p.name}</Link>
+                            ) : (
+                              <span className="max-w-56 truncate">{p.name}</span>
+                            )}
+                            {p.is_featured ? <Star aria-label="Featured" className="size-3.5 fill-gold text-gold" /> : null}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{[p.sku, p.brand].filter(Boolean).join(" · ")}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden text-muted-foreground lg:table-cell">{p.category}</TableCell>
+                    <TableCell className="hidden text-right text-muted-foreground tabular line-through decoration-muted-foreground/40 sm:table-cell">{p.mrp ? formatPaise(p.mrp) : "—"}</TableCell>
+                    <TableCell className="text-right font-medium tabular">{p.price ? formatPaise(p.price) : "—"}</TableCell>
+                    <TableCell className="hidden text-right tabular md:table-cell">
+                      {p.mrp && p.price ? <span className="font-medium text-gold-700">{discountPercent(p.mrp, p.price)}%</span> : "—"}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell"><StockBadge stock={p.stock} reorderLevel={5} /></TableCell>
+                    <TableCell className="hidden tabular xl:table-cell">{p.variant_count}</TableCell>
+                    <TableCell><Pill tone={statusTone[p.status]}>{statusLabel[p.status]}</Pill></TableCell>
+                    <TableCell className="pr-6">{p.href ? <ChevronRight aria-hidden className="size-4 text-muted-foreground" /> : null}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -80,10 +161,10 @@ function ProductsPageContent() {
   );
 }
 
-export default function ProductsPage() {
+export default function ProductsPage(props: PageProps<"/admin/products">) {
   return (
     <StaffOnly>
-      <ProductsPageContent />
+      <ProductsContent searchParams={props.searchParams} />
     </StaffOnly>
   );
 }

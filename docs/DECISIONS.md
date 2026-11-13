@@ -79,3 +79,26 @@ Dashboard charts are small hand-written SVG components. This avoids a dependency
   without keys shows "Admin unavailable" and sends no data.
 - **Auth links** use `/auth/confirm` with token-hash email templates, so a link opened on another
   device still works. PKCE `code` links are also accepted.
+
+## 2026-11-13 — Phase 5: product management
+
+- **One transaction per product save.** `save_product(jsonb)` writes the product, its variants,
+  opening stock (through `adjust_stock`, so it lands in the ledger) and specifications together.
+  It is `SECURITY INVOKER`, so RLS still applies. A failed save leaves nothing behind.
+- **Variants are never hard-deleted by the editor.** Removing one deactivates it, which keeps
+  stock and order history intact. Products with history must be archived; delete is admin-only
+  and the database refuses it when history exists.
+- **Server actions** (`src/features/catalog/admin-actions.ts`) always run: authorise →
+  validate with zod (`schemas.ts`) → write through RLS → `updateTag("catalog")`.
+- **Images are optimised in the browser** (max 1600px, WebP) and uploaded straight to Storage.
+  Storage RLS allows only staff. The server re-validates every path
+  (`products/<product id>/<file>`) before recording it.
+- **The storefront reads one cached catalogue snapshot** (`'use cache'`, tag `catalog`):
+  Supabase when configured, the preview catalogue otherwise. Filtering is in memory, which suits
+  hundreds of products; move it to SQL if the catalogue reaches thousands.
+- **Bestsellers** need sales data, so they arrive with analytics (Phase 10). Until then,
+  featured products fill that section.
+- **Admin gate calls `connection()` when Supabase is unconfigured.** Otherwise a keyless
+  production build sees the gate as static content and fails on admin routes with URL params.
+- **Tests:** `npm test` (Vitest: schemas and Supabase→storefront mapping) and
+  `npm run test:db` (49 database checks).

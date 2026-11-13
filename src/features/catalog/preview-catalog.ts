@@ -5,13 +5,13 @@
  */
 import { productCategories } from "@/config/site";
 import { PREVIEW_TODAY, previewBrands, previewProducts } from "@/features/preview/data";
-import type { ProductReview, StoreBrand, StoreCategory, StoreProduct } from "./types";
+import type { CatalogSnapshot, ProductReview, StoreBrand, StoreCategory, StoreProduct, StoreVariant } from "./types";
 
 const slugify = (s: string) =>
   s.toLowerCase().replace(/&/g, "and").replace(/["']/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
-const categoryBySlugName = new Map<string, { slug: string; name: string }>(
-  productCategories.map((c) => [c.name, { slug: c.slug, name: c.name }]),
+const categoryBySlugName = new Map<string, { slug: string; name: string; parentSlug: null }>(
+  productCategories.map((c) => [c.name, { slug: c.slug, name: c.name, parentSlug: null }]),
 );
 
 export const categoryDescriptions: Record<string, string> = {
@@ -93,10 +93,20 @@ const colourSets = [
 export const previewCatalog: StoreProduct[] = previewProducts
   .filter((p) => p.status === "active")
   .map((p, i) => {
-    const category = categoryBySlugName.get(p.category) ?? { slug: slugify(p.category), name: p.category };
+    const category = categoryBySlugName.get(p.category) ?? { slug: slugify(p.category), name: p.category, parentSlug: null };
     const brandSlug = previewBrands.find((b) => b.name === p.brand)?.slug ?? slugify(p.brand);
     const tpl = specTemplates[category.slug] ?? specTemplates.toys;
     const rating = Math.round((4.2 + ((i * 37) % 8) / 10) * 10) / 10;
+    const colours = colourSets[i % colourSets.length];
+    const variants: StoreVariant[] = colours.map((c, k) => ({
+      id: `${p.id}-v${k}`,
+      name: c.name,
+      sku: k === 0 ? p.sku : `${p.sku}-${c.name.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase()}`,
+      mrp: p.mrp,
+      price: p.price,
+      stock: k === 0 ? p.stock : Math.max(0, p.stock - 2 * k),
+      colour: c.name,
+    }));
     return {
       id: p.id,
       slug: slugify(p.name),
@@ -106,7 +116,9 @@ export const previewCatalog: StoreProduct[] = previewProducts
       brand: { slug: brandSlug, name: p.brand },
       mrp: p.mrp,
       price: p.price,
-      stock: p.stock,
+      stock: variants.reduce((sum, v) => sum + v.stock, 0),
+      variants,
+      defaultVariantId: variants[0].id,
       rating: Math.min(rating, 4.9),
       reviewCount: 6 + ((i * 13) % 40),
       ageRange: tpl.age,
@@ -117,9 +129,10 @@ export const previewCatalog: StoreProduct[] = previewProducts
       ],
       highlights: tpl.highlights,
       specs: [{ label: "Recommended age", value: tpl.age }, ...tpl.specs.map(([label, value]) => ({ label, value }))],
-      colours: colourSets[i % colourSets.length],
       images: [],
       video: null,
+      seoTitle: null,
+      seoDescription: null,
       isNew: i >= previewProducts.length - 8,
       isBestseller: p.unitsSold30d >= 20,
       isFeatured: p.featured,
@@ -128,7 +141,12 @@ export const previewCatalog: StoreProduct[] = previewProducts
   });
 
 export const previewStoreCategories: StoreCategory[] = productCategories.map((c) => ({
-  ...c,
+  slug: c.slug,
+  name: c.name,
+  parentSlug: null,
+  imageUrl: null,
+  seoTitle: null,
+  seoDescription: null,
   description: categoryDescriptions[c.slug] ?? "",
   productCount: previewCatalog.filter((p) => p.category.slug === c.slug).length,
 }));
@@ -139,7 +157,8 @@ export const previewStoreBrands: StoreBrand[] = previewBrands
     slug: b.slug,
     name: b.name,
     description: brandDescriptions[b.slug] ?? "",
-    productCount: previewCatalog.filter((p) => p.brand.slug === b.slug).length,
+    logoUrl: null,
+    productCount: previewCatalog.filter((p) => p.brand?.slug === b.slug).length,
   }));
 
 const reviewers = [
@@ -173,3 +192,11 @@ export const previewReviews: ProductReview[] = previewCatalog.flatMap((p, i) =>
     };
   }),
 );
+
+export const previewSnapshot: CatalogSnapshot = {
+  products: previewCatalog,
+  categories: previewStoreCategories,
+  brands: previewStoreBrands,
+  reviews: previewReviews,
+  source: "preview",
+};

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { ProductSkeleton } from "@/components/store/product/product-skeleton";
 import { Check, RotateCcw, ShieldCheck, Truck } from "lucide-react";
 import { Breadcrumbs } from "@/components/store/page-hero";
-import { Price, Rating, Stars } from "@/components/store/price";
+import { Rating, Stars } from "@/components/store/price";
 import { ProductGrid } from "@/components/store/product-card";
 import { ProductGallery } from "@/components/store/product/product-gallery";
 import { PurchasePanel } from "@/components/store/product/purchase-panel";
@@ -13,26 +13,29 @@ import { siteConfig } from "@/config/site";
 import { storeContact } from "@/config/storefront";
 import {
   getAllProducts,
+  getCatalogSource,
   getProductBySlug,
   getRelatedProducts,
   getReviewsForProduct,
 } from "@/features/catalog/queries";
 import { formatDate } from "@/lib/format";
 
-const isPreview = process.env.NEXT_PUBLIC_USE_PREVIEW_DATA !== "false";
-
-export function generateStaticParams() {
-  return getAllProducts().map((p) => ({ slug: p.slug }));
+export async function generateStaticParams() {
+  const products = await getAllProducts();
+  // Cache Components requires at least one param; an unknown slug renders the 404 page.
+  return products.length ? products.map((p) => ({ slug: p.slug })) : [{ slug: "coming-soon" }];
 }
 
 export async function generateMetadata({ params }: PageProps<"/products/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const product = getProductBySlug(slug);
+  const product = await getProductBySlug(slug);
   if (!product) return { title: "Product not found" };
-  const title = `${product.name} | ${product.category.name}`;
+  const title = product.seoTitle ?? `${product.name} | ${product.category.name}`;
   return {
     title,
-    description: `${product.name} by ${product.brand.name}. ${product.shortDescription}`,
+    description:
+      product.seoDescription ??
+      [product.name, product.brand ? `by ${product.brand.name}.` : ".", product.shortDescription].join(" ").replace(" .", ".").trim(),
     alternates: { canonical: `/products/${product.slug}` },
     openGraph: {
       type: "website",
@@ -45,11 +48,15 @@ export async function generateMetadata({ params }: PageProps<"/products/[slug]">
 
 async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "params">) {
   const { slug } = await params;
-  const product = getProductBySlug(slug);
+  const product = await getProductBySlug(slug);
   if (!product) notFound();
 
-  const reviews = getReviewsForProduct(product.slug);
-  const related = getRelatedProducts(product, 4);
+  const [reviews, related, source] = await Promise.all([
+    getReviewsForProduct(product.slug),
+    getRelatedProducts(product, 4),
+    getCatalogSource(),
+  ]);
+  const isPreview = source === "preview";
   const productUrl = `${siteConfig.url}/products/${product.slug}`;
   const waNumber = storeContact.whatsapp.replace(/\D/g, "") || null;
 
@@ -59,7 +66,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
     name: product.name,
     sku: product.sku,
     description: product.description.join(" "),
-    brand: { "@type": "Brand", name: product.brand.name },
+    ...(product.brand ? { brand: { "@type": "Brand", name: product.brand.name } } : {}),
     category: product.category.name,
     image: product.images.map((i) => i.src),
     url: productUrl,
@@ -73,7 +80,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
       seller: { "@type": "Organization", name: siteConfig.name },
     },
     // Ratings are only published once they come from real customers.
-    ...(isPreview ? {} : { aggregateRating: { "@type": "AggregateRating", ratingValue: product.rating, reviewCount: product.reviewCount } }),
+    ...(isPreview || product.reviewCount === 0 ? {} : { aggregateRating: { "@type": "AggregateRating", ratingValue: product.rating, reviewCount: product.reviewCount } }),
   };
 
   return (
@@ -96,25 +103,23 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
           <ProductGallery images={product.images} video={product.video} categorySlug={product.category.slug} name={product.name} />
 
           <div className="lg:pt-2">
-            <p className="text-xs font-semibold tracking-[0.16em] text-gold-600 uppercase">{product.brand.name}</p>
+            {product.brand ? <p className="text-xs font-semibold tracking-[0.16em] text-gold-600 uppercase">{product.brand.name}</p> : null}
             <h1 className="mt-2 text-3xl leading-tight font-extrabold text-deep sm:text-4xl">{product.name}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-              <a href="#reviews" className="hover:underline"><Rating value={product.rating} count={product.reviewCount} className="text-sm" /></a>
-              <span className="text-muted-foreground">SKU: <span className="font-medium text-deep">{product.sku}</span></span>
-              <span className="text-muted-foreground">Age: <span className="font-medium text-deep">{product.ageRange}</span></span>
+              {product.reviewCount > 0 ? (
+                <a href="#reviews" className="hover:underline"><Rating value={product.rating} count={product.reviewCount} className="text-sm" /></a>
+              ) : null}
+              {product.ageRange ? (
+                <span className="text-muted-foreground">Age: <span className="font-medium text-deep">{product.ageRange}</span></span>
+              ) : null}
             </div>
 
-            <Price price={product.price} mrp={product.mrp} size="lg" className="mt-6" />
-            <p className="mt-1 text-xs text-muted-foreground">MRP inclusive of all taxes</p>
-
-            <p className="mt-6 text-base leading-relaxed text-muted-foreground">{product.shortDescription}</p>
-
-            <div className="mt-8">
+            <div className="mt-6">
               <PurchasePanel
                 name={product.name}
-                sku={product.sku}
-                stock={product.stock}
-                colours={product.colours}
+                shortDescription={product.shortDescription}
+                variants={product.variants}
+                defaultVariantId={product.defaultVariantId}
                 whatsappNumber={waNumber}
                 productUrl={productUrl}
               />
@@ -133,16 +138,20 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
           <section aria-labelledby="desc-heading">
             <h2 id="desc-heading" className="text-2xl font-bold text-deep">Product description</h2>
             <div className="mt-4 flex flex-col gap-4 text-base leading-relaxed text-muted-foreground">
-              {product.description.map((p) => <p key={p}>{p}</p>)}
+              {product.description.length ? product.description.map((p) => <p key={p}>{p}</p>) : <p>{product.shortDescription || "Details coming soon."}</p>}
             </div>
-            <h3 className="mt-8 font-heading text-lg font-semibold text-deep">Highlights</h3>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {product.highlights.map((h) => (
-                <li key={h} className="flex items-start gap-2 text-sm text-deep/80">
-                  <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-gold-600" /> {h}
-                </li>
-              ))}
-            </ul>
+            {product.highlights.length ? (
+              <>
+                <h3 className="mt-8 font-heading text-lg font-semibold text-deep">Highlights</h3>
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {product.highlights.map((h) => (
+                    <li key={h} className="flex items-start gap-2 text-sm text-deep/80">
+                      <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-gold-600" /> {h}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </section>
 
           <section aria-labelledby="spec-heading">
@@ -169,13 +178,17 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
               <h2 id="reviews-heading" className="text-2xl font-bold text-deep">Customer reviews</h2>
               {isPreview ? <p className="mt-1 text-xs text-muted-foreground">Sample reviews shown in preview mode.</p> : null}
             </div>
-            <div className="flex items-center gap-4 sm:ml-auto">
-              <p className="font-heading text-5xl font-extrabold text-deep tabular">{product.rating.toFixed(1)}</p>
-              <div>
-                <Stars value={product.rating} />
-                <p className="mt-1 text-sm text-muted-foreground">{product.reviewCount} reviews</p>
+            {product.reviewCount > 0 ? (
+              <div className="flex items-center gap-4 sm:ml-auto">
+                <p className="font-heading text-5xl font-extrabold text-deep tabular">{product.rating.toFixed(1)}</p>
+                <div>
+                  <Stars value={product.rating} />
+                  <p className="mt-1 text-sm text-muted-foreground">{product.reviewCount} review{product.reviewCount === 1 ? "" : "s"}</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <p className="text-sm text-muted-foreground sm:ml-auto">No reviews yet. Reviews open with customer accounts.</p>
+            )}
           </div>
           <ul className="mt-6 grid gap-4 md:grid-cols-3">
             {reviews.map((r) => (
@@ -184,7 +197,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 <p className="mt-3 font-heading font-semibold text-deep">{r.title}</p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{r.body}</p>
                 <p className="mt-4 text-xs text-muted-foreground">
-                  <span className="font-medium text-deep">{r.author}</span> · {r.city} · {formatDate(r.date)}
+                  <span className="font-medium text-deep">{r.author}</span>{r.city ? ` · ${r.city}` : ""} · {formatDate(r.date)}
                 </p>
               </li>
             ))}
@@ -192,10 +205,12 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
         </section>
 
         {/* Related */}
-        <section aria-label="Related products" className="mt-20">
-          <SectionHeading eyebrow="You may also like" title="Related products" href={`/categories/${product.category.slug}`} linkLabel={`More ${product.category.name}`} />
-          <ProductGrid products={related} />
-        </section>
+        {related.length ? (
+          <section aria-label="Related products" className="mt-20">
+            <SectionHeading eyebrow="You may also like" title="Related products" href={`/categories/${product.category.slug}`} linkLabel={`More ${product.category.name}`} />
+            <ProductGrid products={related} />
+          </section>
+        ) : null}
       </Container>
     </>
   );
