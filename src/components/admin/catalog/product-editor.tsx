@@ -4,10 +4,12 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Boxes, Film, Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
+import { AiFillPanel } from "@/components/admin/catalog/ai-fill-panel";
 import { DeleteButton } from "@/components/admin/catalog/delete-button";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
 import { deleteProduct, saveProduct } from "@/features/catalog/admin-actions";
+import type { AiProductFill } from "@/features/catalog/ai-fill";
 import type { AdminProduct } from "@/features/catalog/admin-repo";
 import { paiseToRupees, rupeesToPaise, slugify } from "@/features/catalog/schemas";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -160,11 +162,64 @@ export function ProductEditor({
     });
   }
 
+  /** Apply AI-extracted fields. Only non-empty values overwrite; nothing is saved. */
+  function applyAi(d: AiProductFill): string {
+    const filled: string[] = [];
+    setBasics((p) => {
+      const next = { ...p };
+      const put = <K extends keyof typeof p>(k: K, v: (typeof p)[K] | "", label: string) => {
+        if (v) {
+          next[k] = v as (typeof p)[K];
+          filled.push(label);
+        }
+      };
+      put("name", d.name, "name");
+      put("category_id", d.category_id, "category");
+      put("brand_id", d.brand_id, "brand");
+      put("age_range", d.age_range, "age");
+      put("short_description", d.short_description.slice(0, 300), "short description");
+      put("description", d.description.slice(0, 10000), "description");
+      put("seo_title", d.seo_title.slice(0, 70), "SEO title");
+      put("seo_description", d.seo_description.slice(0, 170), "SEO description");
+      if (d.name && !slugTouched) next.slug = slugify(d.name);
+      return next;
+    });
+    if (d.highlights.length) {
+      setHighlights(d.highlights.map((h) => h.slice(0, 120)));
+      filled.push(`${d.highlights.length} highlights`);
+    }
+    if (d.specifications.length) {
+      setAttributes(d.specifications.map((a) => ({ key: nextKey(), name: a.name.slice(0, 60), value: a.value.slice(0, 200) })));
+      filled.push(`${d.specifications.length} specifications`);
+    }
+    let variantNote = "";
+    if (d.variants.length) {
+      if (variants.every((v) => !v.id)) {
+        setVariants(
+          d.variants.map((v, i) => ({
+            ...newVariant(i === 0),
+            name: v.name.slice(0, 120),
+            colour: v.colour.slice(0, 40),
+            mrp: v.mrp ? String(v.mrp) : "",
+            price: v.price ? String(v.price) : "",
+          })),
+        );
+        filled.push(`${d.variants.length} variant${d.variants.length === 1 ? "" : "s"}`);
+      } else {
+        variantNote = " Existing variants were kept unchanged.";
+      }
+    }
+    return filled.length
+      ? `Filled: ${filled.join(", ")}. Check every field, add SKUs (✨ button) and stock, then save.${variantNote}`
+      : "The AI didn't find usable details in that text. Try adding more information.";
+  }
+
   const videoUrl = publicStorageUrl("product-videos", basics.video_path);
 
   return (
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_20rem]" noValidate>
       <div className="flex min-w-0 flex-col gap-6">
+        <AiFillPanel categories={categories.map((c) => ({ id: c.id, name: c.name }))} brands={brands} onFill={applyAi} />
         <FormStatus status={status} />
 
         <FormSection title="Basics">
