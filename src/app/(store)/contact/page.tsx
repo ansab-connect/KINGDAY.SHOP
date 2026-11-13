@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   const wa = whatsappLink("Hi KING DAY, I'd like some help choosing a product.");
   const channels = [
-    wa && { icon: MessageCircle, label: "WhatsApp", value: "Chat with our team", href: wa, external: true },
+    wa && { icon: MessageCircle, label: "WhatsApp", value: storeContact.whatsappDisplay, href: wa, external: true },
     storeContact.phone && { icon: Phone, label: "Phone", value: storeContact.phone, href: `tel:${storeContact.phone}` },
     storeContact.email && { icon: Mail, label: "Email", value: storeContact.email, href: `mailto:${storeContact.email}` },
     storeContact.address && { icon: MapPin, label: "Visit", value: storeContact.address },

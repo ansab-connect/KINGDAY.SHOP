@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ShieldAlert } from "lucide-react";
-import { AdminHeader } from "@/components/admin/admin-header";
+import { AdminHeader, type AdminAlert } from "@/components/admin/admin-header";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireStaff } from "@/features/auth/session";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: { default: "Admin", template: "%s · Admin | KING DAY" },
@@ -36,20 +37,42 @@ async function AdminGate({ children }: { children: React.ReactNode }) {
       ? { name: access.user.fullName ?? access.user.email ?? "Staff", email: access.user.email, role: access.user.role }
       : null;
 
+  const alerts = access.status === "granted" ? await getAlerts() : [];
+
   return (
     <div className="min-h-screen bg-muted/40">
-      <AdminSidebar />
+      <AdminSidebar role={user?.role ?? null} />
       <div className="flex min-h-screen flex-col lg:pl-64">
         {access.status === "preview" ? (
           <p role="note" className="bg-deep px-4 py-2 text-center text-xs font-medium text-gold">
             Development preview: Supabase is not configured, so the admin is open locally. It is always locked in production.
           </p>
         ) : null}
-        <AdminHeader user={user} />
+        <AdminHeader user={user} alerts={alerts} />
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
     </div>
   );
+}
+
+/** Live counts for the header bell. Failures never block the admin shell. */
+async function getAlerts(): Promise<AdminAlert[]> {
+  try {
+    const supabase = await createClient();
+    const [orders, stock] = await Promise.all([
+      supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["new", "pending", "confirmed", "processing", "packed"]),
+      supabase.from("inventory").select("on_hand, reorder_level").limit(5000),
+    ]);
+    const out: AdminAlert[] = [];
+    if (orders.count) {
+      out.push({ id: "orders", title: `${orders.count} order${orders.count === 1 ? "" : "s"} need action`, detail: "New, confirmed or packed orders", href: "/admin/orders" });
+    }
+    const low = ((stock.data ?? []) as { on_hand: number; reorder_level: number }[]).filter((r) => r.on_hand <= r.reorder_level).length;
+    if (low) out.push({ id: "stock", title: `${low} SKU${low === 1 ? "" : "s"} low on stock`, detail: "At or below reorder level", href: "/admin/inventory" });
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 function AdminShellSkeleton() {

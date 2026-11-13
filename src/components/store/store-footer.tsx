@@ -72,9 +72,10 @@ export function StoreFooter() {
         </div>
       </Container>
       <div className="border-t border-white/10">
-        <Container className="flex flex-col gap-3 py-6 text-xs text-white/50 sm:flex-row sm:items-center sm:justify-between">
+        <Container className="flex flex-col gap-3 py-6 text-xs text-white/50 lg:flex-row lg:items-center lg:justify-between">
           <p>© {siteConfig.copyrightYear} {siteConfig.legalName}. All rights reserved.</p>
           <p>Secure payments by Razorpay · Cash on delivery where available</p>
+          <p className="tracking-[0.18em] text-white/40 uppercase">Powered by <span className="font-semibold text-white/60">MotherBits Technologies LLP</span></p>
         </Container>
       </div>
     </footer>

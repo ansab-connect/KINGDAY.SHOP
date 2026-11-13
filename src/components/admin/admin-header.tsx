@@ -20,11 +20,7 @@ import { Input } from "@/components/ui/input";
 import { signOut } from "@/features/auth/actions";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-const previewNotifications = [
-  { id: 1, title: "New order KD-1452", detail: "Thunder 12V Ride-on Jeep · Kochi", time: "5 min ago" },
-  { id: 2, title: "Low stock", detail: "Roadster Mini Electric Car — 2 left", time: "1 hr ago" },
-  { id: 3, title: "Payment received", detail: "KD-1449 · Razorpay", time: "3 hrs ago" },
-];
+export type AdminAlert = { id: string; title: string; detail: string; href: string };
 
 const roleLabel: Record<string, string> = {
   super_admin: "Super Admin",
@@ -35,7 +31,7 @@ const roleLabel: Record<string, string> = {
 
 export type AdminHeaderUser = { name: string; email: string | null; role: string } | null;
 
-export function AdminHeader({ user }: { user: AdminHeaderUser }) {
+export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; alerts?: AdminAlert[] }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const name = user?.name ?? "Preview Admin";
   const role = user ? (roleLabel[user.role] ?? user.role) : "Development preview";
@@ -56,19 +52,19 @@ export function AdminHeader({ user }: { user: AdminHeaderUser }) {
             <Logo tone="light" />
           </SheetHeader>
           <div className="overflow-y-auto px-3 py-6">
-            <AdminNavLinks onNavigate={() => setMobileOpen(false)} />
+            <AdminNavLinks role={user?.role ?? null} onNavigate={() => setMobileOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>
 
       <form role="search" className="relative max-w-md flex-1" action="/admin/orders">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <label htmlFor="admin-search" className="sr-only">Search orders, products, customers</label>
+        <label htmlFor="admin-search" className="sr-only">Search orders by number, name, phone or city</label>
         <Input
           id="admin-search"
           name="q"
           type="search"
-          placeholder="Search orders, products, customers…"
+          placeholder="Search orders…"
           className="h-10 bg-muted/60 pl-9"
         />
       </form>
@@ -76,21 +72,25 @@ export function AdminHeader({ user }: { user: AdminHeaderUser }) {
       <div className="ml-auto flex items-center gap-1.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" aria-label={`Notifications (${previewNotifications.length} new)`}>
+            <Button variant="ghost" size="icon" className="relative" aria-label={`Alerts (${alerts.length})`}>
               <Bell />
-              <span aria-hidden className="absolute top-2 right-2 size-2 rounded-full bg-gold ring-2 ring-background" />
+              {alerts.length ? <span aria-hidden className="absolute top-2 right-2 size-2 rounded-full bg-gold ring-2 ring-background" /> : null}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel className="flex items-center justify-between">
-              Notifications <span className="text-xs font-normal text-muted-foreground">Preview</span>
+              Alerts
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {previewNotifications.map((n) => (
-              <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-0.5 py-2">
-                <span className="font-medium">{n.title}</span>
-                <span className="text-xs text-muted-foreground">{n.detail}</span>
-                <span className="text-[0.7rem] text-muted-foreground/80">{n.time}</span>
+            {alerts.length === 0 ? (
+              <p className="px-2 py-4 text-center text-sm text-muted-foreground">All caught up. Nothing needs attention.</p>
+            ) : null}
+            {alerts.map((n) => (
+              <DropdownMenuItem key={n.id} asChild>
+                <Link href={n.href} className="flex flex-col items-start gap-0.5 py-2">
+                  <span className="font-medium">{n.title}</span>
+                  <span className="text-xs text-muted-foreground">{n.detail}</span>
+                </Link>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -115,17 +115,25 @@ export function AdminHeader({ user }: { user: AdminHeaderUser }) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem disabled>
-                <User /> Profile
-              </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/admin/settings">
-                  <Settings /> Settings
+                <Link href="/account">
+                  <User /> My profile
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <ShieldCheck /> Admin users
-              </DropdownMenuItem>
+              {!user || user.role === "admin" || user.role === "super_admin" ? (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin/settings">
+                      <Settings /> Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin/users">
+                      <ShieldCheck /> Users &amp; roles
+                    </Link>
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {user ? (

@@ -2,13 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Heart, Info, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
+import { CheckCircle2, Mail, MessageCircle, Minus, Plus, ShoppingBag } from "lucide-react";
 import { Price } from "@/components/store/price";
+import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
+import { WishlistButton } from "@/components/store/wishlist-button";
+import { OFFICIAL_WHATSAPP, supportMailto, whatsappLink } from "@/config/storefront";
+import { addToCart } from "@/features/cart/cart-store";
+import { whatsappOrderUrl } from "@/lib/whatsapp";
 import type { StoreVariant } from "@/features/catalog/types";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
 
 type Props = {
+  productId: string;
   name: string;
   shortDescription: string;
   variants: StoreVariant[];
@@ -19,11 +25,11 @@ type Props = {
 };
 
 /**
- * Variant / quantity selection and purchase actions. The displayed price follows
- * the selected variant, but it is display-only: checkout (Phase 8) re-reads the
- * price for the variant ID from the database.
+ * Variant / quantity selection and purchase actions. BUY NOW opens WhatsApp with
+ * a pre-filled order message; the cart is kept in the browser. Prices shown are
+ * display-only: online checkout (Phase 8) re-reads them from the database.
  */
-export function PurchasePanel({ name, shortDescription, variants, defaultVariantId, whatsappNumber, productUrl }: Props) {
+export function PurchasePanel({ productId, name, shortDescription, variants, defaultVariantId, whatsappNumber, productUrl }: Props) {
   const [variantId, setVariantId] = useState(defaultVariantId);
   const [qty, setQty] = useState(1);
   const [notice, setNotice] = useState(false);
@@ -33,8 +39,16 @@ export function PurchasePanel({ name, shortDescription, variants, defaultVariant
   const showPicker = variants.length > 1;
   const pickerLabel = variants.every((v) => v.colour) ? "Colour" : "Option";
 
-  const waMessage = `Hi KING DAY, I'm interested in ${name} (${variant.name}, SKU ${variant.sku}), quantity ${qty}. ${productUrl}`;
-  const waHref = whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(waMessage)}` : null;
+  const waOrder = {
+    name,
+    sku: variant.sku,
+    price: variant.price,
+    variant: variants.length > 1 ? (variant.colour ?? variant.name) : null,
+    quantity: qty,
+    url: productUrl,
+  };
+  const buyHref = whatsappOrderUrl(whatsappNumber ?? OFFICIAL_WHATSAPP, waOrder);
+  const enquireHref = whatsappLink(`Hi KING DAY, I have a question about ${name} (SKU ${variant.sku}). ${productUrl}`);
 
   return (
     <div className="flex flex-col gap-6">
@@ -113,45 +127,52 @@ export function PurchasePanel({ name, shortDescription, variants, defaultVariant
         </p>
       </div>
 
+      <a
+        href={out ? undefined : buyHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-disabled={out}
+        data-testid="whatsapp-buy-now"
+        className={cn(
+          "inline-flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full bg-gold px-6 py-4 text-base font-bold tracking-wide text-deep uppercase shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] transition-colors hover:bg-gold-300 focus-visible:ring-2 focus-visible:ring-royal focus-visible:outline-none",
+          out && "pointer-events-none cursor-not-allowed opacity-50",
+        )}
+      >
+        <WhatsAppIcon className="size-5" /> Buy now on WhatsApp
+      </a>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
           disabled={out}
-          onClick={() => setNotice(true)}
-          className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-royal px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgb(75_0_130/0.6)] transition-colors hover:bg-royal-800 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => {
+            addToCart({ variantId: variant.id, productName: name, variantName: variants.length > 1 ? (variant.colour ?? variant.name) : null, sku: variant.sku, price: variant.price, maxQty, url: productUrl }, qty);
+            setNotice(true);
+          }}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-royal px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgb(75_0_130/0.6)] transition-colors hover:bg-royal-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ShoppingBag aria-hidden className="size-4" /> Add to cart
         </button>
-        <button
-          type="button"
-          disabled={out}
-          onClick={() => setNotice(true)}
-          className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-semibold text-deep transition-colors hover:bg-gold-300 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Zap aria-hidden className="size-4" /> Buy now
-        </button>
+        <WishlistButton productId={productId} />
       </div>
 
       {notice ? (
-        <p role="status" className="flex items-start gap-2 rounded-xl bg-royal-50 px-4 py-3 text-sm text-royal-800">
-          <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
-          Online ordering opens at launch. Until then, enquire on WhatsApp and our team will help you order.
+        <p role="status" className="flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-4 py-3 text-sm text-success">
+          <CheckCircle2 aria-hidden className="size-4 shrink-0" />
+          Added to your cart.
+          <Link href="/cart" className="font-semibold underline underline-offset-2">View cart</Link>
         </p>
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        {waHref ? (
-          <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-5 text-sm font-semibold text-[#128C7E] hover:bg-[#25D366]/15">
-            <MessageCircle aria-hidden className="size-4" /> Enquire on WhatsApp
+        {enquireHref ? (
+          <a href={enquireHref} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-5 text-sm font-semibold text-[#128C7E] hover:bg-[#25D366]/15">
+            <MessageCircle aria-hidden className="size-4" /> Ask a question
           </a>
-        ) : (
-          <Link href="/contact" className="inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
-            <MessageCircle aria-hidden className="size-4" /> Ask about this product
-          </Link>
-        )}
-        <Link href="/wishlist" className="inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
-          <Heart aria-hidden className="size-4" /> Wishlist
-        </Link>
+        ) : null}
+        <a href={supportMailto(`Enquiry: ${name} (${variant.sku})`)} className="inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
+          <Mail aria-hidden className="size-4" /> Email support
+        </a>
       </div>
     </div>
   );

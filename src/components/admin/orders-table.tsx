@@ -3,7 +3,7 @@ import { OrderStatusBadge, PaymentStatusBadge } from "@/components/admin/status-
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ORDER_STATUSES, ORDER_STATUS_LABEL, type OrderStatus } from "@/features/orders/types";
-import { previewOrders } from "@/features/preview/data";
+import { getAdminData } from "@/features/admin/source";
 import { formatDateTime, formatPaise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -17,13 +17,19 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
   const statusParam = first(params.status);
   const status = ORDER_STATUSES.includes(statusParam as OrderStatus) ? (statusParam as OrderStatus) : null;
 
+  const { orders: previewOrders, live } = await getAdminData();
   const counts = new Map<OrderStatus, number>();
   for (const o of previewOrders) counts.set(o.status, (counts.get(o.status) ?? 0) + 1);
 
   const rows = previewOrders.filter(
     (o) =>
       (!status || o.status === status) &&
-      (!q || o.number.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q) || o.city.toLowerCase().includes(q)),
+      (!q ||
+        o.number.toLowerCase().includes(q) ||
+        o.customerName.toLowerCase().includes(q) ||
+        o.city.toLowerCase().includes(q) ||
+        (o.email ?? "").toLowerCase().includes(q) ||
+        (!!o.phone && o.phone.replace(/\s/g, "").includes(q.replace(/\s/g, "")))),
   );
 
   const href = (s: OrderStatus | null, query: string = q) => {
@@ -84,13 +90,17 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">No orders match these filters.</TableCell>
+                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">{previewOrders.length === 0 ? "No orders yet. New orders will appear here." : "No orders match these filters."}</TableCell>
                 </TableRow>
               ) : (
-                rows.slice(0, 50).map((o) => (
+                rows.slice(0, 100).map((o) => (
                   <TableRow key={o.id}>
                     <TableCell className="pl-6">
-                      <span className="font-medium text-deep">{o.number}</span>
+                      {live ? (
+                        <Link href={`/admin/orders/${o.id}`} className="font-medium text-royal underline-offset-4 hover:underline">{o.number}</Link>
+                      ) : (
+                        <span className="font-medium text-deep">{o.number}</span>
+                      )}
                       <span className="block text-xs text-muted-foreground">{formatDateTime(o.placedAt)}</span>
                     </TableCell>
                     <TableCell>
@@ -109,8 +119,8 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
           </Table>
         </CardContent>
       </Card>
-      {rows.length > 50 ? (
-        <p className="mt-3 text-center text-xs text-muted-foreground">Showing 50 of {rows.length}. Pagination arrives with live data.</p>
+      {rows.length > 100 ? (
+        <p className="mt-3 text-center text-xs text-muted-foreground">Showing the latest 100 of {rows.length}. Search or filter by status to narrow down.</p>
       ) : null}
     </>
   );

@@ -116,6 +116,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
 
             <div className="mt-6">
               <PurchasePanel
+                productId={product.id}
                 name={product.name}
                 shortDescription={product.shortDescription}
                 variants={product.variants}

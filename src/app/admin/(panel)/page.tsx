@@ -26,20 +26,22 @@ import {
   getRecentOrders,
   getTopProducts,
 } from "@/features/dashboard/metrics";
+import { getAdminData } from "@/features/admin/source";
 import { ORDER_STATUS_LABEL } from "@/features/orders/types";
 import { formatDateTime, formatNumber, formatPaise } from "@/lib/format";
 import { StaffOnly } from "@/components/admin/staff-only";
 
 export const metadata: Metadata = { title: "Overview" };
 
-function AdminDashboardPageContent() {
-  const s = getDashboardSummary();
-  const daily = getDailyRevenue(30);
-  const breakdown = getOrderStatusBreakdown();
-  const breakdownMax = Math.max(...breakdown.map((b) => b.count));
-  const recent = getRecentOrders(6);
-  const top = getTopProducts(5);
-  const lowStock = getLowStockProducts();
+async function AdminDashboardPageContent() {
+  const data = await getAdminData();
+  const s = getDashboardSummary(data);
+  const daily = getDailyRevenue(data, 30);
+  const breakdown = getOrderStatusBreakdown(data);
+  const breakdownMax = Math.max(1, ...breakdown.map((b) => b.count));
+  const recent = getRecentOrders(data, 6);
+  const top = getTopProducts(data, 5);
+  const lowStock = getLowStockProducts(data);
 
   return (
     <>
@@ -59,14 +61,14 @@ function AdminDashboardPageContent() {
           </>
         }
       />
-      <PreviewNotice />
+      {data.live ? null : <PreviewNotice />}
 
       {/* Primary KPIs */}
       <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total revenue" value={formatPaise(s.revenue.value)} change={s.revenue.change} hint="vs previous 30 days" icon={IndianRupee} tone="royal" />
         <StatCard label="Total orders" value={formatNumber(s.orders.value)} change={s.orders.change} hint="vs previous 30 days" icon={ShoppingBag} tone="gold" />
         <StatCard label="Customers" value={formatNumber(s.customers.value)} hint={`${s.customers.newThisMonth} new this month`} icon={Users} tone="neutral" />
-        <StatCard label="Active products" value={formatNumber(s.products.value)} hint={`${s.products.total} in catalogue`} icon={Package} tone="neutral" />
+        <StatCard label="Active products" value={formatNumber(s.products.active)} hint={`${s.products.total} in catalogue`} icon={Package} tone="neutral" />
       </section>
 
       {/* Operational KPIs */}
@@ -96,6 +98,7 @@ function AdminDashboardPageContent() {
             <CardDescription>Orders by status, last 30 days</CardDescription>
           </CardHeader>
           <CardContent>
+            {breakdown.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No orders in the last 30 days.</p> : null}
             <ul className="flex flex-col gap-3">
               {breakdown.map((b) => (
                 <li key={b.status} className="grid grid-cols-[6.5rem_1fr_2rem] items-center gap-3 text-sm">
@@ -140,6 +143,9 @@ function AdminDashboardPageContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {recent.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">No orders yet.</TableCell></TableRow>
+                ) : null}
                 {recent.map((o) => (
                   <TableRow key={o.id}>
                     <TableCell className="pl-6">
@@ -166,6 +172,7 @@ function AdminDashboardPageContent() {
             <CardDescription>By revenue, last 30 days</CardDescription>
           </CardHeader>
           <CardContent>
+            {top.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No sales in the last 30 days.</p> : null}
             <ol className="flex flex-col gap-4">
               {top.map((p, i) => (
                 <li key={p.id} className="flex items-center gap-3">

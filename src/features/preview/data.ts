@@ -228,7 +228,7 @@ for (const c of previewCustomers) {
 
 // ---------------------------------------------------------------- Inventory
 
-export type StockMovementType = "opening" | "stock_in" | "stock_out" | "adjustment" | "sale" | "return";
+export type StockMovementType = "opening" | "stock_in" | "stock_out" | "adjustment" | "sale" | "sale_reversal" | "return" | "purchase";
 
 export type PreviewStockMovement = {
   id: string;

@@ -4,7 +4,7 @@ export const siteConfig = {
   tagline: "Every child deserves a royal ride.",
   description:
     "Premium kids' electric jeeps, cars, bikes, scooters, tricycles, bicycles, toys and baby accessories. Every child deserves a royal ride.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://kingday.in",
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.kingday.in",
   locale: "en_IN",
   currency: "INR",
   whatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "",

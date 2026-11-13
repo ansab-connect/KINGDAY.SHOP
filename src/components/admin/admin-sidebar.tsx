@@ -4,19 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
-import { adminNav } from "@/config/admin-nav";
+import { navForRole } from "@/config/admin-nav";
 import { cn } from "@/lib/utils";
 
 export function isActivePath(pathname: string, href: string) {
   return href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AdminNavLinks({ onNavigate }: { onNavigate?: () => void }) {
+export function AdminNavLinks({ onNavigate, role }: { onNavigate?: () => void; role: string | null }) {
   const pathname = usePathname();
 
   return (
     <nav aria-label="Admin" className="flex flex-col gap-6">
-      {adminNav.map((group) => (
+      {navForRole(role).map((group) => (
         <div key={group.label}>
           <p className="px-3 pb-2 text-[0.68rem] font-semibold tracking-[0.16em] text-white/40 uppercase">
             {group.label}
@@ -56,7 +56,7 @@ export function AdminNavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({ role }: { role: string | null }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-sidebar text-sidebar-foreground lg:flex">
       <div className="flex h-16 items-center border-b border-sidebar-border px-6">
@@ -65,7 +65,7 @@ export function AdminSidebar() {
         </Link>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-6">
-        <AdminNavLinks />
+        <AdminNavLinks role={role} />
       </div>
       <div className="border-t border-sidebar-border p-3">
         <Link

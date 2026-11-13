@@ -1,7 +1,7 @@
 /**
  * Storefront copy and links. Marketing claims here must be reviewed by KING DAY
- * before launch. Contact details are left empty until the store provides them,
- * and empty values are simply not rendered.
+ * before launch. Official contact details are the defaults below; an env var
+ * overrides one only when it is set to a non-empty value.
  */
 export const storeNav = [
   { title: "Home", href: "/" },
@@ -12,11 +12,18 @@ export const storeNav = [
   { title: "Contact", href: "/contact" },
 ] as const;
 
+/** Official KING DAY contact details. */
+export const OFFICIAL_SUPPORT_EMAIL = "kingdaystore@gmail.com";
+export const OFFICIAL_WHATSAPP = "919495902904";
+export const OFFICIAL_WHATSAPP_DISPLAY = "+91 94959 02904";
+export const OFFICE_LOCATION = "KOZHIKKODE PUTHIYAPALAM OFFICE";
+
 export const storeContact = {
-  email: process.env.NEXT_PUBLIC_STORE_EMAIL ?? "",
-  phone: process.env.NEXT_PUBLIC_STORE_PHONE ?? "",
-  whatsapp: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "",
-  address: process.env.NEXT_PUBLIC_STORE_ADDRESS ?? "",
+  email: process.env.NEXT_PUBLIC_STORE_EMAIL || OFFICIAL_SUPPORT_EMAIL,
+  phone: process.env.NEXT_PUBLIC_STORE_PHONE || "",
+  whatsapp: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || OFFICIAL_WHATSAPP,
+  whatsappDisplay: OFFICIAL_WHATSAPP_DISPLAY,
+  address: process.env.NEXT_PUBLIC_STORE_ADDRESS || OFFICE_LOCATION,
   instagram: process.env.NEXT_PUBLIC_INSTAGRAM_HANDLE ?? "",
   facebook: process.env.NEXT_PUBLIC_FACEBOOK_URL ?? "",
   youtube: process.env.NEXT_PUBLIC_YOUTUBE_URL ?? "",
@@ -44,6 +51,9 @@ export const whyChoose = [
     body: "Not sure which model or size? Talk to us before you buy, and after.",
   },
 ] as const;
+
+export const supportMailto = (subject?: string) =>
+  `mailto:${storeContact.email}${subject ? `?subject=${encodeURIComponent(subject)}` : ""}`;
 
 /** Build a WhatsApp deep link. Returns null when no store number is configured. */
 export function whatsappLink(message: string): string | null {

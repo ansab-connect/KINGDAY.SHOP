@@ -422,6 +422,28 @@ await test("staff cannot delete products (admin only)", async () => {
   assert(r.length === 0, "staff deleted a product");
 });
 
+console.log("Audit log & user directory");
+await test("role changes and order updates are written to the audit log (super admin only)", async () => {
+  await user(superAdmin);
+  await db.query(`insert into public.user_roles (user_id, role) values ($1, 'staff')`, [bob]);
+  await db.query(`delete from public.user_roles where user_id = $1 and role = 'staff'`, [bob]);
+  const r = await rows(`select action, entity from public.audit_logs where entity = 'user_roles' order by id`);
+  assert(r.length >= 2 && r.some((x) => x.action === "insert") && r.some((x) => x.action === "delete"), `audit ${JSON.stringify(r)}`);
+  assert((await rows(`select * from public.audit_logs where entity = 'orders'`)).length >= 1, "order changes not audited");
+  await user(staff);
+  assert((await rows(`select * from public.audit_logs`)).length === 0, "staff can read audit log");
+  await expectError(`insert into public.audit_logs (action, entity) values ('x', 'y')`, [], /permission denied|row-level/);
+});
+await test("only admins can list users (with emails)", async () => {
+  await user(superAdmin);
+  const r = await rows(`select email, roles from public.admin_list_users(null, 50)`);
+  assert(r.length === 4 && r.some((x) => String(x.roles).includes("super_admin")), `list ${r.length}`);
+  await user(staff);
+  await expectError(`select * from public.admin_list_users(null, 50)`, [], /not authorized/);
+  await anon();
+  await expectError(`select * from public.admin_list_users(null, 50)`, [], /permission denied/);
+});
+
 console.log("Settings & purchasing");
 await test("only public settings are visible to customers", async () => {
   await anon();

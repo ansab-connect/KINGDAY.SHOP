@@ -182,7 +182,7 @@ export function ProductEditor({
             label="URL slug"
             value={basics.slug}
             error={errors.slug}
-            hint={`kingday.in/products/${basics.slug || "…"}`}
+            hint={`www.kingday.in/products/${basics.slug || "…"}`}
             onChange={(slug) => {
               setSlugTouched(true);
               setB("slug", slug);
