@@ -102,3 +102,25 @@ Dashboard charts are small hand-written SVG components. This avoids a dependency
   production build sees the gate as static content and fails on admin routes with URL params.
 - **Tests:** `npm test` (Vitest: schemas and Supabase→storefront mapping) and
   `npm run test:db` (49 database checks).
+
+## 2026-11-13 — Cloudflare deploy trial (not deployed)
+
+A build-only trial ahead of Phase 12. Nothing was uploaded, and the owner will deploy once all phases are done.
+
+- `opennextjs-cloudflare build` **works on Windows** (Next 16.4.6, OpenNext 1.20.17).
+- Bundle: 13.2 MB raw / **2.65 MB gzip**, under the 3 MB Workers Free limit, but only about 12% headroom.
+  Re-check before deploying; the paid plan raises the limit to 10 MB.
+- OpenNext warns that Node.js middleware (`proxy.ts`) support is **experimental** on Cloudflare. Auth
+  never depends on the proxy, so it can be removed if it misbehaves.
+- **Secret leak found and fixed.** OpenNext copies values from `.env` files into
+  `.open-next/cloudflare/next-env.mjs`, so the service-role key was baked into the server bundle.
+  Fix: the secret now lives only in `.env.development.local` (loaded by `next dev` only). In
+  production it is set with `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`. Before every
+  deploy, grep `.open-next` for the key and make sure it isn't there.
+- Deploy checklist for later:
+  1. Run `npx wrangler login` (owner's Cloudflare account).
+  2. Set `NEXT_PUBLIC_SITE_URL` to the live URL in `.env.production.local`.
+  3. Run the build, then the secret grep check.
+  4. Run `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  5. Run `npm run deploy`.
+  6. Add the live `/auth/confirm` URL and Site URL in Supabase.

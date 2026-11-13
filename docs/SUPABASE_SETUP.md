@@ -20,9 +20,18 @@ In **Project Settings → API**, copy these values into `.env.local`. That file 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon / publishable key>
-SUPABASE_SERVICE_ROLE_KEY=<service_role / secret key>   # server only
+# SUPABASE_SERVICE_ROLE_KEY goes in .env.development.local instead (see note below)
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
+
+Put the secret key in **`.env.development.local`** (also git-ignored), not `.env.local`:
+
+```
+SUPABASE_SERVICE_ROLE_KEY=<service_role / secret key>
+```
+
+Production builds bundle every value in `.env.local` into the Cloudflare Worker, and the secret
+must never be bundled. In production it is set with `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
 
 ## 3. Apply the migrations
 
