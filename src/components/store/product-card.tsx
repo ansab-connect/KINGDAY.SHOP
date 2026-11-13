@@ -38,7 +38,7 @@ export function ProductCard({ product, priority = false }: { product: StoreProdu
             {product.name}
           </Link>
         </h3>
-        <Rating value={product.rating} count={product.reviewCount} />
+        {product.reviewCount > 0 ? <Rating value={product.rating} count={product.reviewCount} /> : null}
         <Price price={product.price} mrp={product.mrp} className="mt-auto pt-1" />
       </div>
     </article>

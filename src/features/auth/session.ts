@@ -34,6 +34,8 @@ export type SessionUser = {
  */
 export const getCurrentUser = cache(async function getCurrentUser(): Promise<SessionUser | null> {
   if (!isSupabaseConfigured) return null;
+  // Session checks are always request-time (JWT expiry uses the current time).
+  await connection();
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   const sub = data?.claims?.sub;

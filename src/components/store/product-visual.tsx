@@ -45,7 +45,7 @@ export function ProductVisual({
   if (image) {
     return (
       <div className={cn("relative overflow-hidden bg-muted", className)}>
-        <Image src={image.src} alt={image.alt} fill sizes={sizes} priority={priority} className="object-cover" />
+        <Image src={image.src} alt={image.alt} fill sizes={sizes} preload={priority} className="object-cover" />
       </div>
     );
   }

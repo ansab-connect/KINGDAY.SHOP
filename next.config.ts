@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   poweredByHeader: false,
   images: {
+    // In local development, images load straight from Supabase. Some ISP networks
+    // (NAT64/IPv6) make Supabase resolve to addresses the dev optimizer treats as
+    // private and refuses. Production uses Cloudflare Images instead.
+    unoptimized: process.env.NODE_ENV === "development",
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       // Supabase Storage public buckets (Phase 4)
