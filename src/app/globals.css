@@ -1,0 +1,220 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =====================================================================
+   KING DAY — Design tokens
+   Official palette: Royal Purple #4B0082 · Matte Gold #D4AF37
+                     Deep Purple #1A0F2E · White #FFFFFF
+   Fonts: Outfit (headings) · DM Sans (body)
+   ===================================================================== */
+
+@theme {
+  /* Brand primitives */
+  --color-royal: #4b0082;
+  --color-gold: #d4af37;
+  --color-deep: #1a0f2e;
+
+  /* Royal purple scale (700 = official Royal Purple, 950 = Deep Purple) */
+  --color-royal-50: #f6f1fb;
+  --color-royal-100: #ece1f6;
+  --color-royal-200: #d6c0eb;
+  --color-royal-300: #b791da;
+  --color-royal-400: #9058c4;
+  --color-royal-500: #6d26a8;
+  --color-royal-600: #5b1096;
+  --color-royal-700: #4b0082;
+  --color-royal-800: #3a0066;
+  --color-royal-900: #2a0b4a;
+  --color-royal-950: #1a0f2e;
+
+  /* Matte gold scale (400 = official Matte Gold) */
+  --color-gold-50: #fbf7e9;
+  --color-gold-100: #f6edc8;
+  --color-gold-200: #eedc95;
+  --color-gold-300: #e3c662;
+  --color-gold-400: #d4af37;
+  --color-gold-500: #bb9629;
+  --color-gold-600: #987820;
+  --color-gold-700: #765d1b;
+  --color-gold-800: #564417;
+  --color-gold-900: #3a2e12;
+
+  /* Status colours (orders, stock, payments) */
+  --color-success: #1d7f55;
+  --color-success-soft: #e6f4ed;
+  --color-warning: #a8670d;
+  --color-warning-soft: #fdf3e2;
+  --color-info: #2958c7;
+  --color-info-soft: #e9effc;
+  --color-danger: #c0392b;
+  --color-danger-soft: #fbeceb;
+
+  /* Elevation — soft, purple-tinted shadows */
+  --shadow-card: 0 1px 2px rgb(26 15 46 / 0.04), 0 4px 16px -4px rgb(26 15 46 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(26 15 46 / 0.05), 0 16px 40px -12px rgb(75 0 130 / 0.22);
+
+  /* Motion */
+  --ease-royal: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@theme inline {
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-outfit), var(--font-dm-sans), ui-sans-serif, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Semantic tokens (shadcn/ui contract) mapped to the KING DAY palette */
+:root {
+  --background: #ffffff;
+  --foreground: #1a0f2e;
+  --card: #ffffff;
+  --card-foreground: #1a0f2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a0f2e;
+  --primary: #4b0082;
+  --primary-foreground: #ffffff;
+  --secondary: #f6f1fb;
+  --secondary-foreground: #4b0082;
+  --muted: #f7f5fa;
+  --muted-foreground: #6b6478;
+  --accent: #f6f1fb;
+  --accent-foreground: #3a0066;
+  --destructive: #c0392b;
+  --border: #ebe6f1;
+  --input: #e2dcea;
+  --ring: #6d26a8;
+  --chart-1: #4b0082;
+  --chart-2: #d4af37;
+  --chart-3: #9058c4;
+  --chart-4: #987820;
+  --chart-5: #d6c0eb;
+  --radius: 0.75rem;
+
+  /* Admin sidebar — Deep Purple with gold highlights */
+  --sidebar: #1a0f2e;
+  --sidebar-foreground: #e9e3f2;
+  --sidebar-primary: #d4af37;
+  --sidebar-primary-foreground: #1a0f2e;
+  --sidebar-accent: rgb(255 255 255 / 0.07);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: #d4af37;
+}
+
+.dark {
+  --background: #120a20;
+  --foreground: #f3eff8;
+  --card: #1a0f2e;
+  --card-foreground: #f3eff8;
+  --popover: #1a0f2e;
+  --popover-foreground: #f3eff8;
+  --primary: #b791da;
+  --primary-foreground: #1a0f2e;
+  --secondary: #2a0b4a;
+  --secondary-foreground: #f3eff8;
+  --muted: #221538;
+  --muted-foreground: #a99fba;
+  --accent: #2a0b4a;
+  --accent-foreground: #f3eff8;
+  --destructive: #e5735f;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.14);
+  --ring: #d4af37;
+  --chart-1: #b791da;
+  --chart-2: #d4af37;
+  --chart-3: #9058c4;
+  --chart-4: #e3c662;
+  --chart-5: #5b1096;
+  --sidebar: #0d0717;
+  --sidebar-foreground: #e9e3f2;
+  --sidebar-primary: #d4af37;
+  --sidebar-primary-foreground: #1a0f2e;
+  --sidebar-accent: rgb(255 255 255 / 0.07);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: #d4af37;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01";
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: var(--color-gold-200);
+    color: var(--color-deep);
+  }
+}
+
+@layer utilities {
+  /* Gold hairline used under section eyebrows and active states */
+  .gold-rule {
+    background: linear-gradient(90deg, var(--color-gold) 0%, rgb(212 175 55 / 0) 100%);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

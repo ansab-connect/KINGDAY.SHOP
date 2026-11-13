@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "kingday-shop",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    // Enable Node.js APIs (required by OpenNext)
+    "nodejs_compat",
+    // Allow fetching public URLs from the app
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      // Must match "name" above
+      "service": "kingday-shop"
+    }
+  ],
+  "images": {
+    // Cloudflare Images binding for next/image optimization
+    "binding": "IMAGES"
+  },
+  // Custom domain (kingday.shop) is attached in Phase 12, after approval.
+  // "routes": [{ "pattern": "kingday.shop", "custom_domain": true }],
+  "observability": { "enabled": true }
+}
