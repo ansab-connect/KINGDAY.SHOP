@@ -9,7 +9,7 @@ import { DeleteButton } from "@/components/admin/catalog/delete-button";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
 import { deleteProduct, saveProduct } from "@/features/catalog/admin-actions";
-import type { AiProductFill } from "@/features/catalog/ai-fill";
+import type { ProductFill } from "@/features/catalog/smart-fill";
 import type { AdminProduct } from "@/features/catalog/admin-repo";
 import { paiseToRupees, rupeesToPaise, slugify } from "@/features/catalog/schemas";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -162,8 +162,8 @@ export function ProductEditor({
     });
   }
 
-  /** Apply AI-extracted fields. Only non-empty values overwrite; nothing is saved. */
-  function applyAi(d: AiProductFill): string {
+  /** Apply Smart fill results. Only non-empty values overwrite; nothing is saved. */
+  function applyAi(d: ProductFill): string {
     const filled: string[] = [];
     setBasics((p) => {
       const next = { ...p };
@@ -211,7 +211,7 @@ export function ProductEditor({
     }
     return filled.length
       ? `Filled: ${filled.join(", ")}. Check every field, add SKUs (✨ button) and stock, then save.${variantNote}`
-      : "The AI didn't find usable details in that text. Try adding more information.";
+      : "No details were recognised. Put the name on the first line, specs as \"Name: value\" and features as bullet points.";
   }
 
   const videoUrl = publicStorageUrl("product-videos", basics.video_path);
