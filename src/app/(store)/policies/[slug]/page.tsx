@@ -12,7 +12,7 @@ const policies = {
   shipping: { title: "Shipping Policy", summary: "Delivery areas, timelines and charges." },
   returns: { title: "Returns & Refunds", summary: "How returns, replacements and refunds work." },
   privacy: { title: "Privacy Policy", summary: "How we collect, use and protect your personal information." },
-  terms: { title: "Terms of Service", summary: "The terms that apply when you use kingday.shop." },
+  terms: { title: "Terms of Service", summary: "The terms that apply when you use kingday.in." },
 } as const;
 
 type PolicySlug = keyof typeof policies;

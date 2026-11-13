@@ -73,7 +73,7 @@ export function CategoryForm({
             label="URL slug"
             value={v.slug}
             error={errors.slug}
-            hint={`kingday.shop/categories/${v.slug || "…"}`}
+            hint={`kingday.in/categories/${v.slug || "…"}`}
             onChange={(slug) => {
               setSlugTouched(true);
               set("slug", slug);

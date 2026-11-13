@@ -60,7 +60,7 @@ export function BrandForm({ brand, canDelete }: { brand: AdminBrand | null; canD
             label="URL slug"
             value={v.slug}
             error={errors.slug}
-            hint={`kingday.shop/shop?brand=${v.slug || "…"}`}
+            hint={`kingday.in/shop?brand=${v.slug || "…"}`}
             onChange={(slug) => {
               setSlugTouched(true);
               setV((p) => ({ ...p, slug }));
