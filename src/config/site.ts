@@ -8,6 +8,8 @@ export const siteConfig = {
   locale: "en_IN",
   currency: "INR",
   whatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "",
+  /** Static year (Cache Components disallows reading the clock during prerender). */
+  copyrightYear: 2026,
 } as const;
 
 /** Official brand colours — mirror of the CSS tokens in globals.css. */

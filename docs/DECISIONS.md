@@ -34,3 +34,19 @@ request (cookies, session) must sit inside `<Suspense>`. Admin and account pages
 
 Dashboard charts are small hand-written SVG components. This avoids a dependency
 (Recharts is ~100 KB) for a few simple charts. We will revisit this if analytics needs grow.
+
+## 2026-11-13 — Storefront on preview catalogue, instant navigation
+
+- The storefront reads from `src/features/catalog/queries.ts`. For now that module serves a
+  fictional preview catalogue. In Phase 5 its function bodies switch to Supabase, and the
+  page code stays as it is. A banner on every storefront page states that the data is sample
+  data while `NEXT_PUBLIC_USE_PREVIEW_DATA` is not `false`.
+- Product structured data omits `aggregateRating` in preview mode, so sample ratings are never
+  published to search engines.
+- Dynamic routes (`/products/[slug]`, `/categories/[slug]`, `/policies/[slug]`) use a
+  synchronous page that passes the `params` promise into an async child wrapped in `<Suspense>`.
+  This is the documented Next.js 16 pattern for instant navigation with Cache Components.
+- Filters use plain GET forms (they work without JavaScript), with a small client helper that
+  auto-submits when a control changes.
+- Cart, checkout, account, wishlist and policy pages are honest placeholders until their phases.
+  Policy text must be written and approved by KING DAY.

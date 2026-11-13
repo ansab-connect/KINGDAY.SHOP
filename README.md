@@ -42,6 +42,6 @@ npm run dev                  # http://localhost:3000
 
 ## Roadmap
 
-1. Foundation ✅ · 2. Admin panel UI · 3. Storefront UI · 4. Supabase (schema, RLS, auth, storage) ·
+1. Foundation ✅ · 2. Admin panel UI ✅ · 3. Storefront UI ✅ · 4. Supabase (schema, RLS, auth, storage) ·
 5. Products · 6. Inventory · 7. Customers · 8. Cart/Checkout/Razorpay/COD · 9. Orders ·
 10. Analytics · 11. Security & testing · 12. Deployment
