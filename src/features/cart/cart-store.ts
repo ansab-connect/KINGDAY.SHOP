@@ -90,3 +90,8 @@ export function clearCart() {
 export function replaceCart(items: CartItem[]) {
   write(items);
 }
+
+/** Current cart outside React (read straight from storage). */
+export function readCart(): CartItem[] {
+  return read();
+}

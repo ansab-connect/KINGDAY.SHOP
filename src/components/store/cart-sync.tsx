@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { replaceCart, useCart, type CartItem } from "@/features/cart/cart-store";
+import { usePathname } from "next/navigation";
+import { readCart, replaceCart, useCart, type CartItem } from "@/features/cart/cart-store";
 import { createClient } from "@/lib/supabase/client";
 
 const OWNER_KEY = "kingday.cart.owner";
@@ -30,14 +31,22 @@ export function CartSync() {
   const ready = useRef(false);
   const last = useRef<string>("");
 
-  // Load + merge once per session.
+  const pathname = usePathname();
+
+  // Load + merge whenever the signed-in account changes (sign-in, sign-out, switch).
+  // Checked on every page change because sign-out happens on the server.
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data: session } = await supabase.auth.getSession();
+      const sessionUid = session.session?.user.id ?? null;
+      if (cancelled || (ready.current && sessionUid === userId.current) || (!sessionUid && !userId.current && ready.current)) return;
+      const { data } = sessionUid ? await supabase.auth.getUser() : { data: { user: null } };
       const uid = data.user?.id ?? null;
       if (cancelled) return;
+      ready.current = false;
+      userId.current = null;
       // The browser cart belongs to whoever was signed in: after sign-out (or a
       // different account) it is cleared so the next person never sees it.
       let owner: string | null = null;
@@ -49,6 +58,7 @@ export function CartSync() {
         try {
           localStorage.removeItem(OWNER_KEY);
         } catch {}
+        ready.current = true;
         return;
       }
       try {
@@ -78,7 +88,8 @@ export function CartSync() {
       });
       if (cancelled) return;
       const merged = new Map<string, CartItem>(server.map((i) => [i.variantId, i]));
-      for (const local of owner && owner !== uid ? [] : items) {
+      // Read the live cart: during hydration `items` is still the empty server snapshot.
+      for (const local of owner && owner !== uid ? [] : readCart()) {
         const s = merged.get(local.variantId);
         merged.set(local.variantId, s ? { ...s, quantity: Math.min(s.maxQty, Math.max(s.quantity, local.quantity)) } : local);
       }
@@ -88,8 +99,7 @@ export function CartSync() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once; later changes are saved below
-  }, []);
+  }, [pathname]);
 
   // Save changes to the account.
   useEffect(() => {
