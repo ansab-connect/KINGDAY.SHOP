@@ -147,7 +147,7 @@ async function AuditContent({ searchParams }: PageProps<"/admin/audit-log">) {
 
 export default function AuditLogPage(props: PageProps<"/admin/audit-log">) {
   return (
-    <StaffOnly minimum="super_admin">
+    <StaffOnly module="audit">
       <AuditContent {...props} />
     </StaffOnly>
   );

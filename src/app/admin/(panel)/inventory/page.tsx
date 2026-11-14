@@ -137,7 +137,7 @@ async function InventoryPageContent() {
 
 export default function InventoryPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="inventory">
       <InventoryPageContent />
     </StaffOnly>
   );

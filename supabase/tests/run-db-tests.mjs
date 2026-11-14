@@ -479,5 +479,88 @@ await test("RLS is enabled on every public table", async () => {
   assert(r.length === 0, `RLS off on: ${r.map((x) => x.relname).join(", ")}`);
 });
 
+console.log("Staff accounts & permissions");
+const [svc, admin2, primary] = (
+  await rows(`insert into auth.users (email, raw_user_meta_data) values
+    ('tech@test.local', '{"full_name":"Tech"}'),
+    ('admin2@test.local', '{"full_name":"Admin Two"}'),
+    ('KingDayStore@gmail.com', '{"full_name":"KING DAY"}')
+    returning id`)
+).map((r) => r.id);
+await db.query(`insert into public.user_roles (user_id, role) values ($1, 'service_staff'), ($2, 'admin')`, [svc, admin2]);
+const svcCat = (await rows(`select id from public.staff_categories where name = 'Service Technician'`))[0].id;
+const salesCat = (await rows(`select id from public.staff_categories where name = 'Sales Staff'`))[0].id;
+const anyProduct = (await rows(`select id from public.products limit 1`))[0].id;
+const touchProduct = async () => (await db.query(`update public.products set name = name where id = $1 returning id`, [anyProduct])).rows.length;
+
+await test("staff IDs are generated per kind and never change", async () => {
+  await user(superAdmin);
+  await db.query(`insert into public.staff_profiles (user_id, category_id) values ($1, $2), ($3, $4)`, [staff, salesCat, svc, svcCat]);
+  const r = await rows(`select user_id, staff_code from public.staff_profiles`);
+  const code = (id) => r.find((x) => x.user_id === id).staff_code;
+  assert(code(staff) === "KD-STF-0001" && code(svc) === "KD-SRV-0001", JSON.stringify(r));
+  await db.query(`update public.staff_profiles set staff_code = 'KD-STF-9999' where user_id = $1`, [staff]);
+  assert((await rows(`select staff_code from public.staff_profiles where user_id = $1`, [staff]))[0].staff_code === "KD-STF-0001", "code changed");
+});
+await test("staff get role-default permissions", async () => {
+  await user(staff);
+  const p = Object.fromEntries((await rows(`select module, actions from public.my_permissions()`)).map((x) => [x.module, x.actions]));
+  assert(p.products?.includes("edit") && !p.products.includes("delete") && !p.users && !p.payroll, JSON.stringify(p));
+});
+await test("only super admin manages staff profiles and permissions", async () => {
+  await user(staff);
+  const n = (await db.query(`update public.staff_profiles set custom_permissions = true where user_id = $1 returning 1`, [staff])).rows.length;
+  assert(n === 0, "staff edited own profile flags");
+  await expectError(`insert into public.user_permissions (user_id, module, actions) values ($1, 'payroll', '{view}')`, [staff], /row-level security/);
+  await user(admin2);
+  await expectError(`insert into public.user_permissions (user_id, module, actions) values ($1, 'payroll', '{view}')`, [staff], /row-level security/);
+});
+await test("custom permissions replace role defaults (enforced by RLS)", async () => {
+  await user(superAdmin);
+  await db.query(`update public.staff_profiles set custom_permissions = true where user_id = $1`, [staff]);
+  await db.query(`insert into public.user_permissions (user_id, module, actions) values ($1, 'products', '{view}'), ($1, 'orders', '{view}')`, [staff]);
+  await user(staff);
+  assert((await touchProduct()) === 0, "view-only staff updated a product");
+  await expectError(`select public.set_reorder_level((select variant_id from public.inventory limit 1), 3)`, [], /not authorized/);
+  await user(superAdmin);
+  await db.query(`update public.staff_profiles set custom_permissions = false where user_id = $1`, [staff]);
+  await db.query(`delete from public.user_permissions where user_id = $1`, [staff]);
+  await user(staff);
+  assert((await touchProduct()) === 1, "defaults not restored");
+});
+await test("deactivated staff lose access immediately", async () => {
+  await user(superAdmin);
+  await db.query(`update public.staff_profiles set status = 'inactive' where user_id = $1`, [staff]);
+  await user(staff);
+  assert((await touchProduct()) === 0, "inactive staff edited product");
+  assert((await rows(`select * from public.my_permissions()`)).length === 0, "inactive staff kept permissions");
+  await user(superAdmin);
+  await db.query(`update public.staff_profiles set status = 'active' where user_id = $1`, [staff]);
+});
+await test("service staff have no admin-panel access", async () => {
+  await user(svc);
+  assert((await touchProduct()) === 0, "service staff edited product");
+  const p = (await rows(`select module from public.my_permissions()`)).map((x) => x.module);
+  assert(p.length === 1 && p[0] === "service", `perms ${p}`);
+});
+await test("staff directory is limited to users-view permission", async () => {
+  await user(superAdmin);
+  const r = await rows(`select * from public.admin_list_accounts(null, 50)`);
+  assert(r.some((x) => x.staff_code === "KD-SRV-0001"), "directory missing staff code");
+  await user(staff);
+  await expectError(`select * from public.admin_list_accounts(null, 50)`, [], /not authorized/);
+});
+await test("primary Super Admin is granted on confirmation and protected", async () => {
+  assert((await rows(`select 1 from public.user_roles where user_id = $1 and role = 'super_admin'`, [primary])).length === 0, "granted before confirmation");
+  await db.query(`update auth.users set email_confirmed_at = now() where id = $1`, [primary]);
+  assert((await rows(`select 1 from public.user_roles where user_id = $1 and role = 'super_admin'`, [primary])).length === 1, "not granted");
+  await user(superAdmin);
+  await expectError(`delete from public.user_roles where user_id = $1 and role = 'super_admin'`, [primary], /primary Super Admin/);
+  await db.query(`insert into public.staff_profiles (user_id) values ($1)`, [primary]);
+  await expectError(`update public.staff_profiles set status = 'inactive' where user_id = $1`, [primary], /primary Super Admin/);
+  await asSuperuser();
+  await expectError(`delete from auth.users where id = $1`, [primary], /primary Super Admin/);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

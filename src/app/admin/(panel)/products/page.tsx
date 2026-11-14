@@ -163,7 +163,7 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
 
 export default function ProductsPage(props: PageProps<"/admin/products">) {
   return (
-    <StaffOnly>
+    <StaffOnly module="products">
       <ProductsContent searchParams={props.searchParams} />
     </StaffOnly>
   );

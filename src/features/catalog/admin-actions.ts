@@ -2,7 +2,8 @@
 
 import { updateTag } from "next/cache";
 import { z } from "zod";
-import { assertStaff } from "@/features/auth/session";
+import type { Action, Module } from "@/features/auth/permissions";
+import { assertCan } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { CATALOG_TAG } from "./cache-tags";
@@ -49,14 +50,16 @@ const notConfigured: ActionResult<never> = {
   error: "Saving is disabled until Supabase is connected (see docs/SUPABASE_SETUP.md).",
 };
 
-async function guard(minimum: "staff" | "admin"): Promise<ActionResult<never> | null> {
+/** Passes when the user holds any of the given permissions on the module (RLS re-checks the exact one). */
+async function guard(module: Module, actions: Action[]): Promise<ActionResult<never> | null> {
   if (!isSupabaseConfigured) return notConfigured;
-  try {
-    await assertStaff(minimum);
-    return null;
-  } catch {
-    return { ok: false, error: "You don't have permission to do that." };
+  for (const action of actions) {
+    try {
+      await assertCan(module, action);
+      return null;
+    } catch {}
   }
+  return { ok: false, error: "You don't have permission to do that." };
 }
 
 const idSchema = z.uuid();
@@ -75,7 +78,7 @@ function previewValidate(schema: z.ZodType, input: unknown): ActionResult<never>
 // ---------------------------------------------------------------- Categories
 export async function saveCategory(input: unknown): Promise<ActionResult<{ id: string }>> {
   if (!isSupabaseConfigured) return previewValidate(categoryInputSchema, input);
-  const denied = await guard("staff");
+  const denied = await guard("categories", ["create", "edit"]);
   if (denied) return denied;
   const parsed = categoryInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please fix the highlighted fields.", fieldErrors: issuesToFieldErrors(parsed.error) };
@@ -95,7 +98,7 @@ export async function saveCategory(input: unknown): Promise<ActionResult<{ id: s
 }
 
 export async function deleteCategory(id: string): Promise<ActionResult> {
-  const denied = await guard("admin");
+  const denied = await guard("categories", ["delete"]);
   if (denied) return denied;
   if (!idSchema.safeParse(id).success) return { ok: false, error: "Invalid category." };
   const supabase = await createClient();
@@ -109,7 +112,7 @@ export async function deleteCategory(id: string): Promise<ActionResult> {
 // ---------------------------------------------------------------- Brands
 export async function saveBrand(input: unknown): Promise<ActionResult<{ id: string }>> {
   if (!isSupabaseConfigured) return previewValidate(brandInputSchema, input);
-  const denied = await guard("staff");
+  const denied = await guard("brands", ["create", "edit"]);
   if (denied) return denied;
   const parsed = brandInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please fix the highlighted fields.", fieldErrors: issuesToFieldErrors(parsed.error) };
@@ -129,7 +132,7 @@ export async function saveBrand(input: unknown): Promise<ActionResult<{ id: stri
 }
 
 export async function deleteBrand(id: string): Promise<ActionResult> {
-  const denied = await guard("admin");
+  const denied = await guard("brands", ["delete"]);
   if (denied) return denied;
   if (!idSchema.safeParse(id).success) return { ok: false, error: "Invalid brand." };
   const supabase = await createClient();
@@ -143,7 +146,7 @@ export async function deleteBrand(id: string): Promise<ActionResult> {
 // ---------------------------------------------------------------- Products
 export async function saveProduct(input: unknown): Promise<ActionResult<{ id: string }>> {
   if (!isSupabaseConfigured) return previewValidate(productInputSchema, input);
-  const denied = await guard("staff");
+  const denied = await guard("products", ["create", "edit"]);
   if (denied) return denied;
   const parsed = productInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please fix the highlighted fields.", fieldErrors: issuesToFieldErrors(parsed.error) };
@@ -161,7 +164,7 @@ export async function saveProduct(input: unknown): Promise<ActionResult<{ id: st
 }
 
 export async function deleteProduct(id: string): Promise<ActionResult> {
-  const denied = await guard("admin");
+  const denied = await guard("products", ["delete"]);
   if (denied) return denied;
   if (!idSchema.safeParse(id).success) return { ok: false, error: "Invalid product." };
   const supabase = await createClient();
@@ -189,7 +192,7 @@ export async function addProductImage(input: {
   width?: number;
   height?: number;
 }): Promise<ActionResult<{ id: string }>> {
-  const denied = await guard("staff");
+  const denied = await guard("products", ["create", "edit"]);
   if (denied) return denied;
   if (!idSchema.safeParse(input.productId).success) return { ok: false, error: "Invalid product." };
   if (!productImagePathSchema(input.productId).safeParse(input.path).success) return { ok: false, error: "Invalid image path." };
@@ -216,7 +219,7 @@ export async function addProductImage(input: {
 }
 
 export async function updateProductImageAlt(imageId: string, alt: string): Promise<ActionResult> {
-  const denied = await guard("staff");
+  const denied = await guard("products", ["create", "edit"]);
   if (denied) return denied;
   if (!idSchema.safeParse(imageId).success) return { ok: false, error: "Invalid image." };
   const supabase = await createClient();
@@ -227,7 +230,7 @@ export async function updateProductImageAlt(imageId: string, alt: string): Promi
 }
 
 export async function deleteProductImage(imageId: string): Promise<ActionResult> {
-  const denied = await guard("staff");
+  const denied = await guard("products", ["edit"]);
   if (denied) return denied;
   if (!idSchema.safeParse(imageId).success) return { ok: false, error: "Invalid image." };
   const supabase = await createClient();
@@ -239,7 +242,7 @@ export async function deleteProductImage(imageId: string): Promise<ActionResult>
 }
 
 export async function reorderProductImages(productId: string, imageIds: string[]): Promise<ActionResult> {
-  const denied = await guard("staff");
+  const denied = await guard("products", ["create", "edit"]);
   if (denied) return denied;
   const parsed = z.object({ productId: idSchema, imageIds: z.array(idSchema).max(12) }).safeParse({ productId, imageIds });
   if (!parsed.success) return { ok: false, error: "Invalid image order." };

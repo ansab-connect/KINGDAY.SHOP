@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "New brand" };
 
 export default function NewBrandPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="brands">
       <PageHeader title="New brand" description="Add a brand to the catalogue" />
       <PreviewSaveNotice />
       <BrandForm brand={null} canDelete={false} />

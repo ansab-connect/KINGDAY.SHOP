@@ -80,7 +80,7 @@ async function CustomersPageContent({ searchParams }: PageProps<"/admin/customer
 
 export default function CustomersPage(props: PageProps<"/admin/customers">) {
   return (
-    <StaffOnly>
+    <StaffOnly module="customers">
       <CustomersPageContent {...props} />
     </StaffOnly>
   );

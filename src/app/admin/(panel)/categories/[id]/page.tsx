@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CategoryForm } from "@/components/admin/catalog/category-form";
 import { PageHeader } from "@/components/admin/page-header";
 import { StaffOnly } from "@/components/admin/staff-only";
-import { getCurrentUser, hasRole } from "@/features/auth/session";
+import { can, getCurrentUser } from "@/features/auth/session";
 import { listCategories } from "@/features/catalog/admin-repo";
 import { isSupabaseConfigured } from "@/lib/env";
 
@@ -24,7 +24,7 @@ async function EditCategoryContent({ params }: { params: PageProps<"/admin/categ
         category={category}
         // Only top-level categories can be parents, and a parent can't become a child.
         parents={hasChildren ? [] : all.filter((c) => !c.parent_id && c.id !== id).map((c) => ({ id: c.id, name: c.name }))}
-        canDelete={hasRole(user, "admin")}
+        canDelete={can(user, "categories", "delete")}
       />
     </>
   );
@@ -32,7 +32,7 @@ async function EditCategoryContent({ params }: { params: PageProps<"/admin/categ
 
 export default function EditCategoryPage(props: PageProps<"/admin/categories/[id]">) {
   return (
-    <StaffOnly>
+    <StaffOnly module="categories">
       <EditCategoryContent params={props.params} />
     </StaffOnly>
   );

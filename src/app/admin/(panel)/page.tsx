@@ -265,7 +265,7 @@ function OpsTile({
 
 export default function AdminDashboardPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="overview">
       <AdminDashboardPageContent />
     </StaffOnly>
   );

@@ -1,114 +1,181 @@
 import type { Metadata } from "next";
-import { AlertTriangle, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ChevronRight, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
-import { RoleControls } from "@/components/admin/role-controls";
 import { StaffOnly } from "@/components/admin/staff-only";
-import { Button } from "@/components/ui/button";
+import { StaffCategoryManager, type StaffCategory } from "@/components/admin/users/account-forms";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCurrentUser, hasRole } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Users & roles" };
+export const metadata: Metadata = { title: "Users & Roles" };
 
-type Row = { id: string; email: string; full_name: string | null; phone: string | null; created_at: string; last_sign_in_at: string | null; roles: string[] };
+type Account = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  roles: string[];
+  staff_code: string | null;
+  category_name: string | null;
+  status: string;
+};
 
-const PERMISSIONS = [
-  { role: "Super Admin", can: "Everything below, plus grant/revoke roles and read the audit log." },
-  { role: "Admin", can: "Store settings, delete catalogue items, view users and roles." },
-  { role: "Staff", can: "Products, categories, brands, inventory, orders, customers and reports." },
-  { role: "Customer", can: "Their own profile, addresses, wishlist and orders only." },
-];
+const ROLE_LABEL: Record<string, string> = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  staff: "Staff",
+  service_staff: "Service Staff",
+  customer: "Customer",
+};
+const RANK = ["super_admin", "admin", "staff", "service_staff", "customer"];
+const mainRole = (roles: string[]) => RANK.find((r) => roles.includes(r)) ?? "customer";
+
+const FILTERS = [
+  { key: "team", label: "Team" },
+  { key: "super_admin", label: "Super Admin" },
+  { key: "admin", label: "Admin" },
+  { key: "staff", label: "Staff" },
+  { key: "service_staff", label: "Service Staff" },
+  { key: "customer", label: "Customers" },
+  { key: "inactive", label: "Inactive" },
+] as const;
 
 async function UsersContent({ searchParams }: PageProps<"/admin/users">) {
-  const raw = (await searchParams).q;
-  const q = (Array.isArray(raw) ? raw[0] : (raw ?? "")).trim().slice(0, 80);
+  const sp = await searchParams;
+  const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? "")).trim();
+  const q = first(sp.q).slice(0, 80);
+  const filter = FILTERS.some((f) => f.key === first(sp.show)) ? first(sp.show) : "team";
   const me = await getCurrentUser();
   const canManage = hasRole(me, "super_admin");
 
-  let rows: Row[] = [];
+  let accounts: Account[] = [];
+  let categories: StaffCategory[] = [];
   let loadError: string | null = null;
   if (!isSupabaseConfigured) {
     loadError = "User management needs Supabase.";
   } else {
     const supabase = await createClient();
-    const { data, error } = await supabase.rpc("admin_list_users", { p_search: q || null, p_limit: 300 });
-    if (error) {
-      loadError = /function|schema cache/i.test(error.message)
-        ? "The user directory isn't installed yet. Apply migration 20261113001100_audit_and_user_admin.sql in the Supabase SQL editor."
+    const [list, cats] = await Promise.all([
+      supabase.rpc("admin_list_accounts", { p_search: q || null, p_limit: 500 }),
+      supabase.from("staff_categories").select("id, name, kind, is_system").order("sort_order").order("name"),
+    ]);
+    if (list.error) {
+      loadError = /function|schema cache/i.test(list.error.message)
+        ? "Staff accounts aren't installed yet. In the Supabase SQL editor, run 20261114001200_service_staff_role.sql, then 20261114001300_staff_accounts_and_permissions.sql."
         : "Couldn't load users. Please refresh.";
     } else {
-      rows = (data ?? []) as Row[];
+      accounts = (list.data ?? []) as Account[];
+      categories = (cats.data ?? []) as StaffCategory[];
     }
   }
-  const staff = rows.filter((r) => r.roles.some((x) => x !== "customer"));
+
+  const shown = accounts.filter((a) => {
+    const role = mainRole(a.roles);
+    if (filter === "team") return role !== "customer";
+    if (filter === "inactive") return a.status === "inactive";
+    return role === filter;
+  });
+  const teamCount = accounts.filter((a) => mainRole(a.roles) !== "customer").length;
 
   return (
     <>
       <PageHeader
-        title="Users & roles"
-        description={canManage ? "Grant or revoke admin access. Changes apply immediately and are audit-logged." : "Read-only. Only a Super Admin can change roles."}
+        title="Users & Roles"
+        description={canManage ? "Create staff accounts, set roles and categories, and control what each person can open." : "Read-only. Only a Super Admin can change accounts."}
+        actions={
+          canManage ? (
+            <Link href="/admin/users/new" className="inline-flex h-10 items-center gap-2 rounded-lg bg-royal px-4 text-sm font-semibold text-white hover:bg-royal-800">
+              <UserPlus aria-hidden className="size-4" /> New account
+            </Link>
+          ) : null
+        }
       />
-
-      <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {PERMISSIONS.map((p) => (
-          <div key={p.role} className="rounded-xl border bg-card p-4 shadow-card">
-            <p className="flex items-center gap-2 font-heading text-sm font-semibold text-deep">
-              <ShieldCheck aria-hidden className="size-4 text-royal" /> {p.role}
-            </p>
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{p.can}</p>
-          </div>
-        ))}
-      </section>
-
-      <form role="search" className="mb-4 flex max-w-md gap-2">
-        <Input name="q" defaultValue={q} placeholder="Search by email or name" aria-label="Search users" />
-        <Button type="submit" variant="outline">Search</Button>
-      </form>
 
       {loadError ? (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning-soft p-4 text-sm text-warning">
           <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" /> {loadError}
         </div>
       ) : (
-        <Card className="py-0 shadow-card">
-          <CardContent className="px-0">
-            <p className="border-b px-6 py-3 text-xs text-muted-foreground">
-              {rows.length} user{rows.length === 1 ? "" : "s"}{q ? ` matching “${q}”` : ""} · {staff.length} with admin access
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-6">User</TableHead>
-                  <TableHead className="hidden md:table-cell">Joined</TableHead>
-                  <TableHead className="hidden lg:table-cell">Last sign-in</TableHead>
-                  <TableHead className="pr-6">Roles</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="py-12 text-center text-muted-foreground">No users found.</TableCell></TableRow>
-                ) : null}
-                {[...staff, ...rows.filter((r) => !staff.includes(r))].map((u) => (
-                  <TableRow key={u.id} className="align-top">
-                    <TableCell className="pl-6">
-                      <p className="max-w-56 truncate font-medium text-deep">{u.full_name || "—"}{u.id === me?.id ? " (you)" : ""}</p>
-                      <p className="max-w-56 truncate text-xs text-muted-foreground">{u.email}</p>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">{formatDate(new Date(u.created_at))}</TableCell>
-                    <TableCell className="hidden text-muted-foreground lg:table-cell">{u.last_sign_in_at ? formatDate(new Date(u.last_sign_in_at)) : "Never"}</TableCell>
-                    <TableCell className="pr-6">
-                      <RoleControls userId={u.id} roles={u.roles} canManage={canManage} isSelf={u.id === me?.id} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <>
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <nav aria-label="Filter accounts" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+              {FILTERS.map((f) => (
+                <Link
+                  key={f.key}
+                  href={{ pathname: "/admin/users", query: { ...(q ? { q } : {}), ...(f.key === "team" ? {} : { show: f.key }) } }}
+                  aria-current={filter === f.key ? "page" : undefined}
+                  className={cn(
+                    "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap",
+                    filter === f.key ? "bg-royal text-white" : "bg-white text-deep/75 ring-1 ring-border hover:text-royal",
+                  )}
+                >
+                  {f.label}
+                </Link>
+              ))}
+            </nav>
+            <form role="search" className="flex gap-2">
+              {filter !== "team" ? <input type="hidden" name="show" value={filter} /> : null}
+              <input name="q" defaultValue={q} placeholder="Name, email or staff ID" aria-label="Search accounts" className="h-10 w-full min-w-0 rounded-lg border bg-white px-3 text-sm lg:w-72" />
+              <button type="submit" className="h-10 rounded-lg border bg-white px-4 text-sm font-semibold text-deep hover:bg-muted">Search</button>
+            </form>
+          </div>
+
+          <Card className="py-0 shadow-card">
+            <CardContent className="px-0">
+              <p className="border-b px-5 py-3 text-xs text-muted-foreground">
+                {shown.length} shown · {teamCount} team member{teamCount === 1 ? "" : "s"} · {accounts.length - teamCount} customer{accounts.length - teamCount === 1 ? "" : "s"}
+              </p>
+              {shown.length === 0 ? <p className="px-5 py-12 text-center text-sm text-muted-foreground">No accounts found.</p> : null}
+              <ul className="divide-y">
+                {shown.map((a) => {
+                  const role = mainRole(a.roles);
+                  return (
+                    <li key={a.id}>
+                      <Link href={`/admin/users/${a.id}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-royal-50 font-heading text-sm font-bold text-royal">
+                          {(a.full_name || a.email).slice(0, 1).toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-deep">
+                            {a.full_name || "—"}
+                            {a.id === me?.id ? <span className="font-normal text-muted-foreground"> (you)</span> : null}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">{a.email}</span>
+                        </span>
+                        <span className="hidden w-28 font-mono text-xs text-muted-foreground md:block">{a.staff_code ?? ""}</span>
+                        <span className="hidden w-48 truncate text-xs text-muted-foreground lg:block">{a.category_name ?? ""}</span>
+                        <span className="hidden w-28 text-xs text-muted-foreground xl:block">{a.last_sign_in_at ? formatDate(new Date(a.last_sign_in_at)) : "Never signed in"}</span>
+                        <span className="flex w-32 flex-col items-end gap-1 sm:flex-row sm:items-center sm:justify-end">
+                          <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", role === "customer" ? "bg-muted text-muted-foreground" : "bg-royal-50 text-royal")}>
+                            {ROLE_LABEL[role]}
+                          </span>
+                          {a.status === "inactive" ? <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-semibold text-danger">Inactive</span> : null}
+                        </span>
+                        <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6 shadow-card">
+            <CardContent className="flex flex-col gap-3">
+              <div>
+                <h2 className="font-heading text-lg font-semibold text-deep">Staff categories</h2>
+                <p className="text-sm text-muted-foreground">Used when creating Staff and Service Staff accounts. Built-in categories can&apos;t be deleted.</p>
+              </div>
+              <StaffCategoryManager categories={categories} canManage={canManage} />
+            </CardContent>
+          </Card>
+        </>
       )}
     </>
   );
@@ -116,7 +183,7 @@ async function UsersContent({ searchParams }: PageProps<"/admin/users">) {
 
 export default function UsersPage(props: PageProps<"/admin/users">) {
   return (
-    <StaffOnly minimum="admin">
+    <StaffOnly module="users">
       <UsersContent {...props} />
     </StaffOnly>
   );

@@ -149,7 +149,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 
 export default function AdminOrderPage(props: PageProps<"/admin/orders/[id]">) {
   return (
-    <StaffOnly>
+    <StaffOnly module="orders">
       <OrderContent params={props.params} />
     </StaffOnly>
   );

@@ -97,7 +97,7 @@ async function CategoriesContent() {
 
 export default function CategoriesPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="categories">
       <CategoriesContent />
     </StaffOnly>
   );

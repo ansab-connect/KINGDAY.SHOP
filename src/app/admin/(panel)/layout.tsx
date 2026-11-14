@@ -34,14 +34,19 @@ async function AdminGate({ children }: { children: React.ReactNode }) {
 
   const user =
     access.status === "granted"
-      ? { name: access.user.fullName ?? access.user.email ?? "Staff", email: access.user.email, role: access.user.role }
+      ? {
+          name: access.user.fullName ?? access.user.email ?? "Staff",
+          email: access.user.email,
+          role: access.user.role,
+          access: { permissions: access.user.permissions, isSuperAdmin: access.user.role === "super_admin" },
+        }
       : null;
 
   const alerts = access.status === "granted" ? await getAlerts() : [];
 
   return (
     <div className="min-h-screen bg-muted/40">
-      <AdminSidebar role={user?.role ?? null} />
+      <AdminSidebar access={user?.access ?? null} />
       <div className="flex min-h-screen flex-col lg:pl-64">
         {access.status === "preview" ? (
           <p role="note" className="bg-deep px-4 py-2 text-center text-xs font-medium text-gold">

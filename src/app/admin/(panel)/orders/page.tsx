@@ -23,7 +23,7 @@ function OrdersPageContent({ searchParams }: PageProps<"/admin/orders">) {
 
 export default function OrdersPage(props: PageProps<"/admin/orders">) {
   return (
-    <StaffOnly>
+    <StaffOnly module="orders">
       <OrdersPageContent {...props} />
     </StaffOnly>
   );

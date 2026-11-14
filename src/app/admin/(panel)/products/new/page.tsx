@@ -20,7 +20,7 @@ async function NewProductContent() {
 
 export default function NewProductPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="products">
       <NewProductContent />
     </StaffOnly>
   );

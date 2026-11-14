@@ -63,7 +63,7 @@ function CouponsPageContent() {
 
 export default function CouponsPage() {
   return (
-    <StaffOnly minimum="admin">
+    <StaffOnly module="coupons">
       <CouponsPageContent />
     </StaffOnly>
   );

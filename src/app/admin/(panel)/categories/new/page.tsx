@@ -24,7 +24,7 @@ async function NewCategoryContent() {
 
 export default function NewCategoryPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="categories">
       <NewCategoryContent />
     </StaffOnly>
   );

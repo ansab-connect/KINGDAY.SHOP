@@ -71,7 +71,7 @@ async function BrandsContent() {
 
 export default function BrandsPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="brands">
       <BrandsContent />
     </StaffOnly>
   );

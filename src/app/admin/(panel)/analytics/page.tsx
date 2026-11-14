@@ -140,7 +140,7 @@ function Empty() {
 
 export default function AnalyticsPage(props: PageProps<"/admin/analytics">) {
   return (
-    <StaffOnly>
+    <StaffOnly module="analytics">
       <AnalyticsPageContent {...props} />
     </StaffOnly>
   );

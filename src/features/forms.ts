@@ -6,6 +6,8 @@ export type FormState = {
   message?: string;
   error?: string;
   fieldErrors?: Record<string, string>;
+  /** Extra values for the client (e.g. a one-time setup link). */
+  data?: Record<string, string>;
   /** Changes on every submit so the client can re-show a repeated notice. */
   at?: number;
 };

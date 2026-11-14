@@ -4,19 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
-import { navForRole } from "@/config/admin-nav";
+import { navFor } from "@/config/admin-nav";
+import type { Permissions } from "@/features/auth/permissions";
 import { cn } from "@/lib/utils";
 
 export function isActivePath(pathname: string, href: string) {
   return href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AdminNavLinks({ onNavigate, role }: { onNavigate?: () => void; role: string | null }) {
+export type NavAccess = { permissions: Permissions; isSuperAdmin: boolean } | null;
+
+export function AdminNavLinks({ onNavigate, access }: { onNavigate?: () => void; access: NavAccess }) {
   const pathname = usePathname();
 
   return (
     <nav aria-label="Admin" className="flex flex-col gap-6">
-      {navForRole(role).map((group) => (
+      {navFor(access?.permissions ?? null, access?.isSuperAdmin).map((group) => (
         <div key={group.label}>
           <p className="px-3 pb-2 text-[0.68rem] font-semibold tracking-[0.16em] text-white/40 uppercase">
             {group.label}
@@ -56,7 +59,7 @@ export function AdminNavLinks({ onNavigate, role }: { onNavigate?: () => void; r
   );
 }
 
-export function AdminSidebar({ role }: { role: string | null }) {
+export function AdminSidebar({ access }: { access: NavAccess }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-sidebar text-sidebar-foreground lg:flex">
       <div className="flex h-16 items-center border-b border-sidebar-border px-6">
@@ -65,7 +68,7 @@ export function AdminSidebar({ role }: { role: string | null }) {
         </Link>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-6">
-        <AdminNavLinks role={role} />
+        <AdminNavLinks access={access} />
       </div>
       <div className="border-t border-sidebar-border p-3">
         <Link

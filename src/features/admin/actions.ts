@@ -2,7 +2,8 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { assertStaff, type StaffRole } from "@/features/auth/session";
+import type { Action, Module } from "@/features/auth/permissions";
+import { assertCan, assertStaff } from "@/features/auth/session";
 import { dbMessage, fail, fieldErrorsOf, ok, type FormState } from "@/features/forms";
 import { ORDER_STATUSES } from "@/features/orders/types";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -14,13 +15,23 @@ import { createClient } from "@/lib/supabase/server";
  * validate → write as the signed-in user (RLS + DB triggers re-check) → refresh.
  */
 
-async function guard(minimum: StaffRole): Promise<FormState | null> {
+async function guard(module: Module, action: Action): Promise<FormState | null> {
   if (!isSupabaseConfigured) return fail("Saving is disabled until Supabase is connected.");
   try {
-    await assertStaff(minimum);
+    await assertCan(module, action);
     return null;
   } catch {
     return fail("You don't have permission to do that.");
+  }
+}
+
+async function superAdminOnly(): Promise<FormState | null> {
+  if (!isSupabaseConfigured) return fail("Saving is disabled until Supabase is connected.");
+  try {
+    await assertStaff("super_admin");
+    return null;
+  } catch {
+    return fail("Only a Super Admin can do that.");
   }
 }
 
@@ -39,7 +50,7 @@ const stockSchema = z.object({
 });
 
 export async function adjustStockAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("staff");
+  const denied = await guard("inventory", "edit");
   if (denied) return denied;
   const parsed = stockSchema.safeParse({
     variantId: str(fd, "variantId"),
@@ -66,7 +77,7 @@ export async function adjustStockAction(_: FormState, fd: FormData): Promise<For
 const reorderSchema = z.object({ variantId: z.uuid(), level: z.coerce.number().int().min(0).max(10000) });
 
 export async function setReorderLevelAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("staff");
+  const denied = await guard("inventory", "edit");
   if (denied) return denied;
   const parsed = reorderSchema.safeParse({ variantId: str(fd, "variantId"), level: str(fd, "level") });
   if (!parsed.success) return fail("Enter a reorder level between 0 and 10,000.");
@@ -84,7 +95,7 @@ const statusSchema = z.object({
 });
 
 export async function updateOrderStatusAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("staff");
+  const denied = await guard("orders", "edit");
   if (denied) return denied;
   const parsed = statusSchema.safeParse({ orderId: str(fd, "orderId"), status: str(fd, "status") });
   if (!parsed.success) return fail("Choose a valid status.");
@@ -97,7 +108,7 @@ export async function updateOrderStatusAction(_: FormState, fd: FormData): Promi
 }
 
 export async function markCodPaidAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("staff");
+  const denied = await guard("orders", "edit");
   if (denied) return denied;
   const orderId = z.uuid().safeParse(str(fd, "orderId"));
   if (!orderId.success) return fail("Invalid order.");
@@ -112,7 +123,7 @@ export async function markCodPaidAction(_: FormState, fd: FormData): Promise<For
 const noteSchema = z.object({ orderId: z.uuid(), note: z.string().trim().max(2000) });
 
 export async function saveOrderNoteAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("staff");
+  const denied = await guard("orders", "edit");
   if (denied) return denied;
   const parsed = noteSchema.safeParse({ orderId: str(fd, "orderId"), note: str(fd, "note") });
   if (!parsed.success) return fail("Notes can be up to 2,000 characters.");
@@ -133,7 +144,7 @@ const shipmentSchema = z.object({
 });
 
 export async function saveShipmentAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("staff");
+  const denied = await guard("orders", "edit");
   if (denied) return denied;
   const parsed = shipmentSchema.safeParse({
     orderId: str(fd, "orderId"),
@@ -166,7 +177,7 @@ export async function saveShipmentAction(_: FormState, fd: FormData): Promise<Fo
 // ---------------------------------------------------------------- Store settings (admin)
 
 export async function saveSettingsAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("admin");
+  const denied = await guard("settings", "edit");
   if (denied) return denied;
   const rows: { key: string; value: unknown; is_public: boolean }[] = [];
   const fieldErrors: Record<string, string> = {};
@@ -208,7 +219,7 @@ const roleSchema = z.object({
 });
 
 export async function grantRoleAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("super_admin");
+  const denied = await superAdminOnly();
   if (denied) return denied;
   const parsed = roleSchema.safeParse({ userId: str(fd, "userId"), role: str(fd, "role") });
   if (!parsed.success) return fail("Choose a user and a role.");
@@ -221,7 +232,7 @@ export async function grantRoleAction(_: FormState, fd: FormData): Promise<FormS
 }
 
 export async function revokeRoleAction(_: FormState, fd: FormData): Promise<FormState> {
-  const denied = await guard("super_admin");
+  const denied = await superAdminOnly();
   if (denied) return denied;
   const parsed = roleSchema.safeParse({ userId: str(fd, "userId"), role: str(fd, "role") });
   if (!parsed.success) return fail("Invalid request.");

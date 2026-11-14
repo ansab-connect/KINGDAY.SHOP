@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Bell, LogOut, Menu, Search, Settings, ShieldCheck, User } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
-import { AdminNavLinks } from "@/components/admin/admin-sidebar";
+import { AdminNavLinks, type NavAccess } from "@/components/admin/admin-sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,10 +26,11 @@ const roleLabel: Record<string, string> = {
   super_admin: "Super Admin",
   admin: "Admin",
   staff: "Staff",
+  service_staff: "Service Staff",
   customer: "Customer",
 };
 
-export type AdminHeaderUser = { name: string; email: string | null; role: string } | null;
+export type AdminHeaderUser = { name: string; email: string | null; role: string; access: NavAccess } | null;
 
 export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; alerts?: AdminAlert[] }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -52,7 +53,7 @@ export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; aler
             <Logo tone="light" />
           </SheetHeader>
           <div className="overflow-y-auto px-3 py-6">
-            <AdminNavLinks role={user?.role ?? null} onNavigate={() => setMobileOpen(false)} />
+            <AdminNavLinks access={user?.access ?? null} onNavigate={() => setMobileOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>
@@ -120,7 +121,7 @@ export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; aler
                   <User /> My profile
                 </Link>
               </DropdownMenuItem>
-              {!user || user.role === "admin" || user.role === "super_admin" ? (
+              {!user || user.access?.permissions.settings?.includes("view") || user.access?.permissions.users?.includes("view") ? (
                 <>
                   <DropdownMenuItem asChild>
                     <Link href="/admin/settings">

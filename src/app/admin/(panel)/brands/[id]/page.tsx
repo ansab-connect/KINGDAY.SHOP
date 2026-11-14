@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { BrandForm } from "@/components/admin/catalog/brand-form";
 import { PageHeader } from "@/components/admin/page-header";
 import { StaffOnly } from "@/components/admin/staff-only";
-import { getCurrentUser, hasRole } from "@/features/auth/session";
+import { can, getCurrentUser } from "@/features/auth/session";
 import { getBrand } from "@/features/catalog/admin-repo";
 import { isSupabaseConfigured } from "@/lib/env";
 
@@ -18,14 +18,14 @@ async function EditBrandContent({ params }: { params: PageProps<"/admin/brands/[
   return (
     <>
       <PageHeader title={brand.name} description={`Edit brand · ${brand.product_count} products`} />
-      <BrandForm brand={brand} canDelete={hasRole(user, "admin")} />
+      <BrandForm brand={brand} canDelete={can(user, "brands", "delete")} />
     </>
   );
 }
 
 export default function EditBrandPage(props: PageProps<"/admin/brands/[id]">) {
   return (
-    <StaffOnly>
+    <StaffOnly module="brands">
       <EditBrandContent params={props.params} />
     </StaffOnly>
   );

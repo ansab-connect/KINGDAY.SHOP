@@ -29,7 +29,7 @@ function ReportsPageContent() {
 
 export default function ReportsPage() {
   return (
-    <StaffOnly>
+    <StaffOnly module="reports">
       <ReportsPageContent />
     </StaffOnly>
   );

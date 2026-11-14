@@ -96,7 +96,7 @@ async function SettingsPageContent() {
 
 export default function SettingsPage() {
   return (
-    <StaffOnly minimum="admin">
+    <StaffOnly module="settings">
       <SettingsPageContent />
     </StaffOnly>
   );
