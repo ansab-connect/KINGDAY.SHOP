@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser, hasRole } from "@/features/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { queuePushDispatch } from "@/features/push/send";
 
 const paise = z.number().int().min(0).max(10_000_000);
 
@@ -51,5 +52,6 @@ export async function saveServiceInvoiceAction(input: unknown): Promise<SaveInvo
   }
   const { data: inv } = await supabase.from("service_invoices").select("id").eq("booking_id", bookingId).maybeSingle();
   refresh();
+  queuePushDispatch();
   return { ok: true, number: data as string, id: (inv as { id: string } | null)?.id ?? "" };
 }

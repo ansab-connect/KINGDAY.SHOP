@@ -5,6 +5,7 @@ import { z } from "zod";
 import { assertCan, getCurrentUser, hasRole } from "@/features/auth/session";
 import { fail, ok, type FormState } from "@/features/forms";
 import { createClient } from "@/lib/supabase/server";
+import { queuePushDispatch } from "@/features/push/send";
 
 /** Service job actions. The database functions re-check every rule (who, which job, which step). */
 
@@ -43,6 +44,7 @@ export async function assignJobAction(_: FormState, fd: FormData): Promise<FormS
   const { error } = await supabase.rpc("assign_service_booking", { p_id: parsed.data.bookingId, p_staff: parsed.data.staffId, p_note: parsed.data.note || null });
   if (error) return fail(friendly(error.message, "Couldn't assign the job."));
   refresh();
+  queuePushDispatch();
   return ok("Job assigned. The technician sees it in their app now.");
 }
 
@@ -55,6 +57,7 @@ export async function cancelJobAction(_: FormState, fd: FormData): Promise<FormS
   const { error } = await supabase.rpc("cancel_service_booking", { p_id: parsed.data.bookingId, p_note: parsed.data.note });
   if (error) return fail(friendly(error.message, "Couldn't cancel the job."));
   refresh();
+  queuePushDispatch();
   return ok("Job cancelled.");
 }
 
@@ -71,6 +74,7 @@ export async function respondJobAction(input: { bookingId: string; accept: boole
   const { error } = await supabase.rpc("respond_service_job", { p_id: parsed.data.bookingId, p_accept: parsed.data.accept, p_note: parsed.data.note || null });
   if (error) return { ok: false, error: friendly(error.message, "Couldn't update the job.") };
   refresh();
+  queuePushDispatch();
   return { ok: true };
 }
 
@@ -84,6 +88,7 @@ export async function advanceJobAction(input: { bookingId: string; status: strin
   const { error } = await supabase.rpc("advance_service_job", { p_id: parsed.data.bookingId, p_status: parsed.data.status, p_note: parsed.data.note || null });
   if (error) return { ok: false, error: friendly(error.message, "Couldn't update the job.") };
   refresh();
+  queuePushDispatch();
   return { ok: true };
 }
 
@@ -110,5 +115,6 @@ export async function saveInspectionAction(input: unknown): Promise<{ ok: boolea
   const { error } = await supabase.rpc("save_service_inspection", { p_id: bookingId, p });
   if (error) return { ok: false, error: friendly(error.message, "Couldn't save the report.") };
   refresh();
+  queuePushDispatch();
   return { ok: true };
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Heart, Menu, Search, ShoppingBag, User } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { InstallAppButton } from "@/components/pwa/install-app";
 import { L } from "@/components/i18n/lang";
 import { LanguageSwitcher, useLang } from "@/components/i18n/language-switcher";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,7 @@ export function StoreHeader() {
                   ))}
                 </ul>
               </nav>
+              <InstallAppButton className="w-full" />
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground"><L en="Language" ml="ഭാഷ" /></span>
                 <LanguageSwitcher />

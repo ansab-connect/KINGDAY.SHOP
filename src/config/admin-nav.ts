@@ -7,6 +7,7 @@ import {
   IdCard,
   Wrench,
   KeyRound,
+  Megaphone,
   LayoutDashboard,
   Package,
   Settings,
@@ -53,6 +54,7 @@ export const adminNav: AdminNavGroup[] = [
       { title: "Orders", href: "/admin/orders", icon: ShoppingBag, module: "orders", phase: 9 },
       { title: "Customers", href: "/admin/customers", icon: Users, module: "customers", phase: 7 },
       { title: "Coupons", href: "/admin/coupons", icon: TicketPercent, module: "coupons", phase: 8 },
+      { title: "Promotions", href: "/admin/promotions", icon: Megaphone, module: "customers" },
     ],
   },
   {

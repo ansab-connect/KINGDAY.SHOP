@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { L } from "@/components/i18n/lang";
+import { InstallAppButton } from "@/components/pwa/install-app";
 import { Container } from "@/components/store/section";
 import { productCategories, siteConfig } from "@/config/site";
 import { storeContact, whatsappLink } from "@/config/storefront";
@@ -36,6 +37,7 @@ export function StoreFooter() {
       <Container className="grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:py-16">
         <div>
           <Logo tone="light" showTagline />
+          <InstallAppButton tone="dark" className="mt-5" />
           <p className="mt-5 max-w-xs text-sm leading-relaxed text-white/65">{siteConfig.description}</p>
           <ul className="mt-6 flex flex-col gap-2.5 text-sm text-white/75">
             {storeContact.phone ? (

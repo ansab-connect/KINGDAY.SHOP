@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Bell } from "lucide-react";
 import { L } from "@/components/i18n/lang";
+import { PushToggle } from "@/components/pwa/push-toggle";
 import { AccountShell } from "@/components/store/account/account-shell";
 import { Container } from "@/components/store/section";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,6 +27,7 @@ async function Notifications() {
   }
   return (
     <AccountShell active="/account/notifications" title="Notifications">
+      <PushToggle className="mb-5" />
       {notes.length === 0 ? (
         <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-14 text-center">
           <Bell aria-hidden className="size-10 text-royal-300" />

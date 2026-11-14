@@ -817,5 +817,53 @@ await test("notifications reach the customer and the assigned technician only", 
   await expectError(`insert into public.notifications (user_id, title) values ($1, 'spam')`, [bob], /permission denied/);
 });
 
+console.log("Web push");
+await test("push subscriptions are private to their owner", async () => {
+  await user(alice);
+  await db.query(`insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values ($1, 'https://push.example/alice-1', repeat('a', 40), repeat('b', 16))`, [alice]);
+  await expectError(`insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values ($1, 'https://push.example/x', repeat('a', 40), repeat('b', 16))`, [bob], /row-level security/);
+  await user(bob);
+  assert((await rows(`select * from public.push_subscriptions`)).length === 0, "bob sees alice's device");
+});
+await test("each notification is claimed for sending exactly once (server key only)", async () => {
+  await user(alice);
+  await expectError(`select * from public.claim_push_notifications(10)`, [], /permission denied/);
+  await asSuperuser();
+  await db.query(`select private.notify($1, 'Test push', 'Body', '/account')`, [alice]);
+  await service();
+  const first = await rows(`select * from public.claim_push_notifications(50)`);
+  const again = await rows(`select * from public.claim_push_notifications(50)`);
+  assert(first.some((n) => n.title === "Test push") && again.length === 0, `${first.length}/${again.length}`);
+});
+await test("shipping updates notify the order's customer", async () => {
+  await asSuperuser();
+  const [o] = await rows(`select id, user_id from public.orders where user_id is not null limit 1`);
+  assert(o, "fixture order missing");
+  await db.query(`insert into public.shipments (order_id, status, carrier, tracking_number) values ($1, 'shipped', 'DTDC', 'X123')`, [o.id]);
+  assert((await rows(`select 1 from public.notifications where user_id = $1 and body like 'Tracking: DTDC X123%'`, [o.user_id])).length === 1, "no shipping notification");
+});
+await test("promotions reach opted-in customers only, sent by admins", async () => {
+  await asSuperuser();
+  await db.query(`update public.profiles set marketing_opt_in = (id = $1)`, [bob]);
+  await user(staff);
+  await expectError(`select public.send_promotion('Big sale', 'Up to 30% off', '/offers')`, [], /not authorized/);
+  await user(admin2);
+  await expectError(`select public.send_promotion('Sale', 'x', 'https://evil.example')`, [], /invalid link/);
+  const n = (await rows(`select public.send_promotion('Big sale', 'Up to 30% off', '/offers') as n`))[0].n;
+  assert(n === 1, `sent to ${n}`);
+  await user(alice);
+  assert((await rows(`select 1 from public.notifications where title = 'Big sale'`)).length === 0, "non-opted-in customer got promo");
+});
+await test("tomorrow's service reminders are queued once", async () => {
+  await asSuperuser();
+  await db.query(`update public.service_bookings set preferred_date = ((now() at time zone 'Asia/Kolkata')::date + 1), reminded_at = null where status in ('new','assigned','accepted')`);
+  await service();
+  const n1 = (await rows(`select public.queue_service_reminders() as n`))[0].n;
+  const n2 = (await rows(`select public.queue_service_reminders() as n`))[0].n;
+  assert(n1 > 0 && n2 === 0, `${n1}/${n2}`);
+  await user(alice);
+  await expectError(`select public.queue_service_reminders()`, [], /permission denied/);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

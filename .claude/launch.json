@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "kingday-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000 }
+    { "name": "kingday-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000 },
+    { "name": "kingday-dev-pwa", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000, "env": { "NEXT_PUBLIC_ENABLE_SW": "1" } }
   ]
 }

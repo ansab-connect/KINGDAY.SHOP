@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { queuePushDispatch } from "@/features/push/send";
 import { formatMobile, normalizeMobile } from "@/features/customer/mobile";
 
 const phone = z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, "Enter a valid mobile number.");
@@ -92,6 +93,7 @@ export async function createServiceBookingAction(input: unknown): Promise<Bookin
     return { ok: false, error: msg };
   }
   refresh();
+  queuePushDispatch();
   return { ok: true, code: data as string };
 }
 
@@ -101,6 +103,7 @@ export async function cancelServiceBookingAction(id: string): Promise<{ ok: bool
   const { error } = await supabase.rpc("cancel_my_service_booking", { p_id: id });
   if (error) return { ok: false, error: "This booking can no longer be cancelled. Please call us." };
   refresh();
+  queuePushDispatch();
   return { ok: true };
 }
 
@@ -161,5 +164,6 @@ export async function checkoutServiceCartAction(): Promise<{ ok: true; codes: st
     };
   }
   refresh();
+  queuePushDispatch();
   return { ok: true, codes: (data ?? []) as string[] };
 }

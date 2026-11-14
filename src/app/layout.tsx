@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Noto_Sans_Malayalam, Outfit } from "next/font/google";
 import { LANG_BOOT_SCRIPT } from "@/components/i18n/lang";
+import { PwaManager } from "@/components/pwa/pwa-manager";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { siteConfig } from "@/config/site";
 import "./globals.css";
@@ -33,6 +34,8 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   applicationName: siteConfig.name,
+  appleWebApp: { capable: true, title: "KING DAY", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
   openGraph: {
     type: "website",
     siteName: siteConfig.name,
@@ -54,6 +57,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="flex min-h-full flex-col">
         <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        <PwaManager />
       </body>
     </html>
   );

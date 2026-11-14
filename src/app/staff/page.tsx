@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CheckCircle2, ClipboardList, Hourglass, PackageCheck, PackageOpen, ShoppingBag, Truck, UserRound, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
+import { InstallAppButton } from "@/components/pwa/install-app";
+import { PushToggle } from "@/components/pwa/push-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
 import { can, requireTeam, type SessionUser } from "@/features/auth/session";
 import { getStaffRecord } from "@/features/staff/queries";
@@ -110,6 +112,11 @@ async function Dashboard() {
           {[record?.designation, record?.categoryName].filter(Boolean).join(" · ") || <L en="Welcome to your dashboard." ml="നിങ്ങളുടെ ഡാഷ്ബോർഡിലേക്ക് സ്വാഗതം." />}
         </p>
       </section>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <PushToggle className="flex-1" />
+        <InstallAppButton />
+      </div>
 
       {missing.length ? (
         <Link href="/staff/profile" className="flex items-center gap-3 rounded-2xl border border-gold-300 bg-gold-50 p-4 text-sm text-gold-800 hover:bg-gold-100">

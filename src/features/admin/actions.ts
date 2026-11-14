@@ -9,6 +9,7 @@ import { ORDER_STATUSES } from "@/features/orders/types";
 import { isSupabaseConfigured } from "@/lib/env";
 import { EDITABLE_SETTINGS } from "./settings-keys";
 import { createClient } from "@/lib/supabase/server";
+import { queuePushDispatch } from "@/features/push/send";
 
 /**
  * Admin panel server actions. Each one: authorise (server-side role check) →
@@ -104,6 +105,7 @@ export async function updateOrderStatusAction(_: FormState, fd: FormData): Promi
   if (error) return fail(dbMessage(error, "Couldn't update the order."));
   if (!data?.length) return fail("Order not found or you can't edit it.");
   refresh();
+  queuePushDispatch();
   return ok("Order status updated.");
 }
 
@@ -171,6 +173,7 @@ export async function saveShipmentAction(_: FormState, fd: FormData): Promise<Fo
     : await supabase.from("shipments").insert({ ...row, order_id: p.orderId });
   if (error) return fail(dbMessage(error, "Couldn't save the shipment."));
   refresh();
+  queuePushDispatch();
   return ok("Shipment saved. The customer sees this on their order page.");
 }
 
