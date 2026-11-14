@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, MessageCircle, Navigation, Phone } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { AssignJobForm, CancelJobForm } from "@/components/admin/service/assign-controls";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { InvoiceEditor } from "@/components/service/invoice-editor";
@@ -36,6 +37,7 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <>
+      <AutoRefresh seconds={45} />
       <Link href="/admin/service" className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-royal hover:underline">
         <ArrowLeft aria-hidden className="size-4" /> Service Management
       </Link>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CheckCircle2, ClipboardList, Hourglass, PackageCheck, PackageOpen, ShoppingBag, Truck, UserRound, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { InstallAppButton } from "@/components/pwa/install-app";
 import { PushToggle } from "@/components/pwa/push-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -102,6 +103,7 @@ async function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6">
+      <AutoRefresh seconds={30} />
       <section className="relative overflow-hidden rounded-2xl bg-deep p-6 text-white sm:p-8">
         <div aria-hidden className="absolute -top-20 -right-20 size-64 rounded-full bg-royal/60 blur-3xl" />
         <p className="relative text-xs font-semibold tracking-[0.18em] text-gold uppercase">{record?.staffCode ?? "KING DAY team"}</p>

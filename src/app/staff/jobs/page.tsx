@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { CalendarClock, ChevronRight, MapPin } from "lucide-react";
 import { L } from "@/components/i18n/lang";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireTeam } from "@/features/auth/session";
 import { SERVICE_STATUSES, categoryLabel } from "@/features/service/constants";
@@ -36,15 +37,18 @@ const inGroup = (b: BookingRow, g: Group, today: string) =>
 async function Jobs({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requireTeam();
   const sp = await searchParams;
-  const tab = (GROUPS.find((g) => g.key === sp.tab)?.key ?? "today") as Group;
+  const chosen = GROUPS.find((g) => g.key === sp.tab)?.key as Group | undefined;
   const supabase = await createClient();
   const { data } = await supabase.from("service_bookings").select("*").eq("assigned_to", user.id).order("preferred_date").limit(300);
   const jobs = (data ?? []) as BookingRow[];
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  // New jobs to accept come first, whatever their date; otherwise today's jobs.
+  const tab: Group = chosen ?? (jobs.some((b) => b.status === "assigned") ? "pending" : "today");
   const shown = jobs.filter((b) => inGroup(b, tab, today));
 
   return (
     <div className="flex flex-col gap-5">
+      <AutoRefresh seconds={20} />
       <h1 className="text-2xl font-bold text-deep"><L en="My jobs" ml="എന്റെ ജോലികൾ" /></h1>
       <nav aria-label="Job groups" className="grid grid-cols-5 gap-1.5">
         {GROUPS.map((g) => {
@@ -52,7 +56,7 @@ async function Jobs({ searchParams }: { searchParams: Promise<Record<string, str
           return (
             <Link
               key={g.key}
-              href={g.key === "today" ? "/staff/jobs" : `/staff/jobs?tab=${g.key}`}
+              href={`/staff/jobs?tab=${g.key}`}
               aria-current={tab === g.key ? "page" : undefined}
               className={cn("flex flex-col items-center rounded-xl border px-1 py-2.5 text-center", tab === g.key ? "border-royal bg-royal text-white" : "bg-white text-deep")}
             >

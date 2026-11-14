@@ -865,5 +865,26 @@ await test("tomorrow's service reminders are queued once", async () => {
   await expectError(`select public.queue_service_reminders()`, [], /permission denied/);
 });
 
+console.log("Booking reaches the office");
+await test("a new booking alerts everyone who can assign jobs (not other staff or technicians)", async () => {
+  await asSuperuser();
+  await db.query(`update public.service_bookings set status = 'cancelled' where customer_id = $1 and status in ('new','assigned')`, [bob]);
+  await user(bob);
+  const code = (await rows(`select public.create_service_booking($1::jsonb) as c`, [booking({ customer_name: "Bob", product_name: "Office alert test" })]))[0].c;
+  await asSuperuser();
+  const got = async (id) => (await rows(`select 1 from public.notifications where user_id = $1 and title = $2`, [id, `Assign technician: ${code}`])).length;
+  assert((await got(superAdmin)) === 1 && (await got(admin2)) === 1, "managers not alerted");
+  assert((await got(staff)) === 0 && (await got(svc)) === 0 && (await got(bob)) === 0, "wrong people alerted");
+  const [bk] = await rows(`select id from public.service_bookings where booking_code = $1`, [code]);
+  await user(admin2);
+  await db.query(`select public.assign_service_booking($1, $2)`, [bk.id, svc]);
+  await user(svc);
+  assert((await rows(`select booking_code from public.service_bookings where id = $1`, [bk.id])).length === 1, "technician can't see assigned job");
+  // Declined jobs go back to the office.
+  await db.query(`select public.respond_service_job($1, false, 'Busy')`, [bk.id]);
+  await asSuperuser();
+  assert((await got(admin2)) === 2, "decline didn't alert the office");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

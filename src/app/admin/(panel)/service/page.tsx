@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { Card, CardContent } from "@/components/ui/card";
 import { SERVICE_STATUSES, categoryLabel, statusLabel } from "@/features/service/constants";
@@ -18,7 +19,7 @@ const OPEN = ["new", "assigned", "accepted", "on_the_way", "reached", "started"]
 async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
   const sp = await searchParams;
   const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? "")).trim();
-  const status = SERVICE_STATUSES.some((s) => s.value === first(sp.status)) ? first(sp.status) : "open";
+  const status = first(sp.status) === "unassigned" || SERVICE_STATUSES.some((s) => s.value === first(sp.status)) ? first(sp.status) : "open";
   const q = first(sp.q).slice(0, 80);
 
   let rows: BookingRow[] = [];
@@ -29,20 +30,28 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
   else {
     const supabase = await createClient();
     let query = supabase.from("service_bookings").select("*").order("preferred_date").order("created_at").limit(300);
-    query = status === "open" ? query.in("status", OPEN) : query.eq("status", status);
+    query = status === "open" ? query.in("status", OPEN) : status === "unassigned" ? query.eq("status", "new").is("assigned_to", null) : query.eq("status", status);
     if (q) query = query.or(`booking_code.ilike.%${q.replace(/[%,()]/g, "")}%,customer_name.ilike.%${q.replace(/[%,()]/g, "")}%,mobile.ilike.%${q.replace(/[%,()]/g, "")}%`);
-    const [{ data, error: e }, { data: all }] = await Promise.all([query, supabase.from("service_bookings").select("status").limit(5000)]);
+    const [{ data, error: e }, { data: all }] = await Promise.all([query, supabase.from("service_bookings").select("status, assigned_to").limit(5000)]);
     if (e) error = /service_bookings|schema cache/i.test(e.message) ? "Apply migration 20261114001500_service_bookings.sql in Supabase first." : "Couldn't load bookings.";
     rows = (data ?? []) as BookingRow[];
     technicians = e ? [] : await listTechnicians();
-    for (const r of (all ?? []) as { status: string }[]) counts[r.status] = (counts[r.status] ?? 0) + 1;
+    for (const r of (all ?? []) as { status: string; assigned_to: string | null }[]) {
+      counts[r.status] = (counts[r.status] ?? 0) + 1;
+      if (r.status === "new" && !r.assigned_to) counts.unassigned = (counts.unassigned ?? 0) + 1;
+    }
   }
   const openCount = OPEN.reduce((n, s) => n + (counts[s] ?? 0), 0);
-  const tabs = [{ value: "open", label: "Open", n: openCount }, ...SERVICE_STATUSES.map((s) => ({ value: s.value, label: s.label, n: counts[s.value] ?? 0 }))];
+  const tabs = [
+    { value: "unassigned", label: "Needs technician", n: counts.unassigned ?? 0 },
+    { value: "open", label: "Open", n: openCount },
+    ...SERVICE_STATUSES.map((s) => ({ value: s.value, label: s.label, n: counts[s.value] ?? 0 })),
+  ];
 
   return (
     <>
       <PageHeader title="Service Management" description="Customer service bookings. Assign technicians and follow every job to completion." />
+      <AutoRefresh seconds={30} />
       {error ? (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning-soft p-4 text-sm text-warning">
           <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" /> {error}
@@ -103,7 +112,7 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
                       </span>
                       <span className="hidden w-28 text-xs text-muted-foreground md:block">{formatDate(new Date(b.preferred_date))}</span>
                       <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", b.status === "new" ? "bg-warning-soft text-warning" : b.status === "cancelled" ? "bg-muted text-muted-foreground" : "bg-royal-50 text-royal")}>
-                        {statusLabel(b.status)}
+                        {b.status === "new" && !b.assigned_to ? "Needs technician" : statusLabel(b.status)}
                       </span>
                       <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
                     </Link>

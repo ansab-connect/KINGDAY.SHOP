@@ -64,11 +64,21 @@ async function AdminGate({ children }: { children: React.ReactNode }) {
 async function getAlerts(): Promise<AdminAlert[]> {
   try {
     const supabase = await createClient();
-    const [orders, stock] = await Promise.all([
+    const [orders, stock, unassigned] = await Promise.all([
       supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["new", "pending", "confirmed", "processing", "packed"]),
       supabase.from("inventory").select("on_hand, reorder_level").limit(5000),
+      // RLS returns these only to users who may view service bookings.
+      supabase.from("service_bookings").select("id", { count: "exact", head: true }).eq("status", "new").is("assigned_to", null),
     ]);
     const out: AdminAlert[] = [];
+    if (unassigned.count) {
+      out.push({
+        id: "service",
+        title: `${unassigned.count} service booking${unassigned.count === 1 ? "" : "s"} need a technician`,
+        detail: "New bookings waiting to be assigned",
+        href: "/admin/service?status=unassigned",
+      });
+    }
     if (orders.count) {
       out.push({ id: "orders", title: `${orders.count} order${orders.count === 1 ? "" : "s"} need action`, detail: "New, confirmed or packed orders", href: "/admin/orders" });
     }
