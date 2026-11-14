@@ -11,7 +11,9 @@ export function JobTimeline({ events, names = {} }: { events: JobEvent[]; names?
     <ol className="relative flex flex-col gap-4 border-l-2 border-royal-100 pl-5">
       {events.map((e, i) => {
         const last = i === events.length - 1;
-        const who = e.actor_code ?? (e.actor_id ? names[e.actor_id] : null) ?? (e.status === "new" || e.status === "cancelled" ? "Customer" : "System");
+        const who =
+          e.actor_code ??
+          (e.actor_id ? (names[e.actor_id] ?? (e.status === "new" ? "Customer" : "Office")) : e.status === "new" || e.status === "cancelled" ? "Customer" : "System");
         return (
           <li key={e.id} className="relative">
             <span className={cn("absolute top-0.5 -left-[1.72rem] grid size-5 place-items-center rounded-full bg-white", last ? "text-royal" : "text-royal-300")}>
