@@ -36,8 +36,10 @@ export function LocationPicker({ value, onChange }: { value: LatLng | null; onCh
       const m = L.map(box.current, { scrollWheelZoom: false }).setView([start.lat, start.lng], value ? 16 : 12);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        // New tab, so a stray tap never leaves the half-filled form.
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
       }).addTo(m);
+      m.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener noreferrer">Leaflet</a>');
       const icon = L.divIcon({
         className: "",
         html: '<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:#4B0082;border:3px solid #D4AF37;transform:rotate(-45deg);box-shadow:0 4px 10px rgba(0,0,0,.3)"></div>',
