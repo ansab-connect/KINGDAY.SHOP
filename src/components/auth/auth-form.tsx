@@ -8,9 +8,11 @@ import { cn } from "@/lib/utils";
 type Field = {
   name: string;
   label: string;
-  type: "text" | "email" | "password";
+  type: "text" | "email" | "password" | "tel";
   autoComplete: string;
   hint?: string;
+  optional?: boolean;
+  inputMode?: "text" | "email" | "tel" | "numeric";
 };
 
 /**
@@ -65,7 +67,8 @@ export function AuthForm({
               name={f.name}
               type={f.type}
               autoComplete={f.autoComplete}
-              required
+              required={!f.optional}
+              inputMode={f.inputMode}
               defaultValue={f.type === "password" ? undefined : state.values?.[f.name]}
               aria-invalid={Boolean(err)}
               aria-describedby={err ? `${id}-error` : f.hint ? `${id}-hint` : undefined}

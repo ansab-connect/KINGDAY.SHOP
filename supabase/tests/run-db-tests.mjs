@@ -762,5 +762,60 @@ await test("customers see their own service invoice; others don't", async () => 
   assert((await rows(`select * from public.service_invoices`)).length === 0, "other technician sees invoice");
 });
 
+console.log("Customer accounts");
+await test("every account has a permanent Customer ID", async () => {
+  const r = await rows(`select id, customer_code from public.profiles order by customer_code`);
+  assert(r.length >= 4 && r.every((x) => /^KD-CUS-\d{6}$/.test(x.customer_code)) && new Set(r.map((x) => x.customer_code)).size === r.length, JSON.stringify(r));
+  await user(alice);
+  const before = (await rows(`select customer_code from public.profiles where id = $1`, [alice]))[0].customer_code;
+  await db.query(`update public.profiles set customer_code = 'KD-CUS-999999', full_name = 'Alice New' where id = $1`, [alice]);
+  const after = (await rows(`select customer_code, full_name from public.profiles where id = $1`, [alice]))[0];
+  assert(after.customer_code === before && after.full_name === "Alice New", JSON.stringify(after));
+});
+await test("one account per mobile number (any format)", async () => {
+  await user(alice);
+  await db.query(`update public.profiles set phone = '98765 43210' where id = $1`, [alice]);
+  assert((await rows(`select mobile_e164 from public.profiles where id = $1`, [alice]))[0].mobile_e164 === "+919876543210", "not normalised");
+  await user(bob);
+  await expectError(`update public.profiles set phone = '+91 9876543210' where id = $1`, [bob], /profiles_mobile_unique|duplicate/);
+});
+await test("product cart is private to its owner", async () => {
+  const variant = (await rows(`select id from public.product_variants limit 1`))[0].id;
+  await user(alice);
+  await db.query(`insert into public.cart_items (user_id, variant_id, quantity) values ($1, $2, 2)`, [alice, variant]);
+  await expectError(`insert into public.cart_items (user_id, variant_id, quantity) values ($1, $2, 1)`, [bob, variant], /row-level security/);
+  await user(bob);
+  assert((await rows(`select * from public.cart_items`)).length === 0, "bob sees alice's cart");
+});
+await test("service cart books every item under the same customer", async () => {
+  await user(alice);
+  const item = (n) => [alice, "scooter", "battery", "external", `Cart item ${n}`, "Battery drains fast", "Kozhikode town", new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10), "morning"];
+  for (const n of [1, 2]) {
+    await db.query(`insert into public.service_cart_items (user_id, category, service_type, purchase_source, product_name, complaint, address, preferred_date, preferred_time) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, item(n));
+  }
+  await user(bob);
+  assert((await rows(`select * from public.service_cart_items`)).length === 0, "bob sees alice's service cart");
+  await expectError(`select public.checkout_service_cart()`, [], /add your name and mobile|empty/);
+  await user(alice);
+  const codes = (await rows(`select public.checkout_service_cart() as c`))[0].c;
+  assert(codes.length === 2, JSON.stringify(codes));
+  const b = await rows(`select customer_id, service_type, preferred_time, mobile from public.service_bookings where booking_code = any($1)`, [codes]);
+  assert(b.every((x) => x.customer_id === alice && x.service_type === "battery" && x.preferred_time === "morning" && x.mobile === "98765 43210"), JSON.stringify(b));
+  assert((await rows(`select * from public.service_cart_items`)).length === 0, "cart not emptied");
+});
+await test("notifications reach the customer and the assigned technician only", async () => {
+  await user(alice);
+  const mine = await rows(`select title from public.notifications`);
+  assert(mine.some((n) => /received/.test(n.title)) && mine.some((n) => /invoice ready/.test(n.title)), mine.map((n) => n.title).join(" | "));
+  await user(svc);
+  assert((await rows(`select title from public.notifications`)).some((n) => /^New job/.test(n.title)), "technician not notified");
+  await user(bob);
+  assert((await rows(`select * from public.notifications`)).length === 0, "bob sees others' notifications");
+  await user(alice);
+  await db.query(`update public.notifications set read_at = now() where user_id = $1`, [alice]);
+  await expectError(`update public.notifications set title = 'x' where user_id = $1`, [alice], /permission denied/);
+  await expectError(`insert into public.notifications (user_id, title) values ($1, 'spam')`, [bob], /permission denied/);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

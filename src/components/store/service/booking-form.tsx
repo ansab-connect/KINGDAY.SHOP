@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CalendarCheck, Camera, CheckCircle2, Loader2, X } from "lucide-react";
+import { CalendarCheck, Camera, CheckCircle2, Loader2, ShoppingCart, X } from "lucide-react";
 import { inputClass } from "@/components/admin/form/fields";
 import { L } from "@/components/i18n/lang";
 import { useLang } from "@/components/i18n/language-switcher";
-import { createServiceBookingAction } from "@/features/service/actions";
-import { MAX_PHOTOS, SERVICE_CATEGORIES, SERVICE_MEDIA_BUCKET } from "@/features/service/constants";
+import { useRouter } from "next/navigation";
+import { addToServiceCartAction, createServiceBookingAction } from "@/features/service/actions";
+import { MAX_PHOTOS, PREFERRED_TIMES, SERVICE_CATEGORIES, SERVICE_MEDIA_BUCKET, SERVICE_TYPES } from "@/features/service/constants";
 import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -15,7 +16,7 @@ import { LocationPicker, type LatLng } from "./location-picker";
 import { VoiceRecorder, type VoiceNote } from "./voice-recorder";
 
 export type Purchase = { key: string; orderId: string; orderNumber: string; productName: string; placedAt: string };
-type Defaults = { name: string; mobile: string; email: string; address: string };
+type Defaults = { name: string; mobile: string; email: string; address: string; code: string };
 
 function Field({ label, error, required, hint, className, children }: { label: React.ReactNode; error?: string; required?: boolean; hint?: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
@@ -55,6 +56,10 @@ const isoIn = (days: number) => {
 
 export function BookingForm({ userId, defaults, purchases }: { userId: string; defaults: Defaults; purchases: Purchase[] }) {
   const ml = useLang() === "ml";
+  const router = useRouter();
+  const known = Boolean(defaults.name && defaults.mobile);
+  const [serviceType, setServiceType] = useState("repair");
+  const [preferredTime, setPreferredTime] = useState("");
   const [name, setName] = useState(defaults.name);
   const [mobile, setMobile] = useState(defaults.mobile);
   const [email, setEmail] = useState(defaults.email);
@@ -88,8 +93,9 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
     setPhotos(next);
   }
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const toCart = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "cart";
     setBusy(true);
     setError(null);
     setFe({});
@@ -110,7 +116,7 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
         if (upErr) throw new Error("Voice note upload failed. Please try again.");
         voicePath = path;
       }
-      const res = await createServiceBookingAction({
+      const payload = {
         customer_name: name,
         mobile,
         email,
@@ -127,7 +133,14 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
         latitude: location?.lat ?? null,
         longitude: location?.lng ?? null,
         preferred_date: preferred,
-      });
+        service_type: serviceType,
+        preferred_time: preferredTime,
+      };
+      const res = toCart ? await addToServiceCartAction(payload) : await createServiceBookingAction(payload);
+      if (res.ok && toCart) {
+        router.push("/service-cart");
+        return;
+      }
       if (res.ok) {
         setDone(res.code);
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -164,6 +177,16 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
   return (
     <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
       <Step n={1} title={<L en="Your details" ml="നിങ്ങളുടെ വിവരങ്ങൾ" />}>
+        {known ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-royal-50 px-4 py-3 text-sm sm:col-span-2">
+            <span>
+              <span className="font-semibold text-deep">{defaults.name}</span> · {defaults.mobile}
+              {defaults.code ? <span className="ml-2 font-mono text-xs text-royal">{defaults.code}</span> : null}
+            </span>
+            <Link href="/account" className="text-sm font-semibold text-royal hover:underline"><L en="Change" ml="മാറ്റുക" /></Link>
+          </div>
+        ) : (
+          <>
         <Field label={<L en="Name" ml="പേര്" />} required error={fe.customer_name}>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" className={inputClass} />
         </Field>
@@ -173,6 +196,8 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
         <Field label={<L en="Email (optional)" ml="ഇമെയിൽ (ഐച്ഛികം)" />} error={fe.email} className="sm:col-span-2">
           <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" maxLength={254} autoComplete="email" className={inputClass} />
         </Field>
+          </>
+        )}
       </Step>
 
       <Step n={2} title={<L en="Product" ml="ഉൽപ്പന്നം" />}>
@@ -190,6 +215,11 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
               </button>
             ))}
           </div>
+        </Field>
+        <Field label={<L en="Service needed" ml="ആവശ്യമായ സർവീസ്" />} className="sm:col-span-2">
+          <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className={inputClass}>
+            {SERVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{ml ? t.ml : t.en}</option>)}
+          </select>
         </Field>
         <Field label={<L en="Where did you buy it?" ml="എവിടെ നിന്നാണ് വാങ്ങിയത്?" />} className="sm:col-span-2">
           <div className="flex flex-wrap gap-2">
@@ -277,13 +307,26 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
         <Field label={<L en="Preferred service date" ml="ഇഷ്ടമുള്ള തീയതി" />} required error={fe.preferred_date}>
           <input value={preferred} onChange={(e) => setPreferred(e.target.value)} type="date" min={isoIn(0)} max={isoIn(90)} className={inputClass} />
         </Field>
+        <Field label={<L en="Preferred time" ml="ഇഷ്ടമുള്ള സമയം" />}>
+          <select value={preferredTime} onChange={(e) => setPreferredTime(e.target.value)} className={inputClass}>
+            <option value="">{ml ? "ഏത് സമയവും" : "Any time"}</option>
+            {PREFERRED_TIMES.map((t) => <option key={t.value} value={t.value}>{ml ? t.ml : t.en}</option>)}
+          </select>
+        </Field>
       </Step>
 
       {error ? <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
-      <button type="submit" disabled={busy} className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-gold px-8 text-base font-bold text-deep shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] hover:bg-gold-300 disabled:opacity-60 sm:w-fit">
-        {busy ? <Loader2 aria-hidden className="size-5 animate-spin" /> : <CalendarCheck aria-hidden className="size-5" />}
-        <L en="Book service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
-      </button>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <button type="submit" value="book" disabled={busy} className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-gold px-8 text-base font-bold text-deep shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] hover:bg-gold-300 disabled:opacity-60">
+          {busy ? <Loader2 aria-hidden className="size-5 animate-spin" /> : <CalendarCheck aria-hidden className="size-5" />}
+          <L en="Book service now" ml="ഇപ്പോൾ ബുക്ക് ചെയ്യുക" />
+        </button>
+        <button type="submit" value="cart" disabled={busy} className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-royal-200 bg-white px-6 text-sm font-semibold text-royal hover:bg-royal-50 disabled:opacity-60">
+          <ShoppingCart aria-hidden className="size-5" />
+          <L en="Add to service cart" ml="സർവീസ് കാർട്ടിൽ ചേർക്കുക" />
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground"><L en="Booking several things? Add each to the service cart and book them together." ml="ഒന്നിലധികം സർവീസുകൾ കാർട്ടിൽ ചേർത്ത് ഒരുമിച്ച് ബുക്ക് ചെയ്യാം." /></p>
     </form>
   );
 }

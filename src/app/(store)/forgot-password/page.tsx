@@ -11,7 +11,14 @@ export default function ForgotPasswordPage() {
     <AuthCard
       title="Reset your password"
       description="Enter your email and we'll send you a link to choose a new password."
-      footer={<Link href="/login" className="font-medium text-royal hover:underline">Back to sign in</Link>}
+      footer={
+        <>
+          <p className="mb-3 text-xs">
+            Registered with your mobile number only? Message us on WhatsApp at +91 94959 02904 from that number and we&apos;ll send you a secure link to reset your password.
+          </p>
+          <Link href="/login" className="font-medium text-royal hover:underline">Back to sign in</Link>
+        </>
+      }
     >
       <AuthForm
         action={requestPasswordReset}

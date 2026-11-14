@@ -43,7 +43,7 @@ export default function AdminLoginPage({ searchParams }: PageProps<"/admin/login
                 action={signInAdmin}
                 submitLabel="Sign in"
                 fields={[
-                  { name: "email", label: "Email", type: "email", autoComplete: "username" },
+                  { name: "login", label: "Email or mobile number", type: "text", autoComplete: "username", inputMode: "email" },
                   { name: "password", label: "Password", type: "password", autoComplete: "current-password" },
                 ]}
               />

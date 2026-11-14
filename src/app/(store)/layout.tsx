@@ -1,4 +1,5 @@
 import { L } from "@/components/i18n/lang";
+import { CartSync } from "@/components/store/cart-sync";
 import { StoreFooter } from "@/components/store/store-footer";
 import { StoreHeader } from "@/components/store/store-header";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -25,6 +26,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       <StoreHeader />
       <main id="main" className="flex-1">{children}</main>
       <StoreFooter />
+      {isSupabaseConfigured ? <CartSync /> : null}
     </div>
   );
 }

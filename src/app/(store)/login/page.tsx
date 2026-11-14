@@ -24,7 +24,7 @@ async function LoginForm({ searchParams }: { searchParams: PageProps<"/login">["
         submitLabel="Sign in"
         hidden={{ next }}
         fields={[
-          { name: "email", label: "Email", type: "email", autoComplete: "email" },
+          { name: "login", label: "Mobile number or email", type: "text", autoComplete: "username", inputMode: "email" },
           { name: "password", label: "Password", type: "password", autoComplete: "current-password" },
         ]}
       />

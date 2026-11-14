@@ -31,3 +31,20 @@ export const MAX_VOICE_SECONDS = 120;
 
 export const mapsLink = (lat: number, lng: number) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 export const directionsLink = (lat: number, lng: number) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+export const SERVICE_TYPES = [
+  { value: "repair", en: "Repair", ml: "റിപ്പയർ" },
+  { value: "general_service", en: "General service", ml: "ജനറൽ സർവീസ്" },
+  { value: "battery", en: "Battery / charging", ml: "ബാറ്ററി / ചാർജിംഗ്" },
+  { value: "installation", en: "Assembly / installation", ml: "അസംബ്ലി / ഇൻസ്റ്റലേഷൻ" },
+  { value: "inspection", en: "Inspection / check-up", ml: "പരിശോധന" },
+  { value: "other", en: "Other", ml: "മറ്റുള്ളവ" },
+] as const;
+export const serviceTypeLabel = (v: string) => SERVICE_TYPES.find((t) => t.value === v)?.en ?? v;
+
+export const PREFERRED_TIMES = [
+  { value: "morning", en: "Morning (9–12)", ml: "രാവിലെ (9–12)" },
+  { value: "afternoon", en: "Afternoon (12–4)", ml: "ഉച്ചയ്ക്ക് (12–4)" },
+  { value: "evening", en: "Evening (4–7)", ml: "വൈകുന്നേരം (4–7)" },
+] as const;
+export const preferredTimeLabel = (v: string | null | undefined) => PREFERRED_TIMES.find((t) => t.value === v)?.en ?? "Any time";

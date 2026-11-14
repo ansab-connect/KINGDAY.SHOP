@@ -5,7 +5,9 @@ import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/session";
 import { dbMessage, fail, fieldErrorsOf, ok, type FormState } from "@/features/forms";
 import { isSupabaseConfigured } from "@/lib/env";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { formatMobile, isMobileLoginEmail, mobileLoginEmail, normalizeMobile } from "@/features/customer/mobile";
 
 /**
  * Customer self-service actions. Every write runs as the signed-in user, so RLS
@@ -35,13 +37,25 @@ export async function updateProfileAction(_: FormState, fd: FormData): Promise<F
     })
     .safeParse({ full_name: fd.get("full_name"), phone: fd.get("phone") ?? "", marketing_opt_in: fd.get("marketing_opt_in") === "on" });
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
+  const mobile = parsed.data.phone ? normalizeMobile(parsed.data.phone) : null;
+  if (parsed.data.phone && !mobile) return fail("Please check the highlighted fields.", { phone: "Enter a valid mobile number." });
+  if (!mobile && isMobileLoginEmail(user.email)) {
+    return fail("Please check the highlighted fields.", { phone: "Your mobile number is how you sign in, so it can't be removed." });
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
-    .update({ ...parsed.data, phone: parsed.data.phone || null })
+    .update({ ...parsed.data, phone: mobile ? formatMobile(mobile) : null })
     .eq("id", user.id);
+  if (error?.code === "23505") return fail("Please check the highlighted fields.", { phone: "This mobile number is already used by another account." });
   if (error) return fail(dbMessage(error, "Couldn't save your profile."));
+  if (mobile && isMobileLoginEmail(user.email)) {
+    // Mobile-only accounts sign in with their number: keep the sign-in address in step.
+    try {
+      await createAdminClient().auth.admin.updateUserById(user.id, { email: mobileLoginEmail(mobile), email_confirm: true });
+    } catch {}
+  }
   revalidatePath("/account");
   return ok("Profile saved.");
 }

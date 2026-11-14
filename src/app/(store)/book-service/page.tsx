@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
-import { Clock, MapPin, ShieldCheck, Wrench } from "lucide-react";
+import { Clock, MapPin, ShieldCheck } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { Container } from "@/components/store/section";
+import { QuickAccount } from "@/components/store/quick-account";
 import { BookingForm } from "@/components/store/service/booking-form";
+import { isMobileLoginEmail } from "@/features/customer/mobile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCurrentUser } from "@/features/auth/session";
 import { getBookingPrefill } from "@/features/service/queries";
@@ -23,16 +24,11 @@ async function BookingContent() {
   const user = await getCurrentUser();
   if (!user) {
     return (
-      <div className="mx-auto flex max-w-lg flex-col items-center gap-4 rounded-2xl border bg-white p-8 text-center shadow-card">
-        <Wrench aria-hidden className="size-10 text-royal" />
-        <h2 className="text-xl font-bold text-deep"><L en="Sign in to book a service" ml="സർവീസ് ബുക്ക് ചെയ്യാൻ സൈൻ ഇൻ ചെയ്യുക" /></h2>
-        <p className="text-sm text-muted-foreground">
-          <L en="Signing in lets us show your KING DAY purchases and keep you updated on the repair." ml="നിങ്ങളുടെ പർച്ചേസുകൾ കാണിക്കാനും റിപ്പയർ വിവരങ്ങൾ അറിയിക്കാനും ഇത് സഹായിക്കും." />
+      <div className="mx-auto flex max-w-md flex-col gap-4">
+        <p className="text-center text-sm text-muted-foreground">
+          <L en="First time here? Create your account with your name and mobile number, then book." ml="ആദ്യമായാണോ? പേരും മൊബൈൽ നമ്പറും നൽകി അക്കൗണ്ട് ഉണ്ടാക്കി ബുക്ക് ചെയ്യൂ." />
         </p>
-        <div className="flex flex-wrap justify-center gap-2">
-          <Link href="/login?next=/book-service" className="inline-flex h-11 items-center rounded-full bg-royal px-6 text-sm font-semibold text-white hover:bg-royal-800"><L en="Sign in" ml="സൈൻ ഇൻ" /></Link>
-          <Link href="/register?next=/book-service" className="inline-flex h-11 items-center rounded-full border px-6 text-sm font-semibold text-deep hover:bg-muted"><L en="Create account" ml="അക്കൗണ്ട് ഉണ്ടാക്കുക" /></Link>
-        </div>
+        <QuickAccount next="/book-service" title={<L en="Your KING DAY account" ml="നിങ്ങളുടെ KING DAY അക്കൗണ്ട്" />} />
       </div>
     );
   }
@@ -40,7 +36,7 @@ async function BookingContent() {
   return (
     <BookingForm
       userId={user.id}
-      defaults={{ name: prefill.name || user.fullName || "", mobile: prefill.mobile, email: user.email ?? "", address: prefill.address }}
+      defaults={{ name: prefill.name || user.fullName || "", mobile: prefill.mobile, email: isMobileLoginEmail(user.email) ? "" : (user.email ?? ""), address: prefill.address, code: prefill.code }}
       purchases={prefill.purchases}
     />
   );

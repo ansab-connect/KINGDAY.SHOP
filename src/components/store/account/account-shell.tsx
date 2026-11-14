@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { Heart, LayoutDashboard, MapPin, Package, Settings, Wrench } from "lucide-react";
+import { Bell, Heart, LayoutDashboard, MapPin, Package, Settings, ShoppingBag, ShoppingCart, Wrench } from "lucide-react";
 import { Container } from "@/components/store/section";
 
 const links = [
-  { href: "/account", label: "Profile", icon: LayoutDashboard },
-  { href: "/account/orders", label: "Orders", icon: Package },
-  { href: "/account/service", label: "Service", icon: Wrench },
-  { href: "/account/addresses", label: "Addresses", icon: MapPin },
+  { href: "/account", label: "My Profile", icon: LayoutDashboard },
+  { href: "/account/orders", label: "My Orders", icon: Package },
+  { href: "/cart", label: "Product Cart", icon: ShoppingBag },
+  { href: "/account/service", label: "My Services", icon: Wrench },
+  { href: "/service-cart", label: "Service Cart", icon: ShoppingCart },
+  { href: "/account/addresses", label: "Saved Addresses", icon: MapPin },
+  { href: "/account/notifications", label: "Notifications", icon: Bell },
   { href: "/wishlist", label: "Wishlist", icon: Heart },
   { href: "/account/settings", label: "Settings", icon: Settings },
 ];

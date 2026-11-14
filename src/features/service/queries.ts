@@ -32,7 +32,7 @@ export type BookingRow = {
 export async function getBookingPrefill(userId: string) {
   const supabase = await createClient();
   const [{ data: profile }, { data: address }, { data: orders }] = await Promise.all([
-    supabase.from("profiles").select("full_name, phone").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("full_name, phone, customer_code").eq("id", userId).maybeSingle(),
     supabase
       .from("addresses")
       .select("line1, line2, landmark, city, state, postal_code")
@@ -48,7 +48,7 @@ export async function getBookingPrefill(userId: string) {
       .order("placed_at", { ascending: false })
       .limit(30),
   ]);
-  const p = profile as { full_name: string | null; phone: string | null } | null;
+  const p = profile as { full_name: string | null; phone: string | null; customer_code: string | null } | null;
   const a = address as { line1: string; line2: string | null; landmark: string | null; city: string; state: string; postal_code: string } | null;
   const purchases: Purchase[] = [];
   for (const o of (orders ?? []) as { id: string; order_number: string; placed_at: string; order_items: { id: string; product_name: string; variant_name: string | null }[] }[]) {
@@ -65,6 +65,7 @@ export async function getBookingPrefill(userId: string) {
   return {
     name: p?.full_name ?? "",
     mobile: p?.phone ?? "",
+    code: p?.customer_code ?? "",
     address: a ? [a.line1, a.line2, a.landmark, `${a.city}, ${a.state} ${a.postal_code}`].filter(Boolean).join(", ") : "",
     purchases,
   };

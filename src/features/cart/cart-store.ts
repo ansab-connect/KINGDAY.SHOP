@@ -85,3 +85,8 @@ export function removeFromCart(variantId: string) {
 export function clearCart() {
   write([]);
 }
+
+/** Replace the whole cart (used when merging with the customer's saved cart). */
+export function replaceCart(items: CartItem[]) {
+  write(items);
+}

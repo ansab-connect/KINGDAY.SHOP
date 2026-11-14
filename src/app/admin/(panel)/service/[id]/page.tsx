@@ -28,6 +28,8 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
   const manage = can(me, "service", "edit");
   const [media, events, inspection, technicians, invoice, basicDefault] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), listTechnicians(), getInvoiceForBooking(id), getDefaultBasicCharge()]);
   const tech = technicians.find((t) => t.user_id === b.assigned_to);
+  const { data: cust } = b.customer_id ? await supabase.from("profiles").select("customer_code").eq("id", b.customer_id).maybeSingle() : { data: null };
+  const customerCode = (cust as { customer_code?: string } | null)?.customer_code;
   const open = !["completed", "invoiced", "cancelled"].includes(b.status);
   const reassignable = ["new", "assigned", "accepted", "on_the_way", "reached"].includes(b.status);
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, this is KING DAY Service about booking ${b.booking_code}.`)}`;
@@ -147,7 +149,7 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
           <CardContent className="flex flex-col gap-4">
             <h2 className="font-heading text-lg font-semibold text-deep">Customer</h2>
             <div className="text-sm">
-              <p className="font-semibold text-deep">{b.customer_name}</p>
+              <p className="font-semibold text-deep">{b.customer_name}{customerCode ? <span className="ml-2 font-mono text-xs text-royal">{customerCode}</span> : null}</p>
               <p className="text-muted-foreground">{b.mobile}{b.email ? ` · ${b.email}` : ""}</p>
               <p className="mt-2 whitespace-pre-line text-deep">{b.address}</p>
             </div>
