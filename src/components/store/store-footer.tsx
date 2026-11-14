@@ -10,6 +10,7 @@ const companyLinks = [
   { title: <L en="About Us" ml="ഞങ്ങളെക്കുറിച്ച്" />, href: "/about" },
   { title: <L en="Contact" ml="ബന്ധപ്പെടുക" />, href: "/contact" },
   { title: <L en="Offers" ml="ഓഫറുകൾ" />, href: "/offers" },
+  { title: <L en="Book a Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />, href: "/book-service" },
   { title: <L en="My Account" ml="എന്റെ അക്കൗണ്ട്" />, href: "/account" },
   { title: <L en="Track Order" ml="ഓർഡർ ട്രാക്ക് ചെയ്യുക" />, href: "/account/orders" },
 ];

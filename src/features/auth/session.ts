@@ -125,9 +125,23 @@ export async function requireStaff(minimum: StaffRole = "staff", module?: Module
   }
   const user = await getCurrentUser();
   if (!user) redirect("/admin/login");
+  if (user.role === "service_staff") redirect("/staff");
   if (!hasRole(user, minimum)) redirect("/admin/login?error=forbidden");
   if (module && !can(user, module, "view")) return { status: "denied", user };
   return { status: "granted", user };
+}
+
+/** Gate for the staff portal (/staff): any active Staff, Service Staff, Admin or Super Admin. */
+export async function requireTeam(): Promise<SessionUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/admin/login?next=/staff");
+  if (!hasRole(user, "service_staff")) redirect("/admin/login?error=forbidden");
+  return user;
+}
+
+/** Where a team member lands after signing in. */
+export function homeFor(user: SessionUser): string {
+  return hasRole(user, "admin") ? "/admin" : "/staff";
 }
 
 /** For server actions: requires a page/action permission. Throws if missing. */

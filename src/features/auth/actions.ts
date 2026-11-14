@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { isSupabaseConfigured, publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, hasRole, safeNextPath } from "./session";
+import { getCurrentUser, hasRole, homeFor, safeNextPath } from "./session";
 
 export type AuthFormState = {
   error?: string;
@@ -65,11 +65,11 @@ export async function signInAdmin(_prev: AuthFormState, formData: FormData): Pro
   if (error) return { error: GENERIC_LOGIN_ERROR, values };
 
   const user = await getCurrentUser();
-  if (!hasRole(user, "staff")) {
+  if (!user || !hasRole(user, "service_staff")) {
     await supabase.auth.signOut();
-    return { error: "This account doesn't have admin access.", values };
+    return { error: "This account doesn't have staff access.", values };
   }
-  redirect("/admin");
+  redirect(homeFor(user));
 }
 
 // ---------------------------------------------------------------- Register

@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Heart, LayoutDashboard, MapPin, Package, Settings } from "lucide-react";
+import { Heart, LayoutDashboard, MapPin, Package, Settings, Wrench } from "lucide-react";
 import { Container } from "@/components/store/section";
 
 const links = [
   { href: "/account", label: "Profile", icon: LayoutDashboard },
   { href: "/account/orders", label: "Orders", icon: Package },
+  { href: "/account/service", label: "Service", icon: Wrench },
   { href: "/account/addresses", label: "Addresses", icon: MapPin },
   { href: "/wishlist", label: "Wishlist", icon: Heart },
   { href: "/account/settings", label: "Settings", icon: Settings },

@@ -562,5 +562,95 @@ await test("primary Super Admin is granted on confirmation and protected", async
   await expectError(`delete from auth.users where id = $1`, [primary], /primary Super Admin/);
 });
 
+console.log("Staff HR profiles");
+await test("staff edit only their own personal details", async () => {
+  await user(staff);
+  await db.query(`insert into public.staff_personal (user_id, address, emergency_phone) values ($1, 'Kozhikode', '+91 90000 00000')`, [staff]);
+  await expectError(`insert into public.staff_personal (user_id, address) values ($1, 'x')`, [svc], /row-level security/);
+  await user(svc);
+  await db.query(`insert into public.staff_personal (user_id, blood_group) values ($1, 'O+')`, [svc]);
+  assert((await rows(`select * from public.staff_personal`)).length === 1, "service staff saw another employee's details");
+  await user(alice);
+  await expectError(`insert into public.staff_personal (user_id) values ($1)`, [alice], /row-level security/);
+  await user(admin2);
+  assert((await rows(`select * from public.staff_personal`)).length === 2, "admin can't read HR details");
+});
+await test("documents are HR-managed and private", async () => {
+  await user(staff);
+  await expectError(`insert into public.staff_documents (user_id, title, path) values ($1, 'ID', $2)`, [staff, `${staff}/docs/id-card-1.pdf`], /row-level security/);
+  await user(admin2);
+  await db.query(`insert into public.staff_documents (user_id, title, path) values ($1, 'ID card', $2)`, [staff, `${staff}/docs/id-card-1.pdf`]);
+  await user(staff);
+  assert((await rows(`select * from public.staff_documents`)).length === 1, "staff can't see own document");
+  await user(svc);
+  assert((await rows(`select * from public.staff_documents`)).length === 0, "service staff saw another's document");
+});
+await test("staff files: own photo only; documents by HR", async () => {
+  await user(staff);
+  await db.query(`insert into storage.objects (bucket_id, name) values ('staff-files', $1)`, [`${staff}/photo-abc123.webp`]);
+  await expectError(`insert into storage.objects (bucket_id, name) values ('staff-files', $1)`, [`${staff}/docs/x-123456.pdf`], /row-level security/);
+  await expectError(`insert into storage.objects (bucket_id, name) values ('staff-files', $1)`, [`${svc}/photo-abc123.webp`], /row-level security/);
+  await user(svc);
+  assert((await rows(`select * from storage.objects where bucket_id = 'staff-files'`)).length === 0, "service staff read another's photo");
+  await user(admin2);
+  await db.query(`insert into storage.objects (bucket_id, name) values ('staff-files', $1)`, [`${staff}/docs/x-123456.pdf`]);
+});
+await test("employment details change only through HR permission", async () => {
+  await user(staff);
+  await expectError(`select public.update_staff_employment($1, 'Sales', 'Executive', 'full_time', '2026-01-01')`, [staff], /not authorized/);
+  await user(admin2);
+  await db.query(`select public.update_staff_employment($1, 'Sales', 'Executive', 'contract', '2026-01-01')`, [staff]);
+  const r = (await rows(`select department, employment_type, status from public.staff_profiles where user_id = $1`, [staff]))[0];
+  assert(r.department === "Sales" && r.employment_type === "contract" && r.status === "active", JSON.stringify(r));
+});
+
+console.log("Service bookings");
+const booking = (over = {}) =>
+  JSON.stringify({
+    customer_name: "Alice",
+    mobile: "+91 98765 43210",
+    category: "jeep",
+    product_name: "Thunder 12V Jeep",
+    complaint: "Not charging",
+    address: "Puthiyapalam, Kozhikode",
+    preferred_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    ...over,
+  });
+await test("signed-in customers book a service and get a booking ID", async () => {
+  await anon();
+  await expectError(`select public.create_service_booking($1::jsonb)`, [booking()], /permission denied/);
+  await user(alice);
+  const code = (await rows(`select public.create_service_booking($1::jsonb) as c`, [booking()]))[0].c;
+  assert(/^KD-SB-\d{6}$/.test(code), code);
+  await expectError(`insert into public.service_bookings (customer_name, mobile, category, purchase_source, product_name, address, preferred_date, complaint) values ('x','9999999','jeep','external','xx','xxxxxx', current_date, 'y')`, [], /permission denied/);
+});
+await test("bookings reject other people's files and orders", async () => {
+  await user(alice);
+  await expectError(`select public.create_service_booking($1::jsonb)`, [booking({ photo_paths: [`${bob}/abc123.webp`] })], /invalid file/);
+  await db.query(`select public.create_service_booking($1::jsonb)`, [booking({ photo_paths: [`${alice}/abc123.webp`], voice_path: `${alice}/voice-123456.webm` })]);
+  await expectError(`select public.create_service_booking($1::jsonb)`, [booking({ order_id: "00000000-0000-0000-0000-000000000000" })], /order not found/);
+  await expectError(`select public.create_service_booking($1::jsonb)`, [booking({ preferred_date: "2020-01-01" })], /preferred date/);
+});
+await test("bookings are private: own customer, service team, assigned technician", async () => {
+  await user(bob);
+  assert((await rows(`select * from public.service_bookings`)).length === 0, "bob sees alice's booking");
+  await user(alice);
+  assert((await rows(`select * from public.service_bookings`)).length === 2, "alice can't see own bookings");
+  await user(admin2);
+  assert((await rows(`select * from public.service_bookings`)).length === 2, "admin can't see bookings");
+  await user(svc);
+  assert((await rows(`select * from public.service_bookings`)).length === 0, "unassigned technician sees bookings");
+  await asSuperuser();
+  await db.query(`update public.service_bookings set assigned_to = $1, status = 'assigned' where booking_code = (select min(booking_code) from public.service_bookings)`, [svc]);
+  await user(svc);
+  assert((await rows(`select * from public.service_bookings`)).length === 1, "technician can't see own job");
+});
+await test("customers cancel only before acceptance", async () => {
+  await user(alice);
+  const [b] = await rows(`select id from public.service_bookings where status = 'new' limit 1`);
+  await db.query(`select public.cancel_my_service_booking($1)`, [b.id]);
+  await expectError(`select public.cancel_my_service_booking($1)`, [b.id], /can no longer be cancelled/);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

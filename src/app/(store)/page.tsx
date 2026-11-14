@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Camera, Check, Lock, MessageCircle, Quote, ShieldCheck } from "lucide-react";
+import { ArrowRight, Camera, Check, Lock, MessageCircle, Quote, ShieldCheck, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { HeroArt } from "@/components/store/hero-art";
 import { NewsletterForm } from "@/components/store/newsletter-form";
@@ -67,10 +67,11 @@ export default async function HomePage() {
                 <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
               <Link
-                href="/categories/electric-jeeps-cars"
-                className="inline-flex h-12 items-center rounded-full border border-white/25 px-7 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/5"
+                href="/book-service"
+                className="inline-flex h-12 items-center gap-2 rounded-full border border-white/25 px-7 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/5"
               >
-                <L en="Explore electric jeeps" ml="ഇലക്ട്രിക് ജീപ്പുകൾ" />
+                <Wrench aria-hidden className="size-4 text-gold" />
+                <L en="Book Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
               </Link>
             </div>
             <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm text-white/70">

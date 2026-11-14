@@ -4,6 +4,8 @@ import {
   FileText,
   FolderTree,
   History,
+  IdCard,
+  Wrench,
   KeyRound,
   LayoutDashboard,
   Package,
@@ -58,6 +60,13 @@ export const adminNav: AdminNavGroup[] = [
     items: [
       { title: "Analytics", href: "/admin/analytics", icon: BarChart3, module: "analytics", phase: 10 },
       { title: "Reports", href: "/admin/reports", icon: FileText, module: "reports", phase: 10 },
+    ],
+  },
+  {
+    label: "Service & People",
+    items: [
+      { title: "Service Management", href: "/admin/service", icon: Wrench, module: "service" },
+      { title: "Staff Management", href: "/admin/staff", icon: IdCard, module: "staff" },
     ],
   },
   {
