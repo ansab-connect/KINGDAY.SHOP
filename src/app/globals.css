@@ -16,6 +16,7 @@
   --color-royal: #4b0082;
   --color-gold: #d4af37;
   --color-deep: #1a0f2e;
+  --color-canvas: #f7f6fa; /* page background */
 
   /* Royal purple scale (700 = official Royal Purple, 950 = Deep Purple) */
   --color-royal-50: #f6f1fb;
@@ -61,8 +62,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--font-outfit), var(--font-dm-sans), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-dm-sans), var(--font-malayalam), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-outfit), var(--font-dm-sans), var(--font-malayalam), ui-sans-serif, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -217,4 +218,19 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* English / Malayalam switch (see components/i18n/lang.tsx) */
+html:not([data-lang="ml"]) .i18n-ml,
+html[data-lang="ml"] .i18n-en {
+  display: none;
+}
+/* Letter-spacing breaks Malayalam conjuncts. */
+.i18n-ml {
+  letter-spacing: normal;
+}
+/* Malayalam words are longer: tighter header nav. */
+html[data-lang="ml"] header nav a {
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
 }

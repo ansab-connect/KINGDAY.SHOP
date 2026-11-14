@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProductSkeleton } from "@/components/store/product/product-skeleton";
-import { Check, RotateCcw, ShieldCheck, Truck } from "lucide-react";
+import { RotateCcw, ShieldCheck, Truck } from "lucide-react";
+import { L } from "@/components/i18n/lang";
 import { Breadcrumbs } from "@/components/store/page-hero";
 import { Rating, Stars } from "@/components/store/price";
 import { ProductGrid } from "@/components/store/product-card";
@@ -64,7 +65,6 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
-    sku: product.sku,
     description: product.description.join(" "),
     ...(product.brand ? { brand: { "@type": "Brand", name: product.brand.name } } : {}),
     category: product.category.name,
@@ -110,7 +110,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 <a href="#reviews" className="hover:underline"><Rating value={product.rating} count={product.reviewCount} className="text-sm" /></a>
               ) : null}
               {product.ageRange ? (
-                <span className="text-muted-foreground">Age: <span className="font-medium text-deep">{product.ageRange}</span></span>
+                <span className="text-muted-foreground"><L en="Age" ml="പ്രായം" />: <span className="font-medium text-deep">{product.ageRange}</span></span>
               ) : null}
             </div>
 
@@ -127,9 +127,9 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
             </div>
 
             <ul className="mt-8 grid gap-3 rounded-2xl bg-muted/60 p-5 text-sm sm:grid-cols-3">
-              <li className="flex items-center gap-2.5"><ShieldCheck aria-hidden className="size-5 text-royal" /> Safety-checked</li>
-              <li className="flex items-center gap-2.5"><Truck aria-hidden className="size-5 text-royal" /> Tracked delivery</li>
-              <li className="flex items-center gap-2.5"><RotateCcw aria-hidden className="size-5 text-royal" /> Easy support</li>
+              <li className="flex items-center gap-2.5"><ShieldCheck aria-hidden className="size-5 text-royal" /> <L en="Safety-checked" ml="സുരക്ഷ ഉറപ്പാക്കിയത്" /></li>
+              <li className="flex items-center gap-2.5"><Truck aria-hidden className="size-5 text-royal" /> <L en="Tracked delivery" ml="ട്രാക്ക് ചെയ്യാവുന്ന ഡെലിവറി" /></li>
+              <li className="flex items-center gap-2.5"><RotateCcw aria-hidden className="size-5 text-royal" /> <L en="Easy support" ml="എളുപ്പത്തിൽ സഹായം" /></li>
             </ul>
           </div>
         </div>
@@ -137,26 +137,14 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
         {/* Details */}
         <div className="mt-16 grid gap-12 lg:grid-cols-[1.4fr_1fr]">
           <section aria-labelledby="desc-heading">
-            <h2 id="desc-heading" className="text-2xl font-bold text-deep">Product description</h2>
+            <h2 id="desc-heading" className="text-2xl font-bold text-deep"><L en="Product description" ml="ഉൽപ്പന്ന വിവരണം" /></h2>
             <div className="mt-4 flex flex-col gap-4 text-base leading-relaxed text-muted-foreground">
               {product.description.length ? product.description.map((p) => <p key={p}>{p}</p>) : <p>{product.shortDescription || "Details coming soon."}</p>}
             </div>
-            {product.highlights.length ? (
-              <>
-                <h3 className="mt-8 font-heading text-lg font-semibold text-deep">Highlights</h3>
-                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {product.highlights.map((h) => (
-                    <li key={h} className="flex items-start gap-2 text-sm text-deep/80">
-                      <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-gold-600" /> {h}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
           </section>
 
           <section aria-labelledby="spec-heading">
-            <h2 id="spec-heading" className="text-2xl font-bold text-deep">Specifications</h2>
+            <h2 id="spec-heading" className="text-2xl font-bold text-deep"><L en="Specifications" ml="സവിശേഷതകൾ" /></h2>
             <dl className="mt-4 divide-y overflow-hidden rounded-2xl border">
               {product.specs.map((s) => (
                 <div key={s.label} className="grid grid-cols-[42%_1fr] gap-4 px-5 py-3 text-sm odd:bg-muted/40">
@@ -165,7 +153,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 </div>
               ))}
               <div className="grid grid-cols-[42%_1fr] gap-4 px-5 py-3 text-sm">
-                <dt className="text-muted-foreground">Category</dt>
+                <dt className="text-muted-foreground"><L en="Category" ml="വിഭാഗം" /></dt>
                 <dd className="font-medium text-deep">{product.category.name}</dd>
               </div>
             </dl>
@@ -176,7 +164,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
         <section id="reviews" aria-labelledby="reviews-heading" className="mt-16 scroll-mt-28">
           <div className="flex flex-col gap-6 rounded-3xl bg-royal-50/60 p-6 sm:flex-row sm:items-center sm:p-8">
             <div>
-              <h2 id="reviews-heading" className="text-2xl font-bold text-deep">Customer reviews</h2>
+              <h2 id="reviews-heading" className="text-2xl font-bold text-deep"><L en="Customer reviews" ml="ഉപഭോക്തൃ അഭിപ്രായങ്ങൾ" /></h2>
               {isPreview ? <p className="mt-1 text-xs text-muted-foreground">Sample reviews shown in preview mode.</p> : null}
             </div>
             {product.reviewCount > 0 ? (
@@ -188,7 +176,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground sm:ml-auto">No reviews yet. Reviews open with customer accounts.</p>
+              <p className="text-sm text-muted-foreground sm:ml-auto"><L en="No reviews yet." ml="ഇതുവരെ അഭിപ്രായങ്ങൾ ഇല്ല." /></p>
             )}
           </div>
           <ul className="mt-6 grid gap-4 md:grid-cols-3">
@@ -208,7 +196,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
         {/* Related */}
         {related.length ? (
           <section aria-label="Related products" className="mt-20">
-            <SectionHeading eyebrow="You may also like" title="Related products" href={`/categories/${product.category.slug}`} linkLabel={`More ${product.category.name}`} />
+            <SectionHeading eyebrow={<L en="You may also like" ml="നിങ്ങൾക്ക് ഇഷ്ടപ്പെട്ടേക്കാം" />} title={<L en="Related products" ml="സമാന ഉൽപ്പന്നങ്ങൾ" />} href={`/categories/${product.category.slug}`} linkLabel={`More ${product.category.name}`} />
             <ProductGrid products={related} />
           </section>
         ) : null}

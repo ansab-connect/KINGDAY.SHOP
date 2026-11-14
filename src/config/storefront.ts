@@ -4,12 +4,12 @@
  * overrides one only when it is set to a non-empty value.
  */
 export const storeNav = [
-  { title: "Home", href: "/" },
-  { title: "Shop", href: "/shop" },
-  { title: "Categories", href: "/categories" },
-  { title: "Offers", href: "/offers" },
-  { title: "About Us", href: "/about" },
-  { title: "Contact", href: "/contact" },
+  { title: "Home", ml: "ഹോം", href: "/" },
+  { title: "Shop", ml: "ഷോപ്പ്", href: "/shop" },
+  { title: "Categories", ml: "വിഭാഗം", href: "/categories" },
+  { title: "Offers", ml: "ഓഫറുകൾ", href: "/offers" },
+  { title: "About", ml: "ഞങ്ങൾ", href: "/about" },
+  { title: "Contact", ml: "ബന്ധപ്പെടുക", href: "/contact" },
 ] as const;
 
 /** Official KING DAY contact details. */

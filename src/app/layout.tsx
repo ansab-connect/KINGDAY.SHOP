@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Outfit } from "next/font/google";
+import { DM_Sans, Noto_Sans_Malayalam, Outfit } from "next/font/google";
+import { LANG_BOOT_SCRIPT } from "@/components/i18n/lang";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { siteConfig } from "@/config/site";
 import "./globals.css";
@@ -14,6 +15,13 @@ const outfit = Outfit({
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const malayalam = Noto_Sans_Malayalam({
+  variable: "--font-malayalam",
+  subsets: ["malayalam"],
+  weight: ["400", "600", "700"],
   display: "swap",
 });
 
@@ -39,7 +47,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en-IN" className={`${outfit.variable} ${dmSans.variable} h-full antialiased`}>
+    <html lang="en-IN" suppressHydrationWarning className={`${outfit.variable} ${dmSans.variable} ${malayalam.variable} h-full antialiased`}>
+      <head>
+        {/* Applies the saved language before first paint (no flash). Static string, no user input. */}
+        <script dangerouslySetInnerHTML={{ __html: LANG_BOOT_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col">
         <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
       </body>

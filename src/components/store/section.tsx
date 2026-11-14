@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { L } from "@/components/i18n/lang";
 import { cn } from "@/lib/utils";
 
 export function Container({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -11,15 +12,15 @@ export function SectionHeading({
   title,
   description,
   href,
-  linkLabel = "View all",
+  linkLabel = <L en="View all" ml="എല്ലാം കാണുക" />,
   align = "left",
   tone = "light",
 }: {
-  eyebrow?: string;
-  title: string;
-  description?: string;
+  eyebrow?: React.ReactNode;
+  title: React.ReactNode;
+  description?: React.ReactNode;
   href?: string;
-  linkLabel?: string;
+  linkLabel?: React.ReactNode;
   align?: "left" | "center";
   tone?: "light" | "dark";
 }) {

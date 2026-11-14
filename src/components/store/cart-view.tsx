@@ -39,7 +39,7 @@ export function CartView() {
           <li key={i.variantId} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
             <div className="min-w-0 flex-1">
               <Link href={i.url.replace(/^https?:\/\/[^/]+/, "")} className="font-heading font-semibold text-deep hover:text-royal">{i.productName}</Link>
-              <p className="text-xs text-muted-foreground">{i.variantName ? `${i.variantName} · ` : ""}SKU {i.sku} · {formatPaise(i.price)} each</p>
+              <p className="text-xs text-muted-foreground">{i.variantName ? `${i.variantName} · ` : ""}{formatPaise(i.price)} each</p>
             </div>
             <div className="flex items-center justify-between gap-4 sm:justify-end">
               <div className="flex h-10 items-center rounded-full border">

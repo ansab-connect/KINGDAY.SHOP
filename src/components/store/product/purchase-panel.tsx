@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Mail, MessageCircle, Minus, Plus, ShoppingBag } from "lucide-react";
+import { L } from "@/components/i18n/lang";
 import { Price } from "@/components/store/price";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { WishlistButton } from "@/components/store/wishlist-button";
@@ -48,14 +49,14 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
     url: productUrl,
   };
   const buyHref = whatsappOrderUrl(whatsappNumber ?? OFFICIAL_WHATSAPP, waOrder);
-  const enquireHref = whatsappLink(`Hi KING DAY, I have a question about ${name} (SKU ${variant.sku}). ${productUrl}`);
+  const enquireHref = whatsappLink(`Hi KING DAY, I have a question about ${name} ${productUrl}`);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Price price={variant.price} mrp={variant.mrp} size="lg" />
         <p className="mt-1 text-xs text-muted-foreground">
-          MRP inclusive of all taxes · SKU <span className="font-medium text-deep">{variant.sku}</span>
+          <L en="MRP inclusive of all taxes" ml="എല്ലാ നികുതികളും ഉൾപ്പെടെ" />
         </p>
       </div>
 
@@ -123,7 +124,7 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
           </button>
         </div>
         <p className={cn("text-sm font-medium", out ? "text-danger" : variant.stock <= 5 ? "text-warning" : "text-success")}>
-          {out ? "Out of stock" : variant.stock <= 5 ? `Only ${variant.stock} left` : "In stock, ready to ship"}
+          {out ? <L en="Out of stock" ml="സ്റ്റോക്ക് ഇല്ല" /> : variant.stock <= 5 ? <L en={`Only ${variant.stock} left`} ml={`${variant.stock} എണ്ണം മാത്രം ബാക്കി`} /> : <L en="In stock, ready to ship" ml="സ്റ്റോക്കുണ്ട്, ഉടൻ അയയ്ക്കാം" />}
         </p>
       </div>
 
@@ -138,7 +139,7 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
           out && "pointer-events-none cursor-not-allowed opacity-50",
         )}
       >
-        <WhatsAppIcon className="size-5" /> Buy now on WhatsApp
+        <WhatsAppIcon className="size-5" /> <L en="Buy now on WhatsApp" ml="WhatsApp-ൽ ഇപ്പോൾ വാങ്ങൂ" />
       </a>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -151,7 +152,7 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
           }}
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-royal px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgb(75_0_130/0.6)] transition-colors hover:bg-royal-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <ShoppingBag aria-hidden className="size-4" /> Add to cart
+          <ShoppingBag aria-hidden className="size-4" /> <L en="Add to cart" ml="കാർട്ടിൽ ചേർക്കുക" />
         </button>
         <WishlistButton productId={productId} />
       </div>
@@ -159,19 +160,19 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
       {notice ? (
         <p role="status" className="flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-4 py-3 text-sm text-success">
           <CheckCircle2 aria-hidden className="size-4 shrink-0" />
-          Added to your cart.
-          <Link href="/cart" className="font-semibold underline underline-offset-2">View cart</Link>
+          <L en="Added to your cart." ml="കാർട്ടിൽ ചേർത്തു." />
+          <Link href="/cart" className="font-semibold underline underline-offset-2"><L en="View cart" ml="കാർട്ട് കാണുക" /></Link>
         </p>
       ) : null}
 
       <div className="flex flex-wrap gap-3">
         {enquireHref ? (
           <a href={enquireHref} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-5 text-sm font-semibold text-[#128C7E] hover:bg-[#25D366]/15">
-            <MessageCircle aria-hidden className="size-4" /> Ask a question
+            <MessageCircle aria-hidden className="size-4" /> <L en="Ask a question" ml="ചോദ്യം ചോദിക്കുക" />
           </a>
         ) : null}
-        <a href={supportMailto(`Enquiry: ${name} (${variant.sku})`)} className="inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
-          <Mail aria-hidden className="size-4" /> Email support
+        <a href={supportMailto(`Enquiry: ${name}`)} className="inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
+          <Mail aria-hidden className="size-4" /> <L en="Email support" ml="ഇമെയിൽ സഹായം" />
         </a>
       </div>
     </div>

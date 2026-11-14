@@ -1,23 +1,24 @@
 import Link from "next/link";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { L } from "@/components/i18n/lang";
 import { Container } from "@/components/store/section";
 import { productCategories, siteConfig } from "@/config/site";
 import { storeContact, whatsappLink } from "@/config/storefront";
 
 const companyLinks = [
-  { title: "About Us", href: "/about" },
-  { title: "Contact", href: "/contact" },
-  { title: "Offers", href: "/offers" },
-  { title: "My Account", href: "/account" },
-  { title: "Track Order", href: "/account/orders" },
+  { title: <L en="About Us" ml="ഞങ്ങളെക്കുറിച്ച്" />, href: "/about" },
+  { title: <L en="Contact" ml="ബന്ധപ്പെടുക" />, href: "/contact" },
+  { title: <L en="Offers" ml="ഓഫറുകൾ" />, href: "/offers" },
+  { title: <L en="My Account" ml="എന്റെ അക്കൗണ്ട്" />, href: "/account" },
+  { title: <L en="Track Order" ml="ഓർഡർ ട്രാക്ക് ചെയ്യുക" />, href: "/account/orders" },
 ];
 
 const policyLinks = [
-  { title: "Shipping Policy", href: "/policies/shipping" },
-  { title: "Returns & Refunds", href: "/policies/returns" },
-  { title: "Privacy Policy", href: "/policies/privacy" },
-  { title: "Terms of Service", href: "/policies/terms" },
+  { title: <L en="Shipping Policy" ml="ഷിപ്പിംഗ് നയം" />, href: "/policies/shipping" },
+  { title: <L en="Returns & Refunds" ml="റിട്ടേൺ & റീഫണ്ട്" />, href: "/policies/returns" },
+  { title: <L en="Privacy Policy" ml="സ്വകാര്യതാ നയം" />, href: "/policies/privacy" },
+  { title: <L en="Terms of Service" ml="സേവന നിബന്ധനകൾ" />, href: "/policies/terms" },
 ];
 
 export function StoreFooter() {
@@ -43,7 +44,7 @@ export function StoreFooter() {
               <li className="flex items-center gap-2.5"><Mail aria-hidden className="size-4 text-gold" /><a href={`mailto:${storeContact.email}`} className="hover:text-white">{storeContact.email}</a></li>
             ) : null}
             {wa ? (
-              <li className="flex items-center gap-2.5"><MessageCircle aria-hidden className="size-4 text-gold" /><a href={wa} target="_blank" rel="noopener noreferrer" className="hover:text-white">Chat on WhatsApp</a></li>
+              <li className="flex items-center gap-2.5"><MessageCircle aria-hidden className="size-4 text-gold" /><a href={wa} target="_blank" rel="noopener noreferrer" className="hover:text-white"><L en="Chat on WhatsApp" ml="WhatsApp-ൽ ചാറ്റ് ചെയ്യുക" /></a></li>
             ) : null}
             {storeContact.address ? (
               <li className="flex items-start gap-2.5"><MapPin aria-hidden className="mt-0.5 size-4 text-gold" /><span>{storeContact.address}</span></li>
@@ -51,13 +52,13 @@ export function StoreFooter() {
           </ul>
         </div>
 
-        <FooterColumn title="Shop" links={productCategories.map((c) => ({ title: c.name, href: `/categories/${c.slug}` }))} />
-        <FooterColumn title="Company" links={companyLinks} />
+        <FooterColumn title={<L en="Shop" ml="ഷോപ്പ്" />} links={productCategories.map((c) => ({ title: c.name, href: `/categories/${c.slug}` }))} />
+        <FooterColumn title={<L en="Company" ml="കമ്പനി" />} links={companyLinks} />
         <div>
-          <FooterColumn title="Policies" links={policyLinks} />
+          <FooterColumn title={<L en="Policies" ml="നയങ്ങൾ" />} links={policyLinks} />
           {social.length ? (
             <div className="mt-8">
-              <p className="font-heading text-sm font-semibold tracking-wide text-gold">Follow us</p>
+              <p className="font-heading text-sm font-semibold tracking-wide text-gold"><L en="Follow us" ml="ഞങ്ങളെ പിന്തുടരൂ" /></p>
               <ul className="mt-3 flex flex-wrap gap-2">
                 {social.map((s) => (
                   <li key={s.label}>
@@ -73,7 +74,7 @@ export function StoreFooter() {
       </Container>
       <div className="border-t border-white/10">
         <Container className="flex flex-col gap-3 py-6 text-xs text-white/50 lg:flex-row lg:items-center lg:justify-between">
-          <p>© {siteConfig.copyrightYear} {siteConfig.legalName}. All rights reserved.</p>
+          <p>© {siteConfig.copyrightYear} {siteConfig.legalName}. <L en="All rights reserved." ml="എല്ലാ അവകാശങ്ങളും നിക്ഷിപ്തം." /></p>
           <p>Secure payments by Razorpay · Cash on delivery where available</p>
           <p className="tracking-[0.18em] text-white/40 uppercase">Powered by <span className="font-semibold text-white/60">MotherBits Technologies LLP</span></p>
         </Container>
@@ -82,7 +83,7 @@ export function StoreFooter() {
   );
 }
 
-function FooterColumn({ title, links }: { title: string; links: { title: string; href: string }[] }) {
+function FooterColumn({ title, links }: { title: React.ReactNode; links: { title: React.ReactNode; href: string }[] }) {
   return (
     <div>
       <p className="font-heading text-sm font-semibold tracking-wide text-gold">{title}</p>
