@@ -652,5 +652,66 @@ await test("customers cancel only before acceptance", async () => {
   await expectError(`select public.cancel_my_service_booking($1)`, [b.id], /can no longer be cancelled/);
 });
 
+console.log("Service jobs");
+const [svc2] = (await rows(`insert into auth.users (email) values ('tech2@test.local') returning id`)).map((r) => r.id);
+await db.query(`insert into public.user_roles (user_id, role) values ($1, 'service_staff')`, [svc2]);
+await user(alice);
+const jobCode = (await rows(`select public.create_service_booking($1::jsonb) as c`, [booking({ product_name: "Job flow jeep" })]))[0].c;
+await asSuperuser();
+const jobId = (await rows(`select id from public.service_bookings where booking_code = $1`, [jobCode]))[0].id;
+
+await test("only service managers assign, and only to active service staff", async () => {
+  await user(staff);
+  await expectError(`select public.assign_service_booking($1, $2)`, [jobId, svc], /not authorized/);
+  await user(admin2);
+  await expectError(`select public.assign_service_booking($1, $2)`, [jobId, staff], /active service staff/);
+  await db.query(`select public.assign_service_booking($1, $2, 'Please visit')`, [jobId, svc]);
+  const [b] = await rows(`select status, assigned_to from public.service_bookings where id = $1`, [jobId]);
+  assert(b.status === "assigned" && b.assigned_to === svc, JSON.stringify(b));
+});
+await test("only the assigned technician sees and accepts the job", async () => {
+  await user(svc2);
+  assert((await rows(`select * from public.service_bookings where id = $1`, [jobId])).length === 0, "other technician sees the job");
+  await expectError(`select public.respond_service_job($1, true)`, [jobId], /already answered/);
+  await user(svc);
+  await db.query(`select public.respond_service_job($1, true)`, [jobId]);
+  assert((await rows(`select status from public.service_bookings where id = $1`, [jobId]))[0].status === "accepted", "not accepted");
+});
+await test("technician steps follow the order and are logged with staff ID", async () => {
+  await user(svc);
+  await expectError(`select public.advance_service_job($1, 'started')`, [jobId], /not available/);
+  await db.query(`select public.advance_service_job($1, 'on_the_way', 'Leaving now')`, [jobId]);
+  await db.query(`select public.advance_service_job($1, 'reached')`, [jobId]);
+  await db.query(`select public.advance_service_job($1, 'started')`, [jobId]);
+  await expectError(`update public.service_bookings set status = 'completed' where id = $1`, [jobId], /permission denied/);
+  const ev = await rows(`select status, note, actor_code from public.service_job_events where booking_id = $1 order by id`, [jobId]);
+  assert(ev.map((e) => e.status).join(",") === "new,assigned,accepted,on_the_way,reached,started", ev.map((e) => e.status).join(","));
+  assert(ev.find((e) => e.status === "on_the_way").note === "Leaving now" && ev.find((e) => e.status === "accepted").actor_code === "KD-SRV-0001", JSON.stringify(ev));
+  await user(alice);
+  assert((await rows(`select * from public.service_job_events where booking_id = $1`, [jobId])).length === 6, "customer can't follow the timeline");
+});
+await test("inspection report: assigned technician only, own files only", async () => {
+  await user(svc2);
+  await expectError(`select public.save_service_inspection($1, $2::jsonb)`, [jobId, JSON.stringify({ problem_found: "x" })], /not authorized/);
+  await user(svc);
+  await expectError(`select public.save_service_inspection($1, $2::jsonb)`, [jobId, JSON.stringify({ before_photos: [`${alice}/abcdef.webp`] })], /invalid file/);
+  await db.query(`select public.save_service_inspection($1, $2::jsonb)`, [
+    jobId,
+    JSON.stringify({ problem_found: "Loose wire", work_performed: "Rewired", before_photos: [`${svc}/before1.webp`], confirmed_by: "Alice", signature_path: `${svc}/sign-1234567.png` }),
+  ]);
+  await db.query(`select public.advance_service_job($1, 'completed', 'Done')`, [jobId]);
+  const [i] = await rows(`select problem_found, confirmed_at from public.service_inspections where booking_id = $1`, [jobId]);
+  assert(i.problem_found === "Loose wire" && i.confirmed_at, JSON.stringify(i));
+});
+await test("after acceptance only a manager can move the job; completed jobs are locked", async () => {
+  await user(admin2);
+  await expectError(`select public.assign_service_booking($1, $2)`, [jobId, svc2], /no longer be reassigned/);
+  await expectError(`select public.cancel_service_booking($1, 'x')`, [jobId], /no longer be cancelled/);
+  const t = (await rows(`select * from public.list_service_technicians()`)).find((x) => x.user_id === svc);
+  assert(Number(t.completed_total) === 1, JSON.stringify(t));
+  await user(svc);
+  await expectError(`select * from public.list_service_technicians()`, [], /not authorized/);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

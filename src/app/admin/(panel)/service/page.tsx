@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { Card, CardContent } from "@/components/ui/card";
 import { SERVICE_STATUSES, categoryLabel, statusLabel } from "@/features/service/constants";
-import type { BookingRow } from "@/features/service/queries";
+import { listTechnicians, type BookingRow, type Technician } from "@/features/service/queries";
 import { isSupabaseConfigured } from "@/lib/env";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -24,6 +24,7 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
   let rows: BookingRow[] = [];
   let error: string | null = null;
   const counts: Record<string, number> = {};
+  let technicians: Technician[] = [];
   if (!isSupabaseConfigured) error = "Service management needs Supabase.";
   else {
     const supabase = await createClient();
@@ -33,6 +34,7 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
     const [{ data, error: e }, { data: all }] = await Promise.all([query, supabase.from("service_bookings").select("status").limit(5000)]);
     if (e) error = /service_bookings|schema cache/i.test(e.message) ? "Apply migration 20261114001500_service_bookings.sql in Supabase first." : "Couldn't load bookings.";
     rows = (data ?? []) as BookingRow[];
+    technicians = e ? [] : await listTechnicians();
     for (const r of (all ?? []) as { status: string }[]) counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
   const openCount = OPEN.reduce((n, s) => n + (counts[s] ?? 0), 0);
@@ -47,6 +49,27 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
         </div>
       ) : (
         <>
+          {technicians.length ? (
+            <section aria-label="Technician performance" className="mb-5">
+              <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Technicians</h2>
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {technicians.map((t) => (
+                  <li key={t.user_id} className="rounded-xl border bg-white p-4 shadow-card">
+                    <p className="truncate text-sm font-semibold text-deep">{t.full_name || "—"}</p>
+                    <p className="font-mono text-xs text-royal">{t.staff_code ?? ""}</p>
+                    <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      {[["Open", t.open_jobs], ["30 days", t.completed_30d], ["Total done", t.completed_total]].map(([k, v]) => (
+                        <div key={k} className="rounded-lg bg-muted/50 py-1.5">
+                          <dd className="font-heading text-lg font-bold text-deep tabular">{v}</dd>
+                          <dt className="text-[0.68rem] text-muted-foreground">{k}</dt>
+                        </div>
+                      ))}
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <nav aria-label="Filter bookings" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
               {tabs.map((t) => (

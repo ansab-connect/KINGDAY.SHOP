@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LayoutGrid, LogOut, UserRound, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, LayoutGrid, LogOut, UserRound, Wrench, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { L } from "@/components/i18n/lang";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
@@ -19,9 +19,14 @@ const ITEMS: Item[] = [
 const active = (path: string, href: string) => (href === "/staff" ? path === "/staff" : path.startsWith(href));
 
 /** Staff portal chrome: sidebar on desktop, bottom tab bar on phones. */
-export function StaffShell({ name, subtitle, adminLink, children }: { name: string; subtitle: string; adminLink: boolean; children: React.ReactNode }) {
+export function StaffShell({ name, subtitle, adminLink, jobsLink, children }: { name: string; subtitle: string; adminLink: boolean; jobsLink: boolean; children: React.ReactNode }) {
   const path = usePathname();
-  const items = adminLink ? [...ITEMS, { href: "/admin", en: "Admin panel", ml: "അഡ്മിൻ", icon: LayoutGrid }] : ITEMS;
+  const items = [
+    ITEMS[0],
+    ...(jobsLink ? [{ href: "/staff/jobs", en: "My jobs", ml: "ജോലികൾ", icon: Wrench }] : []),
+    ...ITEMS.slice(1),
+    ...(adminLink ? [{ href: "/admin", en: "Admin panel", ml: "അഡ്മിൻ", icon: LayoutGrid }] : []),
+  ];
 
   return (
     <div className="min-h-screen bg-canvas">

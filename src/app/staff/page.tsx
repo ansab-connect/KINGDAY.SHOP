@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { AlertTriangle, ArrowRight, Boxes, ClipboardList, PackageCheck, PackageOpen, ShoppingBag, Truck, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CheckCircle2, ClipboardList, Hourglass, PackageCheck, PackageOpen, ShoppingBag, Truck, UserRound, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { Skeleton } from "@/components/ui/skeleton";
 import { can, requireTeam, type SessionUser } from "@/features/auth/session";
@@ -21,6 +21,8 @@ const FOCUS: Record<string, string[]> = {
   "Inventory Staff": ["out", "low"],
   "Packing & Dispatch Staff": ["toPack", "packed"],
   "Customer Support Staff": ["pending", "today"],
+  "Service Technician": ["jobsToday", "jobsPending", "jobsProgress"],
+  "Field Service Staff": ["jobsToday", "jobsPending", "jobsProgress"],
 };
 
 async function loadStats(user: SessionUser): Promise<Stat[]> {
@@ -30,6 +32,20 @@ async function loadStats(user: SessionUser): Promise<Stat[]> {
   today.setHours(0, 0, 0, 0);
   const count = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
 
+  if (user.roles.includes("service_staff")) {
+    const { data } = await supabase.from("service_bookings").select("status, preferred_date, completed_at").eq("assigned_to", user.id).limit(1000);
+    const jobs = (data ?? []) as { status: string; preferred_date: string; completed_at: string | null }[];
+    const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    const monthAgo = Date.now() - 30 * 86400000;
+    const open = (s: string) => !["completed", "invoiced", "cancelled"].includes(s);
+    const pendingJobs = jobs.filter((j) => j.status === "assigned").length;
+    stats.push(
+      { key: "jobsToday", en: "Today's jobs", ml: "ഇന്നത്തെ ജോലികൾ", value: jobs.filter((j) => j.preferred_date === todayIst && open(j.status)).length, href: "/staff/jobs", icon: CalendarClock },
+      { key: "jobsPending", en: "New jobs to accept", ml: "സ്വീകരിക്കാനുള്ളവ", value: pendingJobs, href: "/staff/jobs?tab=pending", icon: Hourglass, tone: pendingJobs ? "warn" : undefined },
+      { key: "jobsProgress", en: "In progress", ml: "നടക്കുന്നവ", value: jobs.filter((j) => ["accepted", "on_the_way", "reached", "started"].includes(j.status)).length, href: "/staff/jobs?tab=progress", icon: Wrench },
+      { key: "jobsDone", en: "Completed (30 days)", ml: "പൂർത്തിയായവ (30 ദിവസം)", value: jobs.filter((j) => ["completed", "invoiced"].includes(j.status) && j.completed_at && new Date(j.completed_at).getTime() > monthAgo).length, href: "/staff/jobs?tab=completed", icon: CheckCircle2 },
+    );
+  }
   if (can(user, "orders")) {
     const orders = () => supabase.from("orders").select("id", { count: "exact", head: true });
     const [todayN, pending, toPack, packed] = await Promise.all([

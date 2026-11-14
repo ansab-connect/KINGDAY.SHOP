@@ -23,7 +23,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
   const code = (data as { staff_code?: string } | null)?.staff_code;
   const adminLink = user.role !== "service_staff" && Object.values(user.permissions).some((a) => a?.includes("view"));
   return (
-    <StaffShell name={user.fullName ?? user.email ?? "Staff"} subtitle={[code, ROLE_LABEL[user.role]].filter(Boolean).join(" · ")} adminLink={adminLink}>
+    <StaffShell name={user.fullName ?? user.email ?? "Staff"} subtitle={[code, ROLE_LABEL[user.role]].filter(Boolean).join(" · ")} adminLink={adminLink} jobsLink={user.roles.includes("service_staff")}>
       {children}
     </StaffShell>
   );

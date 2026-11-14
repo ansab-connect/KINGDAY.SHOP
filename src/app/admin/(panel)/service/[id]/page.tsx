@@ -3,10 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, MessageCircle, Navigation, Phone } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
+import { AssignJobForm, CancelJobForm } from "@/components/admin/service/assign-controls";
 import { StaffOnly } from "@/components/admin/staff-only";
+import { InspectionView, JobTimeline } from "@/components/service/job-views";
 import { Card, CardContent } from "@/components/ui/card";
+import { can, getCurrentUser } from "@/features/auth/session";
 import { categoryLabel, directionsLink, mapsLink, statusLabel } from "@/features/service/constants";
-import { bookingMedia, type BookingRow } from "@/features/service/queries";
+import { bookingMedia, getInspection, getJobEvents, listTechnicians, type BookingRow } from "@/features/service/queries";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,7 +22,12 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
   const { data } = await supabase.from("service_bookings").select("*").eq("id", id).maybeSingle();
   const b = data as BookingRow | null;
   if (!b) notFound();
-  const media = await bookingMedia(b);
+  const me = await getCurrentUser();
+  const manage = can(me, "service", "edit");
+  const [media, events, inspection, technicians] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), listTechnicians()]);
+  const tech = technicians.find((t) => t.user_id === b.assigned_to);
+  const open = !["completed", "invoiced", "cancelled"].includes(b.status);
+  const reassignable = ["new", "assigned", "accepted", "on_the_way", "reached"].includes(b.status);
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, this is KING DAY Service about booking ${b.booking_code}.`)}`;
 
   return (
@@ -69,7 +77,32 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
               ) : null}
             </CardContent>
           </Card>
+          <Card className="shadow-card">
+            <CardContent className="flex flex-col gap-4">
+              <h2 className="font-heading text-lg font-semibold text-deep">Inspection report</h2>
+              <InspectionView data={inspection} />
+            </CardContent>
+          </Card>
         </div>
+
+        <div className="flex flex-col gap-6">
+        <Card className="shadow-card">
+          <CardContent className="flex flex-col gap-4">
+            <h2 className="font-heading text-lg font-semibold text-deep">Technician</h2>
+            <p className="text-sm text-deep">
+              {tech ? `${tech.staff_code ?? ""} · ${tech.full_name ?? ""}` : b.assigned_to ? "Assigned (inactive staff)" : "Not assigned yet"}
+            </p>
+            {manage && reassignable ? (
+              <AssignJobForm bookingId={b.id} technicians={technicians} currentId={b.assigned_to} locked={!["new", "assigned"].includes(b.status)} />
+            ) : null}
+            {manage && open ? (
+              <details className="rounded-lg border p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-danger">Cancel this job</summary>
+                <div className="mt-3"><CancelJobForm bookingId={b.id} /></div>
+              </details>
+            ) : null}
+          </CardContent>
+        </Card>
 
         <Card className="h-fit shadow-card">
           <CardContent className="flex flex-col gap-4">
@@ -93,6 +126,14 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="shadow-card">
+          <CardContent className="flex flex-col gap-4">
+            <h2 className="font-heading text-lg font-semibold text-deep">Timeline</h2>
+            <JobTimeline events={events} />
+          </CardContent>
+        </Card>
+        </div>
       </div>
     </>
   );

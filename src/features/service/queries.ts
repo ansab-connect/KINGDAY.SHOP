@@ -84,3 +84,52 @@ export async function bookingMedia(b: Pick<BookingRow, "photo_paths" | "voice_pa
   const [voice, ...photos] = await Promise.all([b.voice_path ? sign(b.voice_path) : Promise.resolve(null), ...b.photo_paths.map(sign)]);
   return { voice, photos: photos.filter(Boolean) as string[] };
 }
+
+export type JobEvent = { id: number; status: string; note: string | null; actor_code: string | null; actor_id: string | null; created_at: string };
+
+export async function getJobEvents(bookingId: string): Promise<JobEvent[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("service_job_events")
+    .select("id, status, note, actor_code, actor_id, created_at")
+    .eq("booking_id", bookingId)
+    .order("created_at");
+  return (data ?? []) as JobEvent[];
+}
+
+export type Inspection = {
+  problem_found: string | null;
+  work_performed: string | null;
+  spare_parts: string | null;
+  notes: string | null;
+  before_photos: string[];
+  after_photos: string[];
+  confirmed_by: string | null;
+  signature_path: string | null;
+  confirmed_at: string | null;
+  updated_at: string;
+};
+
+/** Inspection report with signed URLs for its photos and signature. */
+export async function getInspection(bookingId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("service_inspections").select("*").eq("booking_id", bookingId).maybeSingle();
+  const i = data as Inspection | null;
+  if (!i) return null;
+  const store = supabase.storage.from("service-media");
+  const sign = async (p: string) => ({ path: p, url: (await store.createSignedUrl(p, 60 * 30)).data?.signedUrl ?? null });
+  const [before, after, sig] = await Promise.all([
+    Promise.all(i.before_photos.map(sign)),
+    Promise.all(i.after_photos.map(sign)),
+    i.signature_path ? sign(i.signature_path) : Promise.resolve(null),
+  ]);
+  return { ...i, before, after, signature: sig };
+}
+
+export type Technician = { user_id: string; full_name: string | null; staff_code: string | null; phone: string | null; open_jobs: number; completed_30d: number; completed_total: number };
+
+export async function listTechnicians(): Promise<Technician[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("list_service_technicians");
+  return ((data ?? []) as Technician[]).map((t) => ({ ...t, open_jobs: Number(t.open_jobs), completed_30d: Number(t.completed_30d), completed_total: Number(t.completed_total) }));
+}
