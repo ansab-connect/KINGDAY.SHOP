@@ -5,12 +5,14 @@ import { ArrowLeft, MapPin, MessageCircle, Navigation, Phone } from "lucide-reac
 import { PageHeader } from "@/components/admin/page-header";
 import { AssignJobForm, CancelJobForm } from "@/components/admin/service/assign-controls";
 import { StaffOnly } from "@/components/admin/staff-only";
+import { InvoiceEditor } from "@/components/service/invoice-editor";
 import { InspectionView, JobTimeline } from "@/components/service/job-views";
 import { Card, CardContent } from "@/components/ui/card";
 import { can, getCurrentUser } from "@/features/auth/session";
 import { categoryLabel, directionsLink, mapsLink, statusLabel } from "@/features/service/constants";
 import { bookingMedia, getInspection, getJobEvents, listTechnicians, type BookingRow } from "@/features/service/queries";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { getDefaultBasicCharge, getInvoiceForBooking } from "@/features/service/invoices";
+import { formatDate, formatDateTime, formatPaise } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Service booking" };
@@ -24,7 +26,7 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
   if (!b) notFound();
   const me = await getCurrentUser();
   const manage = can(me, "service", "edit");
-  const [media, events, inspection, technicians] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), listTechnicians()]);
+  const [media, events, inspection, technicians, invoice, basicDefault] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), listTechnicians(), getInvoiceForBooking(id), getDefaultBasicCharge()]);
   const tech = technicians.find((t) => t.user_id === b.assigned_to);
   const open = !["completed", "invoiced", "cancelled"].includes(b.status);
   const reassignable = ["new", "assigned", "accepted", "on_the_way", "reached"].includes(b.status);
@@ -77,6 +79,43 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
               ) : null}
             </CardContent>
           </Card>
+          {b.status === "completed" || b.status === "invoiced" ? (
+            <Card className="shadow-card">
+              <CardContent className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="font-heading text-lg font-semibold text-deep">{invoice ? `Invoice ${invoice.invoice_number}` : "Invoice"}</h2>
+                  {invoice ? (
+                    <p className="text-sm">
+                      <span className="font-semibold text-deep">{formatPaise(invoice.grand_total)}</span>{" "}
+                      <span className={invoice.payment_status === "paid" ? "text-success" : "text-warning"}>{invoice.payment_status === "paid" ? "Paid" : "Unpaid"}</span>
+                    </p>
+                  ) : null}
+                </div>
+                {manage ? (
+                  <InvoiceEditor
+                    bookingId={b.id}
+                    invoiceId={invoice?.id ?? null}
+                    locked={false}
+                    initial={{
+                service_description: invoice?.service_description ?? inspection?.work_performed ?? "",
+                basic: String((invoice?.basic_charge ?? basicDefault) / 100),
+                labour: String((invoice?.labour_charge ?? 0) / 100),
+                discount: String((invoice?.discount ?? 0) / 100),
+                tax: String(invoice?.tax_percent ?? 0),
+                items: invoice?.items ?? [],
+                payment_method: invoice?.payment_method ?? "",
+                payment_status: invoice?.payment_status ?? "unpaid",
+              }}
+                  />
+                ) : invoice ? (
+                  <a href={`/service-invoice/${invoice.id}`} target="_blank" className="text-sm font-semibold text-royal">View / print invoice</a>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No invoice yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="shadow-card">
             <CardContent className="flex flex-col gap-4">
               <h2 className="font-heading text-lg font-semibold text-deep">Inspection report</h2>

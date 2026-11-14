@@ -7,4 +7,5 @@ export const EDITABLE_SETTINGS = {
   "shipping.flat_rate": { label: "Flat shipping rate (₹)", kind: "rupees", isPublic: true },
   "shipping.free_shipping_threshold": { label: "Free shipping above (₹, blank = never)", kind: "rupees", isPublic: true },
   "tax.prices_include_gst": { label: "Prices include GST", kind: "boolean", isPublic: true },
+  "service.basic_charge": { label: "Default basic service charge (₹)", kind: "rupees", isPublic: true },
 } as const;

@@ -713,5 +713,54 @@ await test("after acceptance only a manager can move the job; completed jobs are
   await expectError(`select * from public.list_service_technicians()`, [], /not authorized/);
 });
 
+console.log("Service invoices");
+const invoice = (over = {}) =>
+  JSON.stringify({
+    service_description: "Battery connector repair",
+    basic_charge: 30000,
+    labour_charge: 20000,
+    discount: 5000,
+    tax_percent: 18,
+    items: [{ description: "Connector", quantity: 2, unit_price: 7500 }],
+    payment_method: "upi",
+    payment_status: "unpaid",
+    ...over,
+  });
+await test("assigned technician invoices a completed job; totals are computed by the database", async () => {
+  await user(svc2);
+  await expectError(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice()], /not authorized/);
+  await user(svc);
+  const num = (await rows(`select public.save_service_invoice($1, $2::jsonb) as n`, [jobId, invoice({ grand_total: 1 })]))[0].n;
+  assert(/^KD-SI-\d{6}$/.test(num), num);
+  const [i] = await rows(`select subtotal, tax_amount, grand_total from public.service_invoices where booking_id = $1`, [jobId]);
+  // 300 + 200 + 2 x 75 = 650; -50 = 600; +18% = 108 -> 708
+  assert(i.subtotal === 65000 && i.tax_amount === 10800 && i.grand_total === 70800, JSON.stringify(i));
+  assert((await rows(`select status from public.service_bookings where id = $1`, [jobId]))[0].status === "invoiced", "booking not invoiced");
+  await expectError(`insert into public.service_invoices (booking_id, customer_name, customer_mobile, customer_address, product) values ($1,'x','9999999','xxxxx','x')`, [jobId], /permission denied/);
+});
+await test("invoices need a completed job, a valid discount, and lock once paid", async () => {
+  await user(alice);
+  const code = (await rows(`select public.create_service_booking($1::jsonb) as c`, [booking({ product_name: "Not done yet" })]))[0].c;
+  await asSuperuser();
+  const openId = (await rows(`select id from public.service_bookings where booking_code = $1`, [code]))[0].id;
+  await user(admin2);
+  await expectError(`select public.save_service_invoice($1, $2::jsonb)`, [openId, invoice()], /complete the service/);
+  await user(svc);
+  await expectError(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice({ discount: 9999999 })], /discount/);
+  await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice({ payment_status: "paid", payment_method: "cash" })]);
+  await expectError(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice()], /only be changed by the office/);
+  await user(admin2);
+  await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice({ payment_status: "paid", payment_method: "cash", discount: 0 })]);
+});
+await test("customers see their own service invoice; others don't", async () => {
+  await user(alice);
+  const r = await rows(`select i.invoice_number, (select count(*) from public.service_invoice_items x where x.invoice_id = i.id) n from public.service_invoices i`);
+  assert(r.length === 1 && Number(r[0].n) === 1, JSON.stringify(r));
+  await user(bob);
+  assert((await rows(`select * from public.service_invoices`)).length === 0, "bob sees alice's invoice");
+  await user(svc2);
+  assert((await rows(`select * from public.service_invoices`)).length === 0, "other technician sees invoice");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

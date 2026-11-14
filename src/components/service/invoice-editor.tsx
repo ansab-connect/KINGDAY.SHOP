@@ -1,0 +1,201 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import { inputClass } from "@/components/admin/form/fields";
+import { L } from "@/components/i18n/lang";
+import { saveServiceInvoiceAction } from "@/features/service/invoice-actions";
+import { cn } from "@/lib/utils";
+
+type Item = { key: string; description: string; quantity: string; price: string };
+export type InvoiceDraft = {
+  service_description: string;
+  basic: string;
+  labour: string;
+  discount: string;
+  tax: string;
+  items: { description: string; quantity: number; unit_price: number }[];
+  payment_method: string;
+  payment_status: "unpaid" | "paid";
+};
+
+const toPaise = (v: string) => {
+  const n = Number(v.replace(/,/g, ""));
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : 0;
+};
+const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+const key = () => Math.random().toString(36).slice(2);
+
+const METHODS = [
+  ["cash", "Cash"],
+  ["upi", "UPI"],
+  ["card", "Card"],
+  ["bank_transfer", "Bank transfer"],
+  ["other", "Other"],
+] as const;
+
+/** Create or edit a service invoice. Totals update as you type; the database recalculates them on save. */
+export function InvoiceEditor({ bookingId, initial, invoiceId, locked }: { bookingId: string; initial: InvoiceDraft; invoiceId: string | null; locked: boolean }) {
+  const router = useRouter();
+  const [desc, setDesc] = useState(initial.service_description);
+  const [basic, setBasic] = useState(initial.basic);
+  const [labour, setLabour] = useState(initial.labour);
+  const [discount, setDiscount] = useState(initial.discount);
+  const [tax, setTax] = useState(initial.tax);
+  const [items, setItems] = useState<Item[]>(
+    initial.items.map((i) => ({ key: key(), description: i.description, quantity: String(i.quantity), price: String(i.unit_price / 100) })),
+  );
+  const [method, setMethod] = useState(initial.payment_method);
+  const [status, setStatus] = useState(initial.payment_status);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const lines = items.map((i) => ({ ...i, total: Math.max(0, Math.trunc(Number(i.quantity) || 0)) * toPaise(i.price) }));
+  const itemsTotal = lines.reduce((n, l) => n + l.total, 0);
+  const subtotal = toPaise(basic) + toPaise(labour) + itemsTotal;
+  const disc = toPaise(discount);
+  const taxPct = Math.min(28, Math.max(0, Number(tax) || 0));
+  const taxAmount = Math.round(((subtotal - Math.min(disc, subtotal)) * taxPct) / 100);
+  const grand = subtotal - Math.min(disc, subtotal) + taxAmount;
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    const res = await saveServiceInvoiceAction({
+      bookingId,
+      service_description: desc,
+      basic_charge: toPaise(basic),
+      labour_charge: toPaise(labour),
+      discount: disc,
+      tax_percent: taxPct,
+      items: lines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), quantity: Math.max(1, Math.trunc(Number(l.quantity) || 1)), unit_price: toPaise(l.price) })),
+      payment_method: method,
+      payment_status: status,
+    });
+    setBusy(false);
+    if (res.ok) {
+      setMsg({ ok: true, text: `Invoice ${res.number} saved.` });
+      router.refresh();
+    } else setMsg({ ok: false, text: res.error });
+  }
+
+  if (locked) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        <L en="This invoice is paid. Only the office can change it." ml="ഈ ബിൽ അടച്ചു കഴിഞ്ഞു. ഓഫീസിന് മാത്രമേ മാറ്റാനാകൂ." />
+      </p>
+    );
+  }
+
+  const money = (value: string, set: (v: string) => void, label: React.ReactNode, id: string) => (
+    <label htmlFor={id} className="flex flex-col gap-1.5 text-sm font-medium text-deep">
+      {label}
+      <div className="relative">
+        <span aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+        <input id={id} value={value} onChange={(e) => set(e.target.value)} inputMode="decimal" className={cn(inputClass, "pl-7 tabular")} />
+      </div>
+    </label>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-deep">
+        <L en="Service description" ml="സർവീസ് വിവരണം" />
+        <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} maxLength={2000} className={cn(inputClass, "h-auto py-2")} />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        {money(basic, setBasic, <L en="Basic service charge" ml="അടിസ്ഥാന സർവീസ് ചാർജ്" />, `inv-basic-${bookingId}`)}
+        {money(labour, setLabour, <L en="Labour charge" ml="ലേബർ ചാർജ്" />, `inv-labour-${bookingId}`)}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-deep"><L en="Spare parts & other items" ml="സ്പെയർ പാർട്സ് & മറ്റുള്ളവ" /></p>
+        {lines.map((l, idx) => (
+          <div key={l.key} className="grid grid-cols-[1fr_4rem_6rem_auto] items-center gap-2">
+            <input
+              value={l.description}
+              onChange={(e) => setItems(items.map((x) => (x.key === l.key ? { ...x, description: e.target.value } : x)))}
+              maxLength={200}
+              placeholder="Item"
+              aria-label={`Item ${idx + 1} description`}
+              className={inputClass}
+            />
+            <input
+              value={l.quantity}
+              onChange={(e) => setItems(items.map((x) => (x.key === l.key ? { ...x, quantity: e.target.value } : x)))}
+              inputMode="numeric"
+              aria-label={`Item ${idx + 1} quantity`}
+              className={cn(inputClass, "text-center tabular")}
+            />
+            <input
+              value={l.price}
+              onChange={(e) => setItems(items.map((x) => (x.key === l.key ? { ...x, price: e.target.value } : x)))}
+              inputMode="decimal"
+              placeholder="₹ each"
+              aria-label={`Item ${idx + 1} price`}
+              className={cn(inputClass, "tabular")}
+            />
+            <button type="button" onClick={() => setItems(items.filter((x) => x.key !== l.key))} aria-label={`Remove item ${idx + 1}`} className="grid size-10 place-items-center rounded-lg text-danger hover:bg-danger-soft">
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setItems([...items, { key: key(), description: "", quantity: "1", price: "" }])} className="inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold text-deep hover:bg-muted">
+          <Plus aria-hidden className="size-4" /> <L en="Add item" ml="ഇനം ചേർക്കുക" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {money(discount, setDiscount, <L en="Discount" ml="ഇളവ്" />, `inv-disc-${bookingId}`)}
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-deep">
+          <L en="Tax %" ml="നികുതി %" />
+          <input value={tax} onChange={(e) => setTax(e.target.value)} inputMode="decimal" className={cn(inputClass, "tabular")} />
+        </label>
+      </div>
+
+      <dl className="flex flex-col gap-1 rounded-xl bg-muted/50 p-4 text-sm tabular">
+        {[
+          ["Subtotal", rupees(subtotal)],
+          ["Discount", `− ${rupees(Math.min(disc, subtotal))}`],
+          [`Tax (${taxPct}%)`, rupees(taxAmount)],
+        ].map(([k, v]) => (
+          <div key={k} className="flex justify-between"><dt className="text-muted-foreground">{k}</dt><dd className="text-deep">{v}</dd></div>
+        ))}
+        <div className="mt-1 flex justify-between border-t pt-2 text-base font-bold"><dt className="text-deep"><L en="Grand total" ml="ആകെ" /></dt><dd className="text-royal">{rupees(grand)}</dd></div>
+      </dl>
+      {disc > subtotal ? <p className="text-xs text-danger">The discount is larger than the total.</p> : null}
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-deep">
+          <L en="Payment status" ml="പേയ്മെന്റ്" />
+          <select value={status} onChange={(e) => setStatus(e.target.value as "unpaid" | "paid")} className={inputClass}>
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-deep">
+          <L en="Payment method" ml="പേയ്മെന്റ് രീതി" />
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className={inputClass}>
+            <option value="">—</option>
+            {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={save} disabled={busy || disc > subtotal} className="inline-flex h-12 items-center gap-2 rounded-xl bg-royal px-6 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-60">
+          {busy ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
+          {invoiceId ? <L en="Update invoice" ml="ബിൽ പുതുക്കുക" /> : <L en="Generate invoice" ml="ബിൽ ഉണ്ടാക്കുക" />}
+        </button>
+        {invoiceId ? (
+          <Link href={`/service-invoice/${invoiceId}`} target="_blank" className="inline-flex h-12 items-center gap-2 rounded-xl border px-5 text-sm font-semibold text-deep hover:bg-muted">
+            <FileText aria-hidden className="size-4" /> <L en="View / print" ml="കാണുക / പ്രിന്റ്" />
+          </Link>
+        ) : null}
+        {msg ? <p role={msg.ok ? "status" : "alert"} className={cn("text-sm", msg.ok ? "text-success" : "text-danger")}>{msg.text}</p> : null}
+      </div>
+    </div>
+  );
+}

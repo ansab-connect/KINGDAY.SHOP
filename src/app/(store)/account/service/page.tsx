@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { requireUser } from "@/features/auth/session";
 import { categoryLabel, statusLabel } from "@/features/service/constants";
 import { getMyBookings } from "@/features/service/queries";
+import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,11 @@ export const metadata: Metadata = { title: "My service bookings", robots: { inde
 async function Bookings() {
   await requireUser("/account/service");
   const bookings = await getMyBookings();
+  const supabase = await createClient();
+  const { data: invRows } = bookings.length
+    ? await supabase.from("service_invoices").select("id, booking_id, invoice_number").in("booking_id", bookings.map((b) => b.id))
+    : { data: [] };
+  const invoices = new Map(((invRows ?? []) as { id: string; booking_id: string; invoice_number: string }[]).map((i) => [i.booking_id, i]));
   return (
     <AccountShell active="/account/service" title="Service bookings">
       <div className="mb-5">
@@ -44,6 +50,11 @@ async function Bookings() {
                 </span>
               </div>
               {b.complaint ? <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{b.complaint}</p> : null}
+              {invoices.get(b.id) ? (
+                <Link href={`/service-invoice/${invoices.get(b.id)!.id}`} className="mt-3 inline-flex h-9 items-center rounded-full border px-4 text-sm font-semibold text-royal hover:bg-royal-50">
+                  <L en={`View invoice ${invoices.get(b.id)!.invoice_number}`} ml="ബിൽ കാണുക" />
+                </Link>
+              ) : null}
               {b.status === "new" || b.status === "assigned" ? <CancelBookingButton id={b.id} /> : null}
             </li>
           ))}

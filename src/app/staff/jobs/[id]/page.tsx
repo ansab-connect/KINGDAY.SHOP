@@ -4,12 +4,14 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArrowLeft, MapPin, MessageCircle, Navigation, Phone } from "lucide-react";
 import { L } from "@/components/i18n/lang";
+import { InvoiceEditor } from "@/components/service/invoice-editor";
 import { InspectionView, JobTimeline } from "@/components/service/job-views";
 import { InspectionForm, JobActions } from "@/components/staff/jobs/job-workflow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireTeam } from "@/features/auth/session";
 import { categoryLabel, directionsLink, mapsLink, statusLabel } from "@/features/service/constants";
 import { bookingMedia, getInspection, getJobEvents, type BookingRow } from "@/features/service/queries";
+import { getDefaultBasicCharge, getInvoiceForBooking } from "@/features/service/invoices";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,7 +34,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
   const { data } = await supabase.from("service_bookings").select("*").eq("id", id).eq("assigned_to", user.id).maybeSingle();
   const b = data as BookingRow | null;
   if (!b) notFound();
-  const [media, events, inspection] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id)]);
+  const [media, events, inspection, invoice, basicDefault] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), getInvoiceForBooking(id), getDefaultBasicCharge()]);
   const phone = b.mobile.replace(/\s/g, "");
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, I'm the KING DAY technician for booking ${b.booking_code}.`)}`;
   const canReport = ["reached", "started", "completed"].includes(b.status);
@@ -120,6 +122,29 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
           <p className="text-sm text-muted-foreground"><L en="You can fill the report after reaching the location." ml="സ്ഥലത്തെത്തിയ ശേഷം റിപ്പോർട്ട് പൂരിപ്പിക്കാം." /></p>
         )}
       </Card>
+
+      {b.status === "completed" || b.status === "invoiced" ? (
+        <Card title={<L en={invoice ? `Invoice ${invoice.invoice_number}` : "Invoice"} ml="ബിൽ" />}>
+          <InvoiceEditor
+            bookingId={b.id}
+            invoiceId={invoice?.id ?? null}
+            locked={invoice?.payment_status === "paid"}
+            initial={{
+              service_description: invoice?.service_description ?? inspection?.work_performed ?? "",
+              basic: String((invoice?.basic_charge ?? basicDefault) / 100),
+              labour: String((invoice?.labour_charge ?? 0) / 100),
+              discount: String((invoice?.discount ?? 0) / 100),
+              tax: String(invoice?.tax_percent ?? 0),
+              items: invoice?.items ?? [],
+              payment_method: invoice?.payment_method ?? "",
+              payment_status: invoice?.payment_status ?? "unpaid",
+              }}
+          />
+          {invoice?.payment_status === "paid" ? (
+            <a href={`/service-invoice/${invoice.id}`} target="_blank" className="mt-3 inline-block text-sm font-semibold text-royal">View / print invoice</a>
+          ) : null}
+        </Card>
+      ) : null}
 
       <Card title={<L en="Timeline" ml="ടൈംലൈൻ" />}>
         <JobTimeline events={events} />
