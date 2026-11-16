@@ -541,7 +541,18 @@ await test("service staff have no admin-panel access", async () => {
   await user(svc);
   assert((await touchProduct()) === 0, "service staff edited product");
   const p = (await rows(`select module from public.my_permissions()`)).map((x) => x.module);
-  assert(p.length === 1 && p[0] === "service", `perms ${p}`);
+  // Technicians get the service module plus read-only spare parts (to pick replaced items).
+  assert(p.sort().join(",") === "service,spare_parts", `perms ${p}`);
+});
+await test("Update 01 modules: admin can't restore or approve resets by default", async () => {
+  await user(admin2);
+  const p = Object.fromEntries((await rows(`select module, actions from public.my_permissions()`)).map((x) => [x.module, x.actions]));
+  assert(p.cms?.includes("edit") && p.billing?.includes("approve"), "admin missing cms/billing");
+  assert(p.backup?.join(",") === "export,view", `admin backup ${p.backup}`);
+  assert(!p.password_resets, "admin got password_resets by default");
+  await user(superAdmin);
+  const s = (await rows(`select module from public.my_permissions()`)).map((x) => x.module);
+  assert(["cms", "backup", "spare_parts", "billing", "password_resets"].every((m) => s.includes(m)), "super admin missing new modules");
 });
 await test("staff directory is limited to users-view permission", async () => {
   await user(superAdmin);

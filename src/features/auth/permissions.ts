@@ -22,6 +22,11 @@ export const MODULES = [
   { key: "users", label: "Users & Roles" },
   { key: "audit", label: "Audit Logs" },
   { key: "settings", label: "Settings" },
+  { key: "cms", label: "Website CMS" },
+  { key: "backup", label: "Backup & Data" },
+  { key: "spare_parts", label: "Spare Parts" },
+  { key: "billing", label: "Service Billing" },
+  { key: "password_resets", label: "Password Resets" },
 ] as const;
 
 export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export"] as const;
@@ -42,7 +47,7 @@ const ALL: Permissions = Object.fromEntries(MODULE_KEYS.map((m) => [m, [...ACTIO
  */
 export const ROLE_DEFAULTS: Record<string, Permissions> = {
   super_admin: ALL,
-  admin: { ...ALL, users: ["view"], audit: [] },
+  admin: { ...ALL, users: ["view"], audit: [], backup: ["view", "export"], password_resets: [] },
   staff: {
     overview: ["view"],
     products: ["view", "create", "edit"],
@@ -54,8 +59,9 @@ export const ROLE_DEFAULTS: Record<string, Permissions> = {
     coupons: ["view"],
     analytics: ["view"],
     reports: ["view"],
+    spare_parts: ["view"],
   },
-  service_staff: { service: ["view", "edit"] },
+  service_staff: { service: ["view", "edit"], spare_parts: ["view"] },
 };
 
 export function mergePermissions(list: Permissions[]): Permissions {

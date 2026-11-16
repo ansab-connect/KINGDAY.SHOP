@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Sign in", robots: { index: false } }
 
 async function LoginForm({ searchParams }: { searchParams: PageProps<"/login">["searchParams"] }) {
   const params = await searchParams;
-  const next = safeNextPath(typeof params.next === "string" ? params.next : undefined, "/account");
+  const next = safeNextPath(typeof params.next === "string" ? params.next : undefined, "/launch");
   const linkError = params.error === "link";
   return (
     <>

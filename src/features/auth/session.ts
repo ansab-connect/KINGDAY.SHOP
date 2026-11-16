@@ -139,9 +139,21 @@ export async function requireTeam(): Promise<SessionUser> {
   return user;
 }
 
-/** Where a team member lands after signing in. */
+/**
+ * Home dashboard per role (used after sign-in and by /launch, the installed app's start page).
+ * Super Admin moves to /super-admin once that area is built (Update 01, Phase 03).
+ */
 export function homeFor(user: SessionUser): string {
-  return hasRole(user, "admin") ? "/admin" : "/staff";
+  switch (user.role) {
+    case "super_admin":
+    case "admin":
+      return "/admin";
+    case "staff":
+    case "service_staff":
+      return "/staff";
+    default:
+      return "/account";
+  }
 }
 
 /** For server actions: requires a page/action permission. Throws if missing. */

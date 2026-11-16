@@ -7,7 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "KING DAY",
     short_name: "KING DAY",
     description: "Premium kids' electric jeeps, bikes, scooters and toys, plus doorstep service. Every child deserves a royal ride.",
-    start_url: "/",
+    // /launch sends each person to their own dashboard (customer, staff, admin) on every app start.
+    start_url: "/launch",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
