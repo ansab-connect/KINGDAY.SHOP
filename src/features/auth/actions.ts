@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { isSupabaseConfigured, publicEnv } from "@/lib/env";
+import { isSupabaseConfigured } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { formatMobile, mobileLoginEmail, normalizeMobile } from "@/features/customer/mobile";
@@ -163,18 +163,8 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
 }
 
 // ---------------------------------------------------------------- Password reset
-export async function requestPasswordReset(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  if (!isSupabaseConfigured) return NOT_CONFIGURED;
-  const parsed = z.object({ email }).safeParse({ email: formData.get("email") });
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values: { email: String(formData.get("email") ?? "") } };
-
-  const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${publicEnv.siteUrl}/auth/confirm?next=/reset-password`,
-  });
-  return { message: "If an account exists for that email, we've sent a link to reset your password." };
-}
-
+// Requests (with Super Admin approval) live in ./password-reset.ts. updatePassword below
+// finishes the emailed-link flow used when System Settings → Password resets is "automatic".
 const updatePasswordSchema = z
   .object({ password, confirm: z.string() })
   .refine((v) => v.password === v.confirm, { message: "Passwords don't match.", path: ["confirm"] });

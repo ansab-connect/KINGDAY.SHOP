@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Crown, History, IdCard, KeyRound, ShieldCheck, SlidersHorizontal, UserCog, UserX, Users, Wrench } from "lucide-react";
+import { ArrowRight, Crown, History, IdCard, KeyRound, LockKeyhole, ShieldCheck, SlidersHorizontal, UserCog, UserX, Users, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { StatCard } from "@/components/admin/stat-card";
@@ -15,6 +15,7 @@ const TOOLS = [
   { href: "/super-admin/admins", icon: ShieldCheck, title: "Admin accounts", text: "Create, deactivate and review Admin and Super Admin accounts." },
   { href: "/super-admin/permissions", icon: KeyRound, title: "Permissions", text: "Default access for Admin, Staff and Service Staff." },
   { href: "/super-admin/settings", icon: SlidersHorizontal, title: "System settings", text: "Password reset rules and other system-wide options." },
+  { href: "/admin/password-resets", icon: LockKeyhole, title: "Password resets", text: "Approve or reject forgot-password requests." },
   { href: "/admin/users", icon: UserCog, title: "All users", text: "Staff, technicians and customers, with per-person access." },
   { href: "/admin/audit-log", icon: History, title: "Audit logs", text: "Every important change, who made it and when." },
   { href: "/admin", icon: ArrowRight, title: "Business admin", text: "Products, orders, service and the rest of the store." },

@@ -10,6 +10,7 @@ import {
   IdCard,
   IndianRupee,
   ListTodo,
+  LockKeyhole,
   Wrench,
   KeyRound,
   Megaphone,
@@ -91,6 +92,7 @@ export const adminNav: AdminNavGroup[] = [
     label: "System",
     items: [
       { title: "Users & Roles", href: "/admin/users", icon: UserCog, module: "users" },
+      { title: "Password Resets", href: "/admin/password-resets", icon: LockKeyhole, module: "password_resets" },
       { title: "Audit Logs", href: "/admin/audit-log", icon: History, module: "audit" },
       { title: "Settings", href: "/admin/settings", icon: Settings, phase: 4, module: "settings" },
     ],

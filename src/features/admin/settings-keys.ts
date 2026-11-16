@@ -20,7 +20,7 @@ export const SYSTEM_SETTINGS = {
     kind: "choice",
     options: [
       { value: "approval", label: "Super Admin approves each reset" },
-      { value: "automatic", label: "Automatic after the customer verifies" },
+      { value: "automatic", label: "Email accounts reset by emailed link (needs email set up)" },
     ],
     fallback: "approval",
   },

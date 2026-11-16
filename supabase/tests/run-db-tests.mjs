@@ -1021,5 +1021,70 @@ await test("checkout: cancelling releases stock, shipping records the sale", asy
   assert((await rows(`select id from public.orders where id = $1`, [o.order_id])).length === 0, "bob sees alice's order");
 });
 
+console.log("Password resets (Update 01 phase 07)");
+const HASH = "$2b$12$" + "a".repeat(53);
+let prId;
+await test("password reset: only the server can file a request; reviewers never see the hash", async () => {
+  await user(bob);
+  await expectError(`select public.create_password_reset_request($1, 'mobile', '+919847000000', $2)`, [bob, HASH], /not authorized/i);
+  await service();
+  const code = (await rows(`select public.create_password_reset_request($1, 'mobile', '+919847000000', $2) as c`, [bob, HASH]))[0].c;
+  assert(/^KD-PR-\d{6}$/.test(code), `code ${code}`);
+  await asSuperuser();
+  prId = (await rows(`select id from public.password_reset_requests where request_code = $1`, [code]))[0].id;
+  assert((await rows(`select 1 from public.notifications where user_id = $1 and title = $2`, [superAdmin, `Password reset request ${code}`])).length === 1, "super admin not alerted");
+  await user(superAdmin);
+  const [r] = await rows(`select * from public.password_reset_requests where id = $1`, [prId]);
+  assert(r && r.status === "pending" && !("password_hash" in r), "reviewer sees request wrongly");
+  await expectError(`select * from private.password_reset_secrets`, [], /permission denied/);
+  await user(admin2);
+  assert((await rows(`select id from public.password_reset_requests`)).length === 0, "admin without permission sees requests");
+  await expectError(`select public.review_password_reset($1, true)`, [prId], /not authorized/i);
+  await user(bob);
+  assert((await rows(`select id from public.password_reset_requests`)).length === 0, "customer sees requests");
+});
+await test("password reset: approve → server applies hash → completed; reject keeps old password", async () => {
+  await user(superAdmin);
+  assert((await rows(`select public.review_password_reset($1, true, 'Called the customer') as s`, [prId]))[0].s === "approved", "not approved");
+  await user(superAdmin);
+  await expectError(`select * from public.take_password_reset_hash($1)`, [prId], /not authorized/i);
+  await service();
+  const [h] = await rows(`select * from public.take_password_reset_hash($1)`, [prId]);
+  assert(h && h.user_id === bob && h.password_hash === HASH, "hash not handed to server");
+  await db.query(`select public.complete_password_reset($1, true)`, [prId]);
+  await asSuperuser();
+  const [done] = await rows(`select status, completed_at from public.password_reset_requests where id = $1`, [prId]);
+  assert(done.status === "completed" && done.completed_at, "not completed");
+  assert((await rows(`select 1 from private.password_reset_secrets where request_id = $1`, [prId])).length === 0, "hash kept after completion");
+  assert((await rows(`select 1 from public.audit_logs where entity = 'password_reset_requests' and entity_id = $1`, [prId])).length >= 2, "not audited");
+  // Reject path
+  await service();
+  await rows(`select public.create_password_reset_request($1, 'email', 'alice@test.local', $2)`, [alice, HASH]);
+  await asSuperuser();
+  const [{ id: aliceReq }] = await rows(`select id from public.password_reset_requests where user_id = $1 and status = 'pending'`, [alice]);
+  await user(superAdmin);
+  await rows(`select public.review_password_reset($1, false, 'Could not verify')`, [aliceReq]);
+  await service();
+  assert((await rows(`select * from public.take_password_reset_hash($1)`, [aliceReq])).length === 0, "rejected hash still available");
+});
+await test("password reset: expiry, rate limit and no self-approval", async () => {
+  await service();
+  await rows(`select public.create_password_reset_request($1, 'email', 'owner@test.local', $2)`, [superAdmin, HASH]);
+  await asSuperuser();
+  const [{ id: own }] = await rows(`select id from public.password_reset_requests where user_id = $1 and status = 'pending'`, [superAdmin]);
+  await user(superAdmin);
+  await expectError(`select public.review_password_reset($1, true)`, [own], /own request/);
+  await asSuperuser();
+  await db.query(`update public.password_reset_requests set expires_at = now() - interval '1 minute' where id = $1`, [own]);
+  await service();
+  await rows(`select public.expire_password_resets()`);
+  await asSuperuser();
+  assert((await rows(`select status from public.password_reset_requests where id = $1`, [own]))[0].status === "expired", "not expired");
+  await service();
+  await rows(`select public.create_password_reset_request($1, 'mobile', '+919847000000', $2)`, [bob, HASH]);
+  await rows(`select public.create_password_reset_request($1, 'mobile', '+919847000000', $2)`, [bob, HASH]);
+  await expectError(`select public.create_password_reset_request($1, 'mobile', '+919847000000', $2)`, [bob, HASH], /rate_limited/);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);
