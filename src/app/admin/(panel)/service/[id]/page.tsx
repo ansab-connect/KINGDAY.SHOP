@@ -14,7 +14,9 @@ import { can, getCurrentUser } from "@/features/auth/session";
 import { categoryLabel, directionsLink, mapsLink, statusLabel } from "@/features/service/constants";
 import { preferredDateText } from "@/features/service/constants";
 import { bookingMedia, getInspection, getJobEvents, listTechnicians, type BookingRow } from "@/features/service/queries";
-import { getDefaultBasicCharge, getInvoiceForBooking } from "@/features/service/invoices";
+import { getDefaultBasicCharge, getInvoiceForBooking, getReplacedItems, replacedName } from "@/features/service/invoices";
+import { ReplacedItems } from "@/components/service/replaced-items";
+import { CustomItemReview } from "@/components/admin/service/custom-item-review";
 import { formatDate, formatDateTime, formatPaise } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +31,11 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
   if (!b) notFound();
   const me = await getCurrentUser();
   const manage = can(me, "service", "edit");
-  const [media, events, inspection, technicians, invoice, basicDefault] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), listTechnicians(), getInvoiceForBooking(id), getDefaultBasicCharge()]);
+  const [media, events, inspection, technicians, invoice, basicDefault, replaced] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), listTechnicians(), getInvoiceForBooking(id), getDefaultBasicCharge(), getReplacedItems(id)]);
+  const partsLines = replaced.map((r) => ({ id: r.id, partId: r.part_id, name: replacedName(r), quantity: r.quantity, unitPrice: r.unit_price_paise, approval: r.approval_status }));
+  const partsTotal = partsLines.filter((l) => l.approval === "approved").reduce((n, l) => n + l.quantity * l.unitPrice, 0);
+  const canApprove = can(me, "billing", "approve");
+  const pendingCustom = replaced.filter((r) => r.approval_status === "pending");
   const tech = technicians.find((t) => t.user_id === b.assigned_to);
   const { data: cust } = b.customer_id ? await supabase.from("profiles").select("customer_code").eq("id", b.customer_id).maybeSingle() : { data: null };
   const customerCode = (cust as { customer_code?: string } | null)?.customer_code;
@@ -87,7 +93,23 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
               ) : null}
             </CardContent>
           </Card>
-          {b.status === "completed" || b.status === "invoiced" ? (
+          <Card className="shadow-card">
+            <CardContent className="flex flex-col gap-4">
+              <h2 className="font-heading text-lg font-semibold text-deep">Replaced items</h2>
+              <ReplacedItems bookingId={b.id} lines={partsLines} editable={manage && b.status !== "cancelled" && invoice?.payment_status !== "paid"} />
+              {canApprove && pendingCustom.length ? (
+                <div className="flex flex-col gap-3 border-t pt-4">
+                  <p className="text-sm font-semibold text-deep">Custom items waiting for approval</p>
+                  {pendingCustom.map((r) => (
+                    <div key={r.id} className="rounded-lg border p-3">
+                      <CustomItemReview id={r.id} name={replacedName(r)} price={r.unit_price_paise} requested={r.master_request === "requested"} />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+          {["completed", "ready_for_delivery", "invoiced"].includes(b.status) ? (
             <Card className="shadow-card">
               <CardContent className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -95,7 +117,8 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
                   {invoice ? (
                     <p className="text-sm">
                       <span className="font-semibold text-deep">{formatPaise(invoice.grand_total)}</span>{" "}
-                      <span className={invoice.payment_status === "paid" ? "text-success" : "text-warning"}>{invoice.payment_status === "paid" ? "Paid" : "Unpaid"}</span>
+                      <span className={invoice.payment_status === "paid" ? "text-success" : "text-warning"}>{invoice.payment_status === "paid" ? "Paid" : invoice.payment_status === "partial" ? `Balance ${formatPaise(invoice.balance)}` : "Unpaid"}</span>{" "}
+                      <span className={invoice.approval_status === "approved" ? "text-success" : "text-warning"}>· {invoice.approval_status === "approved" ? "Approved" : "Draft (customer can't see it)"}</span>
                     </p>
                   ) : null}
                 </div>
@@ -103,7 +126,10 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
                   <InvoiceEditor
                     bookingId={b.id}
                     invoiceId={invoice?.id ?? null}
-                    locked={false}
+                    locked={invoice?.approval_status === "approved" && !canApprove}
+                    sparePartsTotal={partsTotal}
+                    canApprove={canApprove}
+                    approved={invoice?.approval_status === "approved"}
                     initial={{
                 service_description: invoice?.service_description ?? inspection?.work_performed ?? "",
                 basic: String((invoice?.basic_charge ?? basicDefault) / 100),
@@ -112,7 +138,7 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
                 tax: String(invoice?.tax_percent ?? 0),
                 items: invoice?.items ?? [],
                 payment_method: invoice?.payment_method ?? "",
-                payment_status: invoice?.payment_status ?? "unpaid",
+                amount_paid: String((invoice?.amount_paid ?? 0) / 100),
               }}
                   />
                 ) : invoice ? (

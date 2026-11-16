@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Cog,
   Crown,
   ShieldCheck,
   SlidersHorizontal,
@@ -83,6 +84,7 @@ export const adminNav: AdminNavGroup[] = [
     label: "Service & People",
     items: [
       { title: "Service Management", href: "/admin/service", icon: Wrench, module: "service" },
+      { title: "Spare Parts", href: "/admin/spare-parts", icon: Cog, module: "spare_parts" },
       { title: "Staff Management", href: "/admin/staff", icon: IdCard, module: "staff" },
       { title: "Staff Tasks", href: "/admin/tasks", icon: ListTodo, module: "staff" },
       { title: "Salary & Payroll", href: "/admin/payroll", icon: IndianRupee, module: "payroll" },

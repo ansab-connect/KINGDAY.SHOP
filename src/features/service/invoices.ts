@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 
-export type InvoiceItem = { id: string; description: string; quantity: number; unit_price: number; line_total: number };
+export type InvoiceItem = { id: string; description: string; quantity: number; unit_price: number; line_total: number; kind: "additional" | "spare_part" };
 export type ServiceInvoice = {
   id: string;
   invoice_number: string;
@@ -20,14 +20,20 @@ export type ServiceInvoice = {
   tax_amount: number;
   grand_total: number;
   payment_method: string | null;
-  payment_status: "unpaid" | "paid";
+  payment_status: "unpaid" | "partial" | "paid";
+  spare_parts_total: number;
+  additional_total: number;
+  amount_paid: number;
+  balance: number;
+  approval_status: "draft" | "approved";
+  approved_at: string | null;
   paid_at: string | null;
   created_at: string;
   updated_at: string;
   items: InvoiceItem[];
 };
 
-const SELECT = "*, items:service_invoice_items(id, description, quantity, unit_price, line_total, position)";
+const SELECT = "*, items:service_invoice_items(id, description, quantity, unit_price, line_total, position, kind)";
 
 function normalise(row: unknown): ServiceInvoice | null {
   if (!row) return null;
@@ -62,3 +68,28 @@ export const PAYMENT_METHODS = [
   { value: "bank_transfer", label: "Bank transfer" },
   { value: "other", label: "Other" },
 ] as const;
+
+export type ReplacedRow = {
+  id: string;
+  part_id: string | null;
+  custom_name: string | null;
+  quantity: number;
+  unit_price_paise: number;
+  approval_status: "pending" | "approved" | "rejected";
+  master_request: "none" | "requested" | "added" | "declined";
+  added_at: string;
+  spare_parts: { name: string; sku: string } | null;
+};
+
+/** Parts replaced on a booking (RLS: same people who can see the booking). */
+export async function getReplacedItems(bookingId: string): Promise<ReplacedRow[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("service_replaced_items")
+    .select("id, part_id, custom_name, quantity, unit_price_paise, approval_status, master_request, added_at, spare_parts(name, sku)")
+    .eq("booking_id", bookingId)
+    .order("added_at");
+  return (data ?? []) as unknown as ReplacedRow[];
+}
+
+export const replacedName = (r: ReplacedRow) => r.spare_parts?.name ?? r.custom_name ?? "Item";

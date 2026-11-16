@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { ServiceStats } from "@/components/admin/service/service-stats";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { Card, CardContent } from "@/components/ui/card";
 import { SERVICE_STATUSES, categoryLabel, statusLabel } from "@/features/service/constants";
@@ -60,6 +61,7 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
         }
       />
       <AutoRefresh seconds={30} />
+      <ServiceStats />
       {error ? (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning-soft p-4 text-sm text-warning">
           <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" /> {error}

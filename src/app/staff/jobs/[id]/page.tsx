@@ -12,7 +12,8 @@ import { requireTeam } from "@/features/auth/session";
 import { categoryLabel, directionsLink, mapsLink, statusLabel } from "@/features/service/constants";
 import { preferredDateText } from "@/features/service/constants";
 import { bookingMedia, getInspection, getJobEvents, type BookingRow } from "@/features/service/queries";
-import { getDefaultBasicCharge, getInvoiceForBooking } from "@/features/service/invoices";
+import { getDefaultBasicCharge, getInvoiceForBooking, getReplacedItems, replacedName } from "@/features/service/invoices";
+import { ReplacedItems } from "@/components/service/replaced-items";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -35,7 +36,10 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
   const { data } = await supabase.from("service_bookings").select("*").eq("id", id).eq("assigned_to", user.id).maybeSingle();
   const b = data as BookingRow | null;
   if (!b) notFound();
-  const [media, events, inspection, invoice, basicDefault] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), getInvoiceForBooking(id), getDefaultBasicCharge()]);
+  const [media, events, inspection, invoice, basicDefault, replaced] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), getInvoiceForBooking(id), getDefaultBasicCharge(), getReplacedItems(id)]);
+  const partsLines = replaced.map((r) => ({ id: r.id, partId: r.part_id, name: replacedName(r), quantity: r.quantity, unitPrice: r.unit_price_paise, approval: r.approval_status }));
+  const partsTotal = partsLines.filter((l) => l.approval === "approved").reduce((n, l) => n + l.quantity * l.unitPrice, 0);
+  const partsEditable = ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "completed"].includes(b.status) && invoice?.payment_status !== "paid" && invoice?.approval_status !== "approved";
   const phone = b.mobile.replace(/\s/g, "");
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, I'm the KING DAY technician for booking ${b.booking_code}.`)}`;
   const canReport = ["reached", "inspection_started", "inspection_completed", "started", "completed", "ready_for_delivery"].includes(b.status);
@@ -124,12 +128,17 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
         )}
       </Card>
 
-      {b.status === "completed" || b.status === "invoiced" ? (
+      <Card title={<L en="Replaced items" ml="മാറ്റിയ പാർട്ടുകൾ" />}>
+        <ReplacedItems bookingId={b.id} lines={partsLines} editable={partsEditable} />
+      </Card>
+
+      {["completed", "ready_for_delivery", "invoiced"].includes(b.status) ? (
         <Card title={<L en={invoice ? `Invoice ${invoice.invoice_number}` : "Invoice"} ml="ബിൽ" />}>
           <InvoiceEditor
             bookingId={b.id}
             invoiceId={invoice?.id ?? null}
-            locked={invoice?.payment_status === "paid"}
+            locked={invoice?.payment_status === "paid" || invoice?.approval_status === "approved"}
+            sparePartsTotal={partsTotal}
             initial={{
               service_description: invoice?.service_description ?? inspection?.work_performed ?? "",
               basic: String((invoice?.basic_charge ?? basicDefault) / 100),
@@ -138,10 +147,10 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
               tax: String(invoice?.tax_percent ?? 0),
               items: invoice?.items ?? [],
               payment_method: invoice?.payment_method ?? "",
-              payment_status: invoice?.payment_status ?? "unpaid",
+              amount_paid: String((invoice?.amount_paid ?? 0) / 100),
               }}
           />
-          {invoice?.payment_status === "paid" ? (
+          {invoice?.approval_status === "approved" ? (
             <a href={`/service-invoice/${invoice.id}`} target="_blank" className="mt-3 inline-block text-sm font-semibold text-royal">View / print invoice</a>
           ) : null}
         </Card>

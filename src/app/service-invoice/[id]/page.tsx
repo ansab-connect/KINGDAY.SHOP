@@ -30,18 +30,22 @@ async function Invoice({ params }: { params: Promise<{ id: string }> }) {
   const method = PAYMENT_METHODS.find((m) => m.value === inv.payment_method)?.label;
 
   const rows = [
-    ...(inv.basic_charge ? [{ d: "Basic service charge", q: 1, p: inv.basic_charge, t: inv.basic_charge }] : []),
+    ...(inv.basic_charge ? [{ d: "Service charge", q: 1, p: inv.basic_charge, t: inv.basic_charge }] : []),
     ...(inv.labour_charge ? [{ d: "Labour charge", q: 1, p: inv.labour_charge, t: inv.labour_charge }] : []),
-    ...inv.items.map((i) => ({ d: i.description, q: i.quantity, p: i.unit_price, t: i.line_total })),
+    ...inv.items.filter((i) => i.kind === "spare_part").map((i) => ({ d: `Spare part: ${i.description}`, q: i.quantity, p: i.unit_price, t: i.line_total })),
+    ...inv.items.filter((i) => i.kind !== "spare_part").map((i) => ({ d: i.description, q: i.quantity, p: i.unit_price, t: i.line_total })),
   ];
   const link = `${siteConfig.url}/service-invoice/${inv.id}`;
-  const waText = `KING DAY Service invoice ${inv.invoice_number}\nBooking ${bookingCode}\nTotal: ${formatPaise(inv.grand_total)} (${inv.payment_status === "paid" ? "Paid" : "Payment due"})\nView: ${link}`;
+  const waText = `KING DAY Service invoice ${inv.invoice_number}\nBooking ${bookingCode}\nTotal: ${formatPaise(inv.grand_total)} (${inv.payment_status === "paid" ? "Paid" : `Balance ${formatPaise(inv.balance)}`})\nView: ${link}`;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 print:max-w-none print:p-0">
       <div className="mb-6 print:hidden">
         <InvoiceShare whatsappText={waText} phone={inv.customer_mobile} />
       </div>
+      {inv.approval_status !== "approved" ? (
+        <p role="note" className="mb-4 rounded-xl bg-warning-soft px-4 py-3 text-sm font-semibold text-warning">DRAFT: not yet approved by the office. The customer can&apos;t see this bill yet.</p>
+      ) : null}
       <article className="rounded-2xl border bg-white p-6 shadow-card sm:p-10 print:rounded-none print:border-0 print:shadow-none">
         <header className="flex flex-col gap-6 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -105,13 +109,15 @@ async function Invoice({ params }: { params: Promise<{ id: string }> }) {
           {inv.discount ? <div className="flex justify-between"><dt className="text-muted-foreground">Discount</dt><dd>− {formatPaise(inv.discount)}</dd></div> : null}
           {inv.tax_percent ? <div className="flex justify-between"><dt className="text-muted-foreground">Tax ({inv.tax_percent}%)</dt><dd>{formatPaise(inv.tax_amount)}</dd></div> : null}
           <div className="mt-1 flex justify-between border-t pt-2 text-base font-bold text-deep"><dt>Grand total</dt><dd>{formatPaise(inv.grand_total)}</dd></div>
+          {inv.amount_paid ? <div className="flex justify-between"><dt className="text-muted-foreground">Paid / advance</dt><dd>− {formatPaise(inv.amount_paid)}</dd></div> : null}
+          <div className="flex justify-between font-semibold text-deep"><dt>Balance due</dt><dd>{formatPaise(inv.balance)}</dd></div>
         </dl>
 
         <footer className="mt-8 flex flex-col gap-1 border-t pt-4 text-sm">
           <p>
             <span className="text-muted-foreground">Payment: </span>
             <span className={inv.payment_status === "paid" ? "font-semibold text-success" : "font-semibold text-warning"}>
-              {inv.payment_status === "paid" ? `Paid${method ? ` (${method})` : ""}${inv.paid_at ? ` on ${formatDate(new Date(inv.paid_at))}` : ""}` : "Due"}
+              {inv.payment_status === "paid" ? `Paid${method ? ` (${method})` : ""}${inv.paid_at ? ` on ${formatDate(new Date(inv.paid_at))}` : ""}` : inv.payment_status === "partial" ? `Part paid${method ? ` (${method})` : ""}, balance ${formatPaise(inv.balance)}` : "Due"}
             </span>
           </p>
           <p className="text-xs text-muted-foreground">Thank you for choosing KING DAY Service. This is a computer-generated invoice.</p>

@@ -772,9 +772,9 @@ await test("invoices need a completed job, a valid discount, and lock once paid"
   await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice({ payment_status: "paid", payment_method: "cash" })]);
   await expectError(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice()], /only be changed by the office/);
   await user(admin2);
-  await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice({ payment_status: "paid", payment_method: "cash", discount: 0 })]);
+  await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [jobId, invoice({ payment_status: "paid", payment_method: "cash", discount: 0, approve: true })]);
 });
-await test("customers see their own service invoice; others don't", async () => {
+await test("customers see their own APPROVED service invoice; others don't", async () => {
   await user(alice);
   const r = await rows(`select i.invoice_number, (select count(*) from public.service_invoice_items x where x.invoice_id = i.id) n from public.service_invoices i`);
   assert(r.length === 1 && Number(r[0].n) === 1, JSON.stringify(r));
@@ -1134,6 +1134,80 @@ await test("inspection-first: timeline steps in order, by the technician or a ma
   assert((await rows(`select 1 from public.service_job_events where booking_id = $1`, [ifBooking])).length >= 5, "customer can't see own timeline");
   await user(bob);
   assert((await rows(`select 1 from public.service_job_events where booking_id = $1`, [ifBooking])).length === 0, "bob sees alice's timeline");
+});
+
+console.log("Spare parts, replaced items & service billing (Update 01 phases 10-11)");
+let spJob, battery;
+await test("spare parts: technicians search without purchase prices; stock changes only via the ledger", async () => {
+  await asSuperuser();
+  battery = (await rows(`select id from public.spare_parts where sku = 'SP-BAT-12V'`))[0].id;
+  await user(admin2);
+  await db.query(`update public.spare_parts set selling_price_paise = 150000 where id = $1`, [battery]);
+  await db.query(`update public.spare_part_costs set purchase_price_paise = 90000 where part_id = $1`, [battery]);
+  await db.query(`select public.adjust_spare_part_stock($1, 'stock_in', 5, 'First delivery')`, [battery]);
+  await expectError(`update public.spare_parts set stock = 99 where id = $1`, [battery], /stock movement/);
+  await user(svc);
+  const found = await rows(`select * from public.search_spare_parts('battery')`);
+  assert(found.some((p) => p.id === battery && p.stock === 5 && p.selling_price_paise === 150000), JSON.stringify(found));
+  assert((await rows(`select * from public.spare_part_costs`)).length === 0, "technician sees purchase prices");
+  await expectError(`select public.adjust_spare_part_stock($1, 'stock_in', 5)`, [battery], /not authorized/i);
+});
+await test("replaced items: parts take stock, custom items wait for approval and can join the master list", async () => {
+  await asSuperuser();
+  await db.query(`update public.service_bookings set status = 'cancelled' where customer_id = $1 and status not in ('completed','ready_for_delivery','invoiced','cancelled')`, [alice]);
+  await user(alice);
+  const code = (await rows(`select public.create_service_booking($1::jsonb) as c`, [booking({ preferred_date: "", product_name: "Parts test jeep" })]))[0].c;
+  await asSuperuser();
+  spJob = (await rows(`select id from public.service_bookings where booking_code = $1`, [code]))[0].id;
+  await user(admin2);
+  await db.query(`select public.assign_service_booking($1, $2)`, [spJob, svc]);
+  await user(svc);
+  await db.query(`select public.respond_service_job($1, true)`, [spJob]);
+  await db.query(`select public.advance_service_job($1, 'inspection_started')`, [spJob]);
+  await db.query(`select public.set_replaced_part($1, $2, 2)`, [spJob, battery]);
+  await db.query(`select public.set_replaced_part($1, $2, 1)`, [spJob, battery]);
+  await expectError(`select public.set_replaced_part($1, $2, 50)`, [spJob, battery], /Not enough stock/);
+  await asSuperuser();
+  assert((await rows(`select stock from public.spare_parts where id = $1`, [battery]))[0].stock === 4, "stock not 4");
+  const moves = (await rows(`select type, quantity from public.spare_part_movements where booking_id = $1 order by id`, [spJob])).map((m) => `${m.type}${m.quantity}`);
+  assert(moves.join(",") === "used-2,returned1", moves.join(","));
+  await user(svc2);
+  await expectError(`select public.set_replaced_part($1, $2, 1)`, [spJob, battery], /not authorized/i);
+  await user(svc);
+  await db.query(`select public.add_custom_replaced_item($1, 'Horn switch', 1, 25000, true)`, [spJob]);
+  await expectError(`select public.add_custom_replaced_item($1, 'horn switch ', 1, 25000)`, [spJob], /already on the bill/);
+  await asSuperuser();
+  const [custom] = await rows(`select id, approval_status, master_request from public.service_replaced_items where booking_id = $1 and custom_name is not null`, [spJob]);
+  assert(custom.approval_status === "pending" && custom.master_request === "requested", JSON.stringify(custom));
+  assert((await rows(`select 1 from public.spare_parts where name = 'Horn switch'`)).length === 0, "custom item joined master list by itself");
+  await user(svc);
+  await expectError(`select public.review_custom_replaced_item($1, true)`, [custom.id], /not authorized/i);
+  await user(admin2);
+  await db.query(`select public.review_custom_replaced_item($1, true, 30000, true, 'SP-HORN-SW', 'OK')`, [custom.id]);
+  await asSuperuser();
+  assert((await rows(`select 1 from public.spare_parts where sku = 'SP-HORN-SW' and name = 'Horn switch'`)).length === 1, "not added to master list");
+});
+await test("billing: technician drafts, customer sees it only after approval, partial payment and balance", async () => {
+  await user(svc);
+  for (const s of ["inspection_completed", "started", "completed"]) await db.query(`select public.advance_service_job($1, $2)`, [spJob, s]);
+  await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [spJob, JSON.stringify({ basic_charge: 50000, labour_charge: 0, discount: 0, tax_percent: 0, items: [{ description: "Cleaning", quantity: 1, unit_price: 10000 }], amount_paid: 0 })]);
+  await asSuperuser();
+  const [d] = await rows(`select approval_status, spare_parts_total, additional_total, grand_total from public.service_invoices where booking_id = $1`, [spJob]);
+  assert(d.approval_status === "draft" && d.spare_parts_total === 150000 + 30000 && d.additional_total === 10000 && d.grand_total === 50000 + 10000 + 180000, JSON.stringify(d));
+  await user(alice);
+  assert((await rows(`select 1 from public.service_invoices where booking_id = $1`, [spJob])).length === 0, "customer sees a draft bill");
+  await user(admin2);
+  await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [spJob, JSON.stringify({ basic_charge: 50000, labour_charge: 0, discount: 0, tax_percent: 0, items: [{ description: "Cleaning", quantity: 1, unit_price: 10000 }], amount_paid: 100000, payment_method: "upi", approve: true })]);
+  await user(alice);
+  const [c] = await rows(`select approval_status, payment_status, balance from public.service_invoices where booking_id = $1`, [spJob]);
+  assert(c && c.approval_status === "approved" && c.payment_status === "partial" && c.balance === 140000, JSON.stringify(c));
+  await user(svc);
+  await expectError(`select public.save_service_invoice($1, $2::jsonb)`, [spJob, JSON.stringify({ basic_charge: 1, items: [] })], /approved bills/);
+  await user(admin2);
+  const stats = (await rows(`select public.service_dashboard_stats() as s`))[0].s;
+  assert(stats.spare_parts_revenue >= 180000 && stats.pending_payments >= 140000 && typeof stats.inspection_pending === "number", JSON.stringify(stats));
+  await user(bob);
+  await expectError(`select public.service_dashboard_stats()`, [], /not authorized/i);
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
