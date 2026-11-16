@@ -12,16 +12,12 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-royal focus:px-4 focus:py-2 focus:text-white">
         Skip to content
       </a>
-      <p role="note" className="bg-gold-100 px-4 py-1.5 text-center text-xs font-medium text-gold-800">
-        {isSupabaseConfigured ? (
-          <L
-            en="Pre-launch: online ordering opens soon. Enquire on WhatsApp in the meantime."
-            ml="ഓൺലൈൻ ഓർഡർ ഉടൻ ആരംഭിക്കും. അതുവരെ WhatsApp-ൽ അന്വേഷിക്കൂ."
-          />
-        ) : (
-          "Preview store: products, prices and reviews are sample data. Ordering opens at launch."
-        )}
-      </p>
+      {/* Local preview only (no database): warn that the data is sample data. */}
+      {isSupabaseConfigured ? null : (
+        <p role="note" className="bg-gold-100 px-4 py-1.5 text-center text-xs font-medium text-gold-800">
+          Preview store: products, prices and reviews are sample data.
+        </p>
+      )}
       <div className="bg-deep px-4 py-2 text-center text-[0.7rem] font-semibold tracking-[0.2em] text-gold uppercase">
         <L en="Every child deserves a royal ride" ml="ഓരോ കുഞ്ഞിനും ഒരു രാജകീയ യാത്ര" />
       </div>
