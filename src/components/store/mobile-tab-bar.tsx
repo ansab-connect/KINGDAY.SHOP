@@ -12,7 +12,7 @@ const TABS = [
   { href: "/shop", en: "Shop", ml: "ഷോപ്പ്", icon: LayoutGrid, match: (p: string) => p.startsWith("/shop") || p.startsWith("/categories") || p.startsWith("/products") || p.startsWith("/offers") },
   { href: "/book-service", en: "Service", ml: "സർവീസ്", icon: Wrench, match: (p: string) => p.startsWith("/book-service") },
   { href: "/cart", en: "Cart", ml: "കാർട്ട്", icon: ShoppingBag, match: (p: string) => p.startsWith("/cart") || p.startsWith("/checkout") },
-  { href: "/launch", en: "Account", ml: "അക്കൗണ്ട്", icon: User, match: (p: string) => p.startsWith("/account") || p.startsWith("/wishlist") || p === "/login" || p === "/register" },
+  { href: "/launch?to=account", en: "Account", ml: "അക്കൗണ്ട്", icon: User, match: (p: string) => p.startsWith("/account") || p.startsWith("/wishlist") || p === "/login" || p === "/register" },
 ] as const;
 
 /** App-style bottom tab bar on phones and tablets (hidden on desktop, where the header has everything). */

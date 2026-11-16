@@ -8,7 +8,8 @@ import { getCurrentUser, homeFor } from "@/features/auth/session";
  */
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
-  const target = user ? homeFor(user) : "/";
+  // The Account button (?to=account) sends signed-out visitors to sign in; the app start shows the shop.
+  const target = user ? homeFor(user) : request.nextUrl.searchParams.get("to") === "account" ? "/login" : "/";
   const response = NextResponse.redirect(new URL(target, request.nextUrl.origin), 303);
   response.headers.set("Cache-Control", "private, no-store");
   return response;
