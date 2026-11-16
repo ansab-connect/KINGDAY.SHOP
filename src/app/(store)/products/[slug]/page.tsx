@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProductSkeleton } from "@/components/store/product/product-skeleton";
-import { RotateCcw, ShieldCheck, Truck } from "lucide-react";
+import Link from "next/link";
+import { Banknote, RotateCcw, ShieldCheck, Truck, Wrench } from "lucide-react";
+import { RecentlyViewed } from "@/components/store/product/recently-viewed";
 import { L } from "@/components/i18n/lang";
 import { Breadcrumbs } from "@/components/store/page-hero";
 import { Rating, Stars } from "@/components/store/price";
@@ -126,10 +128,33 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
               />
             </div>
 
-            <ul className="mt-8 grid gap-3 rounded-2xl bg-muted/60 p-5 text-sm sm:grid-cols-3">
-              <li className="flex items-center gap-2.5"><ShieldCheck aria-hidden className="size-5 text-royal" /> <L en="Safety-checked" ml="സുരക്ഷ ഉറപ്പാക്കിയത്" /></li>
-              <li className="flex items-center gap-2.5"><Truck aria-hidden className="size-5 text-royal" /> <L en="Tracked delivery" ml="ട്രാക്ക് ചെയ്യാവുന്ന ഡെലിവറി" /></li>
-              <li className="flex items-center gap-2.5"><RotateCcw aria-hidden className="size-5 text-royal" /> <L en="Easy support" ml="എളുപ്പത്തിൽ സഹായം" /></li>
+            <ul className="mt-8 grid gap-px overflow-hidden rounded-2xl border bg-border text-sm sm:grid-cols-2">
+              {[
+                { icon: Truck, en: "Delivery", ml: "ഡെലിവറി", den: "Our team calls to confirm your delivery date.", dml: "ഡെലിവറി തീയതി ഞങ്ങൾ വിളിച്ച് ഉറപ്പിക്കും.", href: "/policies/shipping" },
+                { icon: Banknote, en: "Cash on delivery", ml: "ക്യാഷ് ഓൺ ഡെലിവറി", den: "Pay when your order arrives.", dml: "ഓർഡർ എത്തുമ്പോൾ പണം നൽകാം.", href: null },
+                { icon: ShieldCheck, en: "Warranty", ml: "വാറന്റി", den: "As per the brand. See our warranty policy.", dml: "ബ്രാൻഡ് വാറന്റി പ്രകാരം.", href: "/policies/warranty" },
+                { icon: RotateCcw, en: "Returns", ml: "റിട്ടേൺ", den: "See returns & refunds.", dml: "റിട്ടേൺ നയം കാണുക.", href: "/policies/returns" },
+                { icon: Wrench, en: "BEST FIT service", ml: "BEST FIT സർവീസ്", den: "Fitting, repair and service after you buy.", dml: "വാങ്ങിയ ശേഷം ഫിറ്റിംഗും സർവീസും.", href: "/book-service" },
+              ].map((i) => {
+                const body = (
+                  <>
+                    <i.icon aria-hidden className="mt-0.5 size-5 shrink-0 text-royal" />
+                    <span>
+                      <span className="block font-semibold text-deep"><L en={i.en} ml={i.ml} /></span>
+                      <span className="block text-muted-foreground"><L en={i.den} ml={i.dml} /></span>
+                    </span>
+                  </>
+                );
+                return (
+                  <li key={i.en} className="bg-white">
+                    {i.href ? (
+                      <Link href={i.href} className="flex gap-3 p-4 hover:bg-muted/40">{body}</Link>
+                    ) : (
+                      <div className="flex gap-3 p-4">{body}</div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
@@ -200,6 +225,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
             <ProductGrid products={related} />
           </section>
         ) : null}
+        <RecentlyViewed current={{ slug: product.slug, name: product.name, image: product.images[0]?.src ?? null, price: product.price, mrp: product.mrp }} />
       </Container>
     </>
   );

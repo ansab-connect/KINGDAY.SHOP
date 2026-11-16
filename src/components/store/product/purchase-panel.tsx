@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Mail, MessageCircle, Minus, Plus, ShoppingBag } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Mail, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { Price } from "@/components/store/price";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
@@ -10,6 +11,7 @@ import { WishlistButton } from "@/components/store/wishlist-button";
 import { OFFICIAL_WHATSAPP, supportMailto, whatsappLink } from "@/config/storefront";
 import { addToCart } from "@/features/cart/cart-store";
 import { whatsappOrderUrl } from "@/lib/whatsapp";
+import { formatPaise } from "@/lib/format";
 import type { StoreVariant } from "@/features/catalog/types";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,7 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
   const [variantId, setVariantId] = useState(defaultVariantId);
   const [qty, setQty] = useState(1);
   const [notice, setNotice] = useState(false);
+  const router = useRouter();
   const variant = variants.find((v) => v.id === variantId) ?? variants[0];
   const out = variant.stock <= 0;
   const maxQty = Math.max(1, Math.min(variant.stock, 5));
@@ -55,6 +58,11 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
     <div className="flex flex-col gap-6">
       <div>
         <Price price={variant.price} mrp={variant.mrp} size="lg" />
+        {variant.mrp > variant.price ? (
+          <p className="mt-1 text-sm font-semibold text-success">
+            <L en={`You save ${formatPaise(variant.mrp - variant.price)}`} ml={`നിങ്ങൾക്ക് ${formatPaise(variant.mrp - variant.price)} ലാഭം`} />
+          </p>
+        ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
           <L en="MRP inclusive of all taxes" ml="എല്ലാ നികുതികളും ഉൾപ്പെടെ" />
         </p>
@@ -128,19 +136,17 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
         </p>
       </div>
 
-      <a
-        href={out ? undefined : buyHref}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-disabled={out}
-        data-testid="whatsapp-buy-now"
-        className={cn(
-          "inline-flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full bg-gold px-6 py-4 text-base font-bold tracking-wide text-deep uppercase shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] transition-colors hover:bg-gold-300 focus-visible:ring-2 focus-visible:ring-royal focus-visible:outline-none",
-          out && "pointer-events-none cursor-not-allowed opacity-50",
-        )}
+      <button
+        type="button"
+        disabled={out}
+        onClick={() => {
+          addToCart({ variantId: variant.id, productName: name, variantName: variants.length > 1 ? (variant.colour ?? variant.name) : null, sku: variant.sku, price: variant.price, maxQty, url: productUrl }, qty);
+          router.push("/checkout");
+        }}
+        className="inline-flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full bg-gold px-6 py-4 text-base font-bold tracking-wide text-deep uppercase shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] transition-colors hover:bg-gold-300 focus-visible:ring-2 focus-visible:ring-royal focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <WhatsAppIcon className="size-5" /> <L en="Buy now on WhatsApp" ml="WhatsApp-ൽ ഇപ്പോൾ വാങ്ങൂ" />
-      </a>
+        <Zap aria-hidden className="size-5" /> <L en="Buy now" ml="ഇപ്പോൾ വാങ്ങൂ" />
+      </button>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <button
@@ -166,6 +172,17 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
       ) : null}
 
       <div className="flex flex-wrap gap-3">
+        {!out ? (
+          <a
+            href={buyHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="whatsapp-buy-now"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#25D366] px-5 text-sm font-semibold text-white hover:bg-[#1fb857]"
+          >
+            <WhatsAppIcon className="size-4" /> <L en="Order on WhatsApp" ml="WhatsApp-ൽ ഓർഡർ" />
+          </a>
+        ) : null}
         {enquireHref ? (
           <a href={enquireHref} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-5 text-sm font-semibold text-[#128C7E] hover:bg-[#25D366]/15">
             <MessageCircle aria-hidden className="size-4" /> <L en="Ask a question" ml="ചോദ്യം ചോദിക്കുക" />
