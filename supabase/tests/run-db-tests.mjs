@@ -554,6 +554,17 @@ await test("Update 01 modules: admin can't restore or approve resets by default"
   const s = (await rows(`select module from public.my_permissions()`)).map((x) => x.module);
   assert(["cms", "backup", "spare_parts", "billing", "password_resets"].every((m) => s.includes(m)), "super admin missing new modules");
 });
+await test("system.* settings: only a Super Admin can change them", async () => {
+  await user(admin2);
+  const r = await db.query(`update public.store_settings set value = '"automatic"' where key = 'system.password_reset_mode' returning key`);
+  assert(r.rows.length === 0, "admin changed a system setting");
+  await expectError(`insert into public.store_settings (key, value) values ('system.test_key', '1')`, [], /row-level security/);
+  const ok = await db.query(`update public.store_settings set value = value where key = 'store.name' returning key`);
+  assert(ok.rows.length === 1, "admin lost normal settings access");
+  await user(superAdmin);
+  const s = await db.query(`update public.store_settings set value = '"automatic"' where key = 'system.password_reset_mode' returning key`);
+  assert(s.rows.length === 1, "super admin couldn't change a system setting");
+});
 await test("staff directory is limited to users-view permission", async () => {
   await user(superAdmin);
   const r = await rows(`select * from public.admin_list_accounts(null, 50)`);

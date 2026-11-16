@@ -9,3 +9,21 @@ export const EDITABLE_SETTINGS = {
   "tax.prices_include_gst": { label: "Prices include GST", kind: "boolean", isPublic: true },
   "service.basic_charge": { label: "Default basic service charge (₹)", kind: "rupees", isPublic: true },
 } as const;
+
+/**
+ * System settings: Super Admin only (the database blocks "system.*" keys for everyone else,
+ * migration 0022). Read by the password reset workflow (Update 01, Phase 07).
+ */
+export const SYSTEM_SETTINGS = {
+  "system.password_reset_mode": {
+    label: "Password resets",
+    kind: "choice",
+    options: [
+      { value: "approval", label: "Super Admin approves each reset" },
+      { value: "automatic", label: "Automatic after the customer verifies" },
+    ],
+    fallback: "approval",
+  },
+  "system.password_reset_expiry_hours": { label: "Reset request expires after (hours)", kind: "hours", min: 1, max: 168, fallback: 48 },
+} as const;
+export type SystemSettingKey = keyof typeof SYSTEM_SETTINGS;

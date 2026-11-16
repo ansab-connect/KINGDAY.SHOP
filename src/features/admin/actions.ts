@@ -7,7 +7,7 @@ import { assertCan, assertStaff } from "@/features/auth/session";
 import { dbMessage, fail, fieldErrorsOf, ok, type FormState } from "@/features/forms";
 import { ORDER_STATUSES } from "@/features/orders/types";
 import { isSupabaseConfigured } from "@/lib/env";
-import { EDITABLE_SETTINGS } from "./settings-keys";
+import { EDITABLE_SETTINGS, SYSTEM_SETTINGS } from "./settings-keys";
 import { createClient } from "@/lib/supabase/server";
 import { queuePushDispatch } from "@/features/push/send";
 
@@ -247,4 +247,30 @@ export async function revokeRoleAction(_: FormState, fd: FormData): Promise<Form
   if (!data?.length) return fail("That role was already removed.");
   refresh();
   return ok("Role revoked.");
+}
+
+// ---------------------------------------------------------------- System settings (super admin)
+
+export async function saveSystemSettingsAction(_: FormState, fd: FormData): Promise<FormState> {
+  const denied = await superAdminOnly();
+  if (denied) return denied;
+  const rows: { key: string; value: unknown; is_public: boolean }[] = [];
+  const fieldErrors: Record<string, string> = {};
+  for (const [key, def] of Object.entries(SYSTEM_SETTINGS)) {
+    const raw = str(fd, key);
+    if (def.kind === "choice") {
+      if (!def.options.some((o) => o.value === raw)) fieldErrors[key] = "Choose an option.";
+      else rows.push({ key, value: raw, is_public: false });
+    } else {
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < def.min || n > def.max) fieldErrors[key] = `Enter a whole number from ${def.min} to ${def.max}.`;
+      else rows.push({ key, value: n, is_public: false });
+    }
+  }
+  if (Object.keys(fieldErrors).length) return fail("Please fix the highlighted fields.", fieldErrors);
+  const supabase = await createClient();
+  const { error } = await supabase.from("store_settings").upsert(rows, { onConflict: "key" });
+  if (error) return fail(dbMessage(error, "Couldn't save system settings."));
+  refresh();
+  return ok("System settings saved.");
 }

@@ -134,10 +134,21 @@ export type AccountDetails = {
 };
 
 /** Create (no `account`) or edit an account. */
-export function AccountForm({ categories, account, lockRole }: { categories: StaffCategory[]; account?: AccountDetails; lockRole?: boolean }) {
+export function AccountForm({
+  categories,
+  account,
+  lockRole,
+  defaultRole,
+}: {
+  categories: StaffCategory[];
+  account?: AccountDetails;
+  lockRole?: boolean;
+  /** Pre-selected role for a new account (e.g. "admin" from Super Admin → Admin accounts). */
+  defaultRole?: string;
+}) {
   const router = useRouter();
   const [state, action, pending] = useActionState<FormState, FormData>(account ? updateAccountAction : createAccountAction, {});
-  const [role, setRole] = useState(account?.role ?? "staff");
+  const [role, setRole] = useState(account?.role ?? defaultRole ?? "staff");
   const [access, setAccess] = useState<"password" | "link">("password");
   const fe = state.fieldErrors ?? {};
   const createdId = !account && state.ok ? state.data?.userId : undefined;

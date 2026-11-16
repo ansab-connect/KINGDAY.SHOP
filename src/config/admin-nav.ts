@@ -1,5 +1,8 @@
 import {
   BarChart3,
+  Crown,
+  ShieldCheck,
+  SlidersHorizontal,
   Boxes,
   FileText,
   FolderTree,
@@ -40,6 +43,15 @@ export const adminNav: AdminNavGroup[] = [
     items: [{ title: "Overview", href: "/admin", icon: LayoutDashboard, module: "overview" }],
   },
   {
+    label: "Super Admin",
+    items: [
+      { title: "Control Centre", href: "/super-admin", icon: Crown, module: "users", superAdminOnly: true },
+      { title: "Admin Accounts", href: "/super-admin/admins", icon: ShieldCheck, module: "users", superAdminOnly: true },
+      { title: "Permissions", href: "/super-admin/permissions", icon: KeyRound, module: "users", superAdminOnly: true },
+      { title: "System Settings", href: "/super-admin/settings", icon: SlidersHorizontal, module: "settings", superAdminOnly: true },
+    ],
+  },
+  {
     label: "Catalogue",
     items: [
       { title: "Products", href: "/admin/products", icon: Package, module: "products", phase: 5 },
@@ -75,7 +87,6 @@ export const adminNav: AdminNavGroup[] = [
     label: "System",
     items: [
       { title: "Users & Roles", href: "/admin/users", icon: UserCog, module: "users" },
-      { title: "Permissions", href: "/admin/permissions", icon: KeyRound, module: "users", superAdminOnly: true },
       { title: "Audit Logs", href: "/admin/audit-log", icon: History, module: "audit" },
       { title: "Settings", href: "/admin/settings", icon: Settings, phase: 4, module: "settings" },
     ],

@@ -14,7 +14,7 @@ describe("homeFor (installed app start page and post-login landing)", () => {
     expect(homeFor(as("service_staff"))).toBe("/staff");
     expect(homeFor(as("staff"))).toBe("/staff");
     expect(homeFor(as("admin"))).toBe("/admin");
-    expect(homeFor(as("super_admin"))).toBe("/admin");
+    expect(homeFor(as("super_admin"))).toBe("/super-admin");
   });
 });
 

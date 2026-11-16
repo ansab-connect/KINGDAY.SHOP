@@ -11,7 +11,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "New account" };
 
-async function NewAccountContent() {
+const PRESET_ROLES = ["super_admin", "admin", "staff", "service_staff"];
+
+async function NewAccountContent({ searchParams }: PageProps<"/admin/users/new">) {
+  const raw = (await searchParams).role;
+  const defaultRole = PRESET_ROLES.find((r) => r === (Array.isArray(raw) ? raw[0] : raw));
   const me = await getCurrentUser();
   if (isSupabaseConfigured && !hasRole(me, "super_admin")) {
     return <p className="rounded-xl border bg-white p-6 text-sm text-muted-foreground">Only a Super Admin can create accounts.</p>;
@@ -30,17 +34,17 @@ async function NewAccountContent() {
       <PageHeader title="New account" description="A unique staff ID (KD-STF-0001, KD-SRV-0001…) is created automatically." />
       <Card className="max-w-3xl shadow-card">
         <CardContent>
-          <AccountForm categories={categories} />
+          <AccountForm categories={categories} defaultRole={defaultRole} />
         </CardContent>
       </Card>
     </>
   );
 }
 
-export default function NewAccountPage() {
+export default function NewAccountPage(props: PageProps<"/admin/users/new">) {
   return (
     <StaffOnly module="users">
-      <NewAccountContent />
+      <NewAccountContent {...props} />
     </StaffOnly>
   );
 }

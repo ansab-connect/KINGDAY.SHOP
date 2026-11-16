@@ -9,7 +9,7 @@ import type { Permissions } from "@/features/auth/permissions";
 import { cn } from "@/lib/utils";
 
 export function isActivePath(pathname: string, href: string) {
-  return href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
+  return href === "/admin" || href === "/super-admin" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export type NavAccess = { permissions: Permissions; isSuperAdmin: boolean } | null;

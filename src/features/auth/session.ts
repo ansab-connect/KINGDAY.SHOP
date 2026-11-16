@@ -126,7 +126,7 @@ export async function requireStaff(minimum: StaffRole = "staff", module?: Module
   const user = await getCurrentUser();
   if (!user) redirect("/admin/login");
   if (user.role === "service_staff") redirect("/staff");
-  if (!hasRole(user, minimum)) redirect("/admin/login?error=forbidden");
+  if (!hasRole(user, minimum)) redirect(hasRole(user, "staff") ? "/admin" : "/admin/login?error=forbidden");
   if (module && !can(user, module, "view")) return { status: "denied", user };
   return { status: "granted", user };
 }
@@ -141,11 +141,11 @@ export async function requireTeam(): Promise<SessionUser> {
 
 /**
  * Home dashboard per role (used after sign-in and by /launch, the installed app's start page).
- * Super Admin moves to /super-admin once that area is built (Update 01, Phase 03).
  */
 export function homeFor(user: SessionUser): string {
   switch (user.role) {
     case "super_admin":
+      return "/super-admin";
     case "admin":
       return "/admin";
     case "staff":
