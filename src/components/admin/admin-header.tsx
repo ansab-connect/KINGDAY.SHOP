@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, LogOut, Menu, Search, Settings, ShieldCheck, User } from "lucide-react";
+import { Bell, ExternalLink, IdCard, LogOut, Menu, Search, Settings, ShieldCheck, User } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { AdminNavLinks, type NavAccess } from "@/components/admin/admin-sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -37,6 +37,14 @@ export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; aler
   const name = user?.name ?? "Preview Admin";
   const role = user ? (roleLabel[user.role] ?? user.role) : "Development preview";
   const initials = name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "KD";
+  // null access = local preview, where everything is visible.
+  const canView = (m: string) => !user || Boolean(user.access?.isSuperAdmin || (user.access?.permissions as Record<string, string[] | undefined>)[m]?.includes("view"));
+  // Header search goes to the first list this person may open.
+  const search = canView("orders")
+    ? { action: "/admin/orders", label: "Search orders by number, name, phone or city", placeholder: "Search orders…" }
+    : canView("products")
+      ? { action: "/admin/products", label: "Search products by name or SKU", placeholder: "Search products…" }
+      : null;
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:px-6">
@@ -46,29 +54,35 @@ export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; aler
             <Menu />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-72 border-none bg-sidebar p-0 text-sidebar-foreground">
-          <SheetHeader className="h-16 justify-center border-b border-sidebar-border px-6">
+        <SheetContent side="left" className="flex w-[min(18rem,85vw)] flex-col gap-0 border-none bg-sidebar p-0 text-sidebar-foreground">
+          <SheetHeader className="h-16 shrink-0 justify-center border-b border-sidebar-border px-6">
             <SheetTitle className="sr-only">Admin navigation</SheetTitle>
             <SheetDescription className="sr-only">Navigate between admin modules</SheetDescription>
-            <Logo tone="light" />
+            <Link href={user?.access?.isSuperAdmin ? "/super-admin" : "/admin"} onClick={() => setMobileOpen(false)} aria-label="Admin home" className="w-fit">
+              <Logo tone="light" />
+            </Link>
           </SheetHeader>
-          <div className="overflow-y-auto px-3 py-6">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-6">
             <AdminNavLinks access={user?.access ?? null} onNavigate={() => setMobileOpen(false)} />
+          </div>
+          <div className="flex shrink-0 flex-col gap-0.5 border-t border-sidebar-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <Link href="/staff" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/70 hover:bg-sidebar-accent hover:text-white">
+              <IdCard aria-hidden className="size-4" /> My staff portal
+            </Link>
+            <Link href="/" target="_blank" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/70 hover:bg-sidebar-accent hover:text-white">
+              <ExternalLink aria-hidden className="size-4" /> View store
+            </Link>
           </div>
         </SheetContent>
       </Sheet>
 
-      <form role="search" className="relative max-w-md flex-1" action="/admin/orders">
-        <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <label htmlFor="admin-search" className="sr-only">Search orders by number, name, phone or city</label>
-        <Input
-          id="admin-search"
-          name="q"
-          type="search"
-          placeholder="Search orders…"
-          className="h-10 bg-muted/60 pl-9"
-        />
-      </form>
+      {search ? (
+        <form role="search" className="relative max-w-md min-w-0 flex-1" action={search.action}>
+          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <label htmlFor="admin-search" className="sr-only">{search.label}</label>
+          <Input id="admin-search" name="q" type="search" placeholder={search.placeholder} className="h-10 bg-muted/60 pl-9" />
+        </form>
+      ) : null}
 
       <div className="ml-auto flex items-center gap-1.5">
         <DropdownMenu>
@@ -78,7 +92,7 @@ export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; aler
               {alerts.length ? <span aria-hidden className="absolute top-2 right-2 size-2 rounded-full bg-gold ring-2 ring-background" /> : null}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuContent align="end" className="w-[min(20rem,calc(100vw-2rem))]">
             <DropdownMenuLabel className="flex items-center justify-between">
               Alerts
             </DropdownMenuLabel>
@@ -117,23 +131,23 @@ export function AdminHeader({ user, alerts = [] }: { user: AdminHeaderUser; aler
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href="/account">
+                <Link href="/staff/profile">
                   <User /> My profile
                 </Link>
               </DropdownMenuItem>
-              {!user || user.access?.permissions.settings?.includes("view") || user.access?.permissions.users?.includes("view") ? (
-                <>
-                  <DropdownMenuItem asChild>
-                    <Link href="/admin/settings">
-                      <Settings /> Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/admin/users">
-                      <ShieldCheck /> Users &amp; roles
-                    </Link>
-                  </DropdownMenuItem>
-                </>
+              {canView("settings") ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/admin/settings">
+                    <Settings /> Settings
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              {canView("users") ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/admin/users">
+                    <ShieldCheck /> Users &amp; roles
+                  </Link>
+                </DropdownMenuItem>
               ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

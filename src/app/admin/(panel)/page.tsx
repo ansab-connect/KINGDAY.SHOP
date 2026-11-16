@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -9,6 +10,7 @@ import {
   Package,
   ShoppingBag,
   Users,
+  Wrench,
 } from "lucide-react";
 import { RevenueChart } from "@/components/admin/charts/revenue-chart";
 import { PageHeader } from "@/components/admin/page-header";
@@ -30,11 +32,38 @@ import { getAdminData } from "@/features/admin/source";
 import { ORDER_STATUS_LABEL } from "@/features/orders/types";
 import { formatDateTime, formatNumber, formatPaise } from "@/lib/format";
 import { StaffOnly } from "@/components/admin/staff-only";
+import { navFor } from "@/config/admin-nav";
+import { allows, type Module, type Permissions } from "@/features/auth/permissions";
+import { can, getCurrentUser } from "@/features/auth/session";
+import { isSupabaseConfigured } from "@/lib/env";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Overview" };
 
+const IN_PROGRESS = ["assigned", "accepted", "on_the_way", "reached", "started"];
+
+/** Real service counts; RLS returns rows only to people who may view service bookings. */
+async function getServiceSummary() {
+  const supabase = await createClient();
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const head = () => supabase.from("service_bookings").select("id", { count: "exact", head: true });
+  const [unassigned, active, done] = await Promise.all([
+    head().eq("status", "new").is("assigned_to", null),
+    head().in("status", IN_PROGRESS),
+    head().in("status", ["completed", "invoiced"]).gte("updated_at", monthStart.toISOString()),
+  ]);
+  return { unassigned: unassigned.count ?? 0, active: active.count ?? 0, doneThisMonth: done.count ?? 0 };
+}
+
 async function AdminDashboardPageContent() {
-  const data = await getAdminData();
+  // Sections follow the viewer's permissions; null = local preview (show everything).
+  const me = isSupabaseConfigured ? await getCurrentUser() : null;
+  const perms: Permissions | null = me ? me.permissions : null;
+  const sees = (m: Module) => perms === null || allows(perms, m, "view");
+  const sales = sees("orders");
+  const [data, service] = await Promise.all([getAdminData(), isSupabaseConfigured && sees("service") ? getServiceSummary() : null]);
   const s = getDashboardSummary(data);
   const daily = getDailyRevenue(data, 30);
   const breakdown = getOrderStatusBreakdown(data);
@@ -47,17 +76,21 @@ async function AdminDashboardPageContent() {
     <>
       <PageHeader
         title="Overview"
-        description="Store performance for the last 30 days."
+        description={sales ? "Store performance for the last 30 days." : "Your work at a glance."}
         actions={
           <>
-            <Button variant="outline" asChild>
-              <Link href="/admin/orders">View orders</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/products">
-                <Package aria-hidden /> Products
-              </Link>
-            </Button>
+            {sales ? (
+              <Button variant="outline" asChild>
+                <Link href="/admin/orders">View orders</Link>
+              </Button>
+            ) : null}
+            {sees("products") ? (
+              <Button asChild>
+                <Link href="/admin/products">
+                  <Package aria-hidden /> Products
+                </Link>
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -65,20 +98,40 @@ async function AdminDashboardPageContent() {
 
       {/* Primary KPIs */}
       <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total revenue" value={formatPaise(s.revenue.value)} change={s.revenue.change} hint="vs previous 30 days" icon={IndianRupee} tone="royal" />
-        <StatCard label="Total orders" value={formatNumber(s.orders.value)} change={s.orders.change} hint="vs previous 30 days" icon={ShoppingBag} tone="gold" />
-        <StatCard label="Customers" value={formatNumber(s.customers.value)} hint={`${s.customers.newThisMonth} new this month`} icon={Users} tone="neutral" />
-        <StatCard label="Active products" value={formatNumber(s.products.active)} hint={`${s.products.total} in catalogue`} icon={Package} tone="neutral" />
+        {sales ? (
+          <>
+            <StatCard label="Total revenue" value={formatPaise(s.revenue.value)} change={s.revenue.change} hint="vs previous 30 days" icon={IndianRupee} tone="royal" />
+            <StatCard label="Total orders" value={formatNumber(s.orders.value)} change={s.orders.change} hint="vs previous 30 days" icon={ShoppingBag} tone="gold" />
+          </>
+        ) : null}
+        {sees("customers") ? <StatCard label="Customers" value={formatNumber(s.customers.value)} hint={`${s.customers.newThisMonth} new this month`} icon={Users} tone="neutral" /> : null}
+        {sees("products") ? <StatCard label="Active products" value={formatNumber(s.products.active)} hint={`${s.products.total} in catalogue`} icon={Package} tone="neutral" /> : null}
       </section>
 
       {/* Operational KPIs */}
-      <section aria-label="Operations" className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <OpsTile href="/admin/orders" icon={Clock} label="Pending orders" value={s.pendingOrders} note="Need action" tone="text-warning bg-warning-soft" />
-        <OpsTile href="/admin/orders" icon={CheckCircle2} label="Completed orders" value={s.completedOrders} note="Delivered" tone="text-success bg-success-soft" />
-        <OpsTile href="/admin/inventory" icon={AlertTriangle} label="Low stock" value={s.lowStock} note="At or below reorder level" tone="text-danger bg-danger-soft" />
-      </section>
+      {sales || sees("inventory") ? (
+        <section aria-label="Operations" className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {sales ? (
+            <>
+              <OpsTile href="/admin/orders" icon={Clock} label="Pending orders" value={s.pendingOrders} note="Need action" tone="text-warning bg-warning-soft" />
+              <OpsTile href="/admin/orders" icon={CheckCircle2} label="Completed orders" value={s.completedOrders} note="Delivered" tone="text-success bg-success-soft" />
+            </>
+          ) : null}
+          {sees("inventory") ? <OpsTile href="/admin/inventory" icon={AlertTriangle} label="Low stock" value={s.lowStock} note="At or below reorder level" tone="text-danger bg-danger-soft" /> : null}
+        </section>
+      ) : null}
+
+      {/* Service (BEST FIT) */}
+      {service ? (
+        <section aria-label="Service" className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <OpsTile href="/admin/service?status=unassigned" icon={Wrench} label="Bookings to assign" value={service.unassigned} note="New, no technician" tone="text-warning bg-warning-soft" />
+          <OpsTile href="/admin/service" icon={Clock} label="Service in progress" value={service.active} note="Assigned to started" tone="text-royal bg-royal-50" />
+          <OpsTile href="/admin/service" icon={CheckCircle2} label="Services done" value={service.doneThisMonth} note="This month" tone="text-success bg-success-soft" />
+        </section>
+      ) : null}
 
       {/* Sales chart + order statistics */}
+      {sales ? (
       <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="shadow-card xl:col-span-2">
           <CardHeader>
@@ -116,8 +169,10 @@ async function AdminDashboardPageContent() {
           </CardContent>
         </Card>
       </section>
+      ) : null}
 
       {/* Recent orders + top products */}
+      {sales ? (
       <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="shadow-card xl:col-span-2">
           <CardHeader>
@@ -190,8 +245,10 @@ async function AdminDashboardPageContent() {
           </CardContent>
         </Card>
       </section>
+      ) : null}
 
       {/* Low stock */}
+      {sees("inventory") ? (
       <section className="mt-6">
         <Card className="shadow-card">
           <CardHeader>
@@ -226,6 +283,7 @@ async function AdminDashboardPageContent() {
           </CardContent>
         </Card>
       </section>
+      ) : null}
     </>
   );
 }
@@ -263,10 +321,25 @@ function OpsTile({
   );
 }
 
+/**
+ * /admin is the Admin home. Someone without "Overview" goes straight to the first
+ * module they may open, instead of a "no access" page.
+ */
+async function OverviewEntry() {
+  if (isSupabaseConfigured) {
+    const me = await getCurrentUser();
+    if (me && !can(me, "overview")) {
+      const first = navFor(me.permissions, me.role === "super_admin").flatMap((g) => g.items)[0];
+      redirect(first?.href ?? "/staff");
+    }
+  }
+  return <AdminDashboardPageContent />;
+}
+
 export default function AdminDashboardPage() {
   return (
-    <StaffOnly module="overview">
-      <AdminDashboardPageContent />
+    <StaffOnly>
+      <OverviewEntry />
     </StaffOnly>
   );
 }
