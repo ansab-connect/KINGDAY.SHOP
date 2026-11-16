@@ -8,6 +8,8 @@ import {
   FolderTree,
   History,
   IdCard,
+  IndianRupee,
+  ListTodo,
   Wrench,
   KeyRound,
   Megaphone,
@@ -81,6 +83,8 @@ export const adminNav: AdminNavGroup[] = [
     items: [
       { title: "Service Management", href: "/admin/service", icon: Wrench, module: "service" },
       { title: "Staff Management", href: "/admin/staff", icon: IdCard, module: "staff" },
+      { title: "Staff Tasks", href: "/admin/tasks", icon: ListTodo, module: "staff" },
+      { title: "Salary & Payroll", href: "/admin/payroll", icon: IndianRupee, module: "payroll" },
     ],
   },
   {

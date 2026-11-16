@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CheckCircle2, ClipboardList, Hourglass, PackageCheck, PackageOpen, ShoppingBag, Truck, UserRound, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CheckCircle2, ClipboardList, History, Hourglass, IndianRupee, ListTodo, PackageCheck, PackageOpen, ShoppingBag, Truck, UserRound, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { InstallAppButton } from "@/components/pwa/install-app";
@@ -9,6 +9,7 @@ import { PushToggle } from "@/components/pwa/push-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
 import { can, requireTeam, type SessionUser } from "@/features/auth/session";
 import { getStaffRecord } from "@/features/staff/queries";
+import { countMyOpenTasks } from "@/features/staff/work";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,10 @@ async function loadStats(user: SessionUser): Promise<Stat[]> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const count = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
+
+  // Everyone: their own open tasks (RLS returns only their rows).
+  const openTasks = await countMyOpenTasks(user.id);
+  stats.push({ key: "tasks", en: "My open tasks", ml: "തുറന്ന ജോലികൾ", value: openTasks, href: "/staff/tasks", icon: ListTodo, tone: openTasks ? "warn" : undefined });
 
   if (user.roles.includes("service_staff")) {
     const { data } = await supabase.from("service_bookings").select("status, preferred_date, completed_at").eq("assigned_to", user.id).limit(1000);
@@ -114,6 +119,20 @@ async function Dashboard() {
           {[record?.designation, record?.categoryName].filter(Boolean).join(" · ") || <L en="Welcome to your dashboard." ml="നിങ്ങളുടെ ഡാഷ്ബോർഡിലേക്ക് സ്വാഗതം." />}
         </p>
       </section>
+
+      <nav aria-label="My work" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[
+          { href: "/staff/tasks", en: "My tasks", ml: "എന്റെ ജോലികൾ", icon: ListTodo },
+          { href: "/staff/history", en: "Work history", ml: "ജോലി ചരിത്രം", icon: History },
+          { href: "/staff/salary", en: "Salary & payslips", ml: "ശമ്പളം & പേസ്ലിപ്പ്", icon: IndianRupee },
+        ].map((l) => (
+          <Link key={l.href} href={l.href} className="flex items-center gap-3 rounded-2xl border bg-white p-4 text-sm font-semibold text-deep shadow-card hover:border-royal/40">
+            <l.icon aria-hidden className="size-5 text-royal" />
+            <span className="flex-1"><L en={l.en} ml={l.ml} /></span>
+            <ArrowRight aria-hidden className="size-4 text-muted-foreground" />
+          </Link>
+        ))}
+      </nav>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <PushToggle className="flex-1" />

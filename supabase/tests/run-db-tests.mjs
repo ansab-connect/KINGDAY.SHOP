@@ -908,5 +908,57 @@ await test("a new booking alerts everyone who can assign jobs (not other staff o
   assert((await got(admin2)) === 2, "decline didn't alert the office");
 });
 
+console.log("Staff tasks & payroll (Update 01 phase 05)");
+await db.query(`update public.staff_profiles set status = 'active', custom_permissions = false where user_id in ($1, $2)`, [staff, svc]);
+let taskId;
+await test("tasks: managers assign, assignee sees only own and can only change status", async () => {
+  await user(admin2);
+  [{ id: taskId }] = await rows(`insert into public.staff_tasks (title, assigned_to, due_date) values ('Count jeep stock', $1, current_date) returning id`, [svc]);
+  await asSuperuser();
+  assert((await rows(`select 1 from public.notifications where user_id = $1 and title = 'New task: Count jeep stock'`, [svc])).length === 1, "assignee not notified");
+  await user(staff);
+  assert((await rows(`select id from public.staff_tasks where id = $1`, [taskId])).length === 0, "other staff saw the task");
+  await user(svc);
+  assert((await rows(`select id from public.staff_tasks where id = $1`, [taskId])).length === 1, "assignee can't see task");
+  assert((await db.query(`update public.staff_tasks set title = 'hacked' where id = $1 returning id`, [taskId])).rows.length === 0, "assignee edited title");
+  await db.query(`select public.update_my_task($1, 'done', 'Counted 12')`, [taskId]);
+  const [t] = await rows(`select status, staff_note, completed_at from public.staff_tasks where id = $1`, [taskId]);
+  assert(t.status === "done" && t.staff_note === "Counted 12" && t.completed_at, "status not updated");
+  await user(staff);
+  await expectError(`select public.update_my_task($1, 'todo')`, [taskId], /not found/i);
+});
+
+let runId;
+await test("payroll: salary is private, payslips appear only after finalising", async () => {
+  await user(admin2);
+  await db.query(`insert into public.salary_structures (user_id, basic_paise, allowances_paise, deductions_paise, effective_from) values ($1, 1500000, 200000, 50000, '2026-01-01'), ($2, 2000000, 0, 0, '2026-01-01')`, [svc, staff]);
+  await user(svc);
+  const own = await rows(`select user_id from public.salary_structures`);
+  assert(own.length === 1 && own[0].user_id === svc, `technician sees ${own.length} salaries`);
+  await expectError(`insert into public.salary_structures (user_id, basic_paise) values ($1, 1)`, [bob], /row-level security/);
+  await expectError(`select public.generate_payroll('2026-11-15')`, [], /not authorized/i);
+  await user(admin2);
+  runId = (await rows(`select public.generate_payroll('2026-11-15') as id`))[0].id;
+  const slips = await rows(`select user_id, net_paise from public.payslips where run_id = $1`, [runId]);
+  assert(slips.length === 2, `expected 2 payslips, got ${slips.length}`);
+  assert(Number(slips.find((s) => s.user_id === svc).net_paise) === 1650000, "wrong net pay");
+  await user(svc);
+  assert((await rows(`select id from public.payslips`)).length === 0, "draft payslip visible to staff");
+  await user(admin2);
+  await db.query(`update public.payslips set bonus_paise = 100000 where run_id = $1 and user_id = $2`, [runId, svc]);
+  await db.query(`select public.finalize_payroll($1)`, [runId]);
+  await expectError(`update public.payslips set bonus_paise = 0 where run_id = $1`, [runId], /finalised/);
+  await db.query(`update public.payslips set paid_on = current_date, payment_method = 'upi' where run_id = $1 and user_id = $2`, [runId, svc]);
+  await user(svc);
+  const mine = await rows(`select user_id, net_paise from public.payslips`);
+  assert(mine.length === 1 && mine[0].user_id === svc && Number(mine[0].net_paise) === 1750000, "technician payslip wrong or sees others");
+  assert((await rows(`select id from public.payroll_runs`)).length === 1, "technician can't see own finalised run");
+  await user(staff);
+  assert((await rows(`select id from public.payslips where user_id = $1`, [svc])).length === 0, "staff saw another payslip");
+  await asSuperuser();
+  assert((await rows(`select 1 from public.notifications where user_id = $1 and title like 'Payslip ready%'`, [svc])).length === 1, "no payslip notification");
+  assert((await rows(`select 1 from public.audit_logs where entity = 'payslips'`)).length >= 1, "payslip change not audited");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

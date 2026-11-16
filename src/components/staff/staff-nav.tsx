@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LayoutGrid, LogOut, UserRound, Wrench, type LucideIcon } from "lucide-react";
+import { ClipboardList, IndianRupee, LayoutDashboard, LayoutGrid, LogOut, UserRound, Wrench, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { L } from "@/components/i18n/lang";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
@@ -13,20 +13,21 @@ type Item = { href: string; en: string; ml: string; icon: LucideIcon };
 
 const ITEMS: Item[] = [
   { href: "/staff", en: "Dashboard", ml: "ഡാഷ്ബോർഡ്", icon: LayoutDashboard },
-  { href: "/staff/profile", en: "My profile", ml: "എന്റെ പ്രൊഫൈൽ", icon: UserRound },
+  { href: "/staff/tasks", en: "Tasks", ml: "ജോലികൾ", icon: ClipboardList },
+  { href: "/staff/salary", en: "Salary", ml: "ശമ്പളം", icon: IndianRupee },
+  { href: "/staff/profile", en: "Profile", ml: "പ്രൊഫൈൽ", icon: UserRound },
 ];
+const ADMIN_ITEM: Item = { href: "/admin", en: "Admin panel", ml: "അഡ്മിൻ", icon: LayoutGrid };
 
 const active = (path: string, href: string) => (href === "/staff" ? path === "/staff" : path.startsWith(href));
 
 /** Staff portal chrome: sidebar on desktop, bottom tab bar on phones. */
 export function StaffShell({ name, subtitle, adminLink, jobsLink, children }: { name: string; subtitle: string; adminLink: boolean; jobsLink: boolean; children: React.ReactNode }) {
   const path = usePathname();
-  const items = [
-    ITEMS[0],
-    ...(jobsLink ? [{ href: "/staff/jobs", en: "My jobs", ml: "ജോലികൾ", icon: Wrench }] : []),
-    ...ITEMS.slice(1),
-    ...(adminLink ? [{ href: "/admin", en: "Admin panel", ml: "അഡ്മിൻ", icon: LayoutGrid }] : []),
-  ];
+  // Phone tab bar: at most 5 items. The admin panel link lives in the desktop sidebar
+  // and as an icon in the phone header.
+  const tabs: Item[] = [ITEMS[0], ...(jobsLink ? [{ href: "/staff/jobs", en: "Jobs", ml: "സർവീസ്", icon: Wrench }] : []), ...ITEMS.slice(1)];
+  const items: Item[] = [...tabs, ...(adminLink ? [ADMIN_ITEM] : [])];
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -64,10 +65,15 @@ export function StaffShell({ name, subtitle, adminLink, jobsLink, children }: { 
       <div className="lg:pl-60">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b bg-white/90 px-4 backdrop-blur sm:px-6">
           <Link href="/staff" className="lg:hidden" aria-label="Staff dashboard"><Logo /></Link>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
             <LanguageSwitcher className="lg:hidden" />
-            <div className="text-right">
-              <p className="max-w-40 truncate text-sm font-semibold text-deep sm:max-w-none">{name}</p>
+            {adminLink ? (
+              <Link href="/admin" aria-label="Admin panel" className="grid size-10 shrink-0 place-items-center rounded-lg text-deep hover:bg-muted lg:hidden">
+                <LayoutGrid className="size-5" />
+              </Link>
+            ) : null}
+            <div className="min-w-0 text-right">
+              <p className="max-w-32 truncate text-sm font-semibold text-deep sm:max-w-none">{name}</p>
               <p className="text-xs text-muted-foreground">{subtitle}</p>
             </div>
             <form action={signOut} className="lg:hidden">
@@ -81,8 +87,8 @@ export function StaffShell({ name, subtitle, adminLink, jobsLink, children }: { 
         <main className="mx-auto max-w-5xl px-4 pt-6 pb-28 sm:px-6 lg:pb-10">{children}</main>
       </div>
 
-      <nav aria-label="Staff" className="fixed inset-x-0 bottom-0 z-30 grid border-t bg-white pb-[env(safe-area-inset-bottom)] lg:hidden" style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}>
-        {items.map((i) => (
+      <nav aria-label="Staff" className="fixed inset-x-0 bottom-0 z-30 grid border-t bg-white pb-[env(safe-area-inset-bottom)] lg:hidden" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+        {tabs.map((i) => (
           <Link
             key={i.href}
             href={i.href}

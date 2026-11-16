@@ -1,6 +1,8 @@
 export const siteConfig = {
   name: "KING DAY",
   legalName: "KING DAY",
+  /** Operating company (payslips, invoices, footer credit). */
+  company: "MOTHERBITS TECHNOLOGIES LLP",
   tagline: "Every child deserves a royal ride.",
   description:
     "Premium kids' electric jeeps, cars, bikes, scooters, tricycles, bicycles, toys and baby accessories. Every child deserves a royal ride.",
