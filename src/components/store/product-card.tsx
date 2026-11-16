@@ -24,7 +24,7 @@ export function ProductCard({ product, priority = false }: { product: StoreProdu
           image={product.images[0]}
           categorySlug={product.category.slug}
           priority={priority}
-          className={cn("aspect-square bg-canvas", out && "opacity-60 grayscale")}
+          className="aspect-square bg-canvas"
           iconClassName="transition-transform duration-500 ease-royal group-hover:scale-105"
         />
         <div className="pointer-events-none absolute top-2 left-2 flex flex-col items-start gap-1">
