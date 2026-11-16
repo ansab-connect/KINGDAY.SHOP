@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Boxes, Film, Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
@@ -47,11 +47,14 @@ export function ProductEditor({
   categories,
   brands,
   canDelete,
+  onDirtyChange,
 }: {
   product: AdminProduct | null;
   categories: Option[];
   brands: Option[];
   canDelete: boolean;
+  /** Told whenever the form gains or loses unsaved changes. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -95,6 +98,18 @@ export function ProductEditor({
     product?.attributes.length ? product.attributes.map((a) => ({ key: nextKey(), ...a })) : [{ key: nextKey(), name: "", value: "" }],
   );
   const [videoBusy, setVideoBusy] = useState(false);
+
+  // Unsaved changes: warn before leaving the page, and let the "new product" wrapper ask before clearing.
+  const snapshot = JSON.stringify({ basics, highlights, variants, attributes });
+  const [initialSnapshot] = useState(snapshot);
+  const dirty = snapshot !== initialSnapshot;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, onDirtyChange]);
 
   const setB = <K extends keyof typeof basics>(k: K, val: (typeof basics)[K]) => setBasics((p) => ({ ...p, [k]: val }));
   const setVariant = (key: string, patch: Partial<VariantRow>) =>
@@ -252,24 +267,6 @@ export function ProductEditor({
           <TextAreaField id="p-desc" label="Full description" rows={8} maxLength={10000} value={basics.description} error={errors.description} onChange={(v) => setB("description", v)} />
         </FormSection>
 
-        <FormSection title="Highlights" description="Short selling points shown as a checklist.">
-          {highlights.map((h, i) => (
-            <div key={i} className="flex gap-2">
-              <label htmlFor={`p-hl-${i}`} className="sr-only">Highlight {i + 1}</label>
-              <input id={`p-hl-${i}`} value={h} maxLength={120} placeholder="e.g. Parental remote control" onChange={(e) => setHighlights((list) => list.map((x, j) => (j === i ? e.target.value : x)))} className={inputClass} />
-              <button type="button" aria-label="Remove highlight" onClick={() => setHighlights((list) => (list.length > 1 ? list.filter((_, j) => j !== i) : [""]))} className="grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
-                <X className="size-4" />
-              </button>
-            </div>
-          ))}
-          {highlights.length < 12 ? (
-            <button type="button" onClick={() => setHighlights((l) => [...l, ""])} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-royal hover:underline">
-              <Plus aria-hidden className="size-4" /> Add highlight
-            </button>
-          ) : null}
-          {errors.highlights ? <p className="text-xs text-danger">{errors.highlights}</p> : null}
-        </FormSection>
-
         <FormSection
           title="Variants, pricing & SKUs"
           description="Every colour or model is a variant with its own SKU, price and stock."
@@ -340,6 +337,33 @@ export function ProductEditor({
           </ul>
         </FormSection>
 
+        <FormSection title="Images">
+          {product ? (
+            <ProductImages productId={product.id} productName={basics.name} images={product.images} />
+          ) : (
+            <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then add images.</p>
+          )}
+        </FormSection>
+        <details className="group rounded-2xl border bg-white">
+          <summary className="cursor-pointer list-none px-5 py-4 font-heading text-base font-semibold text-deep">More details (optional): highlights, specifications, video, search listing</summary>
+          <div className="flex flex-col gap-6 border-t p-4 sm:p-5">
+        <FormSection title="Highlights" description="Short selling points shown as a checklist.">
+          {highlights.map((h, i) => (
+            <div key={i} className="flex gap-2">
+              <label htmlFor={`p-hl-${i}`} className="sr-only">Highlight {i + 1}</label>
+              <input id={`p-hl-${i}`} value={h} maxLength={120} placeholder="e.g. Parental remote control" onChange={(e) => setHighlights((list) => list.map((x, j) => (j === i ? e.target.value : x)))} className={inputClass} />
+              <button type="button" aria-label="Remove highlight" onClick={() => setHighlights((list) => (list.length > 1 ? list.filter((_, j) => j !== i) : [""]))} className="grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
+                <X className="size-4" />
+              </button>
+            </div>
+          ))}
+          {highlights.length < 12 ? (
+            <button type="button" onClick={() => setHighlights((l) => [...l, ""])} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-royal hover:underline">
+              <Plus aria-hidden className="size-4" /> Add highlight
+            </button>
+          ) : null}
+          {errors.highlights ? <p className="text-xs text-danger">{errors.highlights}</p> : null}
+        </FormSection>
         <FormSection title="Specifications" description="Shown as a table on the product page.">
           {attributes.map((a, i) => (
             <div key={a.key} className="grid grid-cols-[1fr_1.4fr_auto] gap-2">
@@ -356,15 +380,6 @@ export function ProductEditor({
             <Plus aria-hidden className="size-4" /> Add specification
           </button>
         </FormSection>
-
-        <FormSection title="Images">
-          {product ? (
-            <ProductImages productId={product.id} productName={basics.name} images={product.images} />
-          ) : (
-            <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then add images.</p>
-          )}
-        </FormSection>
-
         <FormSection title="Product video" description="Optional. MP4 or WebM, up to 50 MB.">
           {product ? (
             <div className="flex flex-col gap-3">
@@ -386,11 +401,12 @@ export function ProductEditor({
             <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then add a video.</p>
           )}
         </FormSection>
-
         <FormSection title="Search engine listing" description="Optional. Defaults to the product name and short description.">
           <TextField id="p-seo-title" label="SEO title" maxLength={70} value={basics.seo_title} error={errors.seo_title} onChange={(v) => setB("seo_title", v)} />
           <TextAreaField id="p-seo-desc" label="SEO description" rows={2} maxLength={170} value={basics.seo_description} error={errors.seo_description} onChange={(v) => setB("seo_description", v)} />
         </FormSection>
+          </div>
+        </details>
       </div>
 
       <aside className="flex flex-col gap-6 xl:sticky xl:top-24 xl:self-start">
