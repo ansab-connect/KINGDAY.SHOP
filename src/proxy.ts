@@ -15,6 +15,7 @@ export const config = {
     "/super-admin/:path*",
     "/staff/:path*",
     "/launch",
+    "/my",
     "/book-service",
     "/service-cart",
     "/service-invoice/:path*",

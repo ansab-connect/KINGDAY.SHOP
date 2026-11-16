@@ -35,7 +35,7 @@ function SearchForm({ id, className }: { id: string; className?: string }) {
 
 const actions = [
   { href: "/wishlist", icon: Heart, en: "Wishlist", ml: "വിഷ്‌ലിസ്റ്റ്" },
-  { href: "/launch?to=account", icon: User, en: "Account", ml: "അക്കൗണ്ട്" },
+  { href: "/my", icon: User, en: "Account", ml: "അക്കൗണ്ട്" },
   { href: "/cart", icon: ShoppingBag, en: "Cart", ml: "കാർട്ട്" },
 ] as const;
 
