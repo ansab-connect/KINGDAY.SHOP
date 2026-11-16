@@ -9,6 +9,7 @@ import { Container } from "@/components/store/section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireUser } from "@/features/auth/session";
 import { categoryLabel, statusLabel } from "@/features/service/constants";
+import { preferredDateText } from "@/features/service/constants";
 import { getMyBookings } from "@/features/service/queries";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
@@ -43,7 +44,7 @@ async function Bookings() {
                 <div>
                   <p className="font-mono text-sm font-bold text-royal">{b.booking_code}</p>
                   <p className="mt-1 font-semibold text-deep">{b.product_name}</p>
-                  <p className="text-xs text-muted-foreground">{categoryLabel(b.category)} · Booked {formatDate(new Date(b.created_at))} · Preferred {formatDate(new Date(b.preferred_date))}</p>
+                  <p className="text-xs text-muted-foreground">{categoryLabel(b.category)} · Booked {formatDate(new Date(b.created_at))} · Preferred {preferredDateText(b.preferred_date)}</p>
                 </div>
                 <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", b.status === "cancelled" ? "bg-muted text-muted-foreground" : b.status === "completed" || b.status === "invoiced" ? "bg-success-soft text-success" : "bg-royal-50 text-royal")}>
                   {statusLabel(b.status)}

@@ -10,11 +10,26 @@ import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-const NEXT: Record<string, { status: "on_the_way" | "reached" | "started" | "completed"; en: string; ml: string }> = {
-  accepted: { status: "on_the_way", en: "I'm on the way", ml: "ഞാൻ വഴിയിലാണ്" },
-  on_the_way: { status: "reached", en: "Reached location", ml: "സ്ഥലത്തെത്തി" },
-  reached: { status: "started", en: "Start service", ml: "സർവീസ് തുടങ്ങുക" },
-  started: { status: "completed", en: "Service completed", ml: "സർവീസ് പൂർത്തിയായി" },
+type Step = { status: string; en: string; ml: string; secondary?: boolean };
+/**
+ * Next steps per status (mirrors public.advance_service_job). Inspection comes first;
+ * field visits add "on the way" / "reached" before it.
+ */
+const NEXT: Record<string, Step[]> = {
+  accepted: [
+    { status: "inspection_started", en: "Start inspection", ml: "പരിശോധന തുടങ്ങുക" },
+    { status: "on_the_way", en: "I'm on the way (home visit)", ml: "ഞാൻ വഴിയിലാണ്", secondary: true },
+  ],
+  on_the_way: [{ status: "reached", en: "Reached location", ml: "സ്ഥലത്തെത്തി" }],
+  reached: [
+    { status: "inspection_started", en: "Start inspection", ml: "പരിശോധന തുടങ്ങുക" },
+    { status: "started", en: "Start service directly", ml: "സർവീസ് തുടങ്ങുക", secondary: true },
+  ],
+  inspection_started: [{ status: "inspection_completed", en: "Inspection completed", ml: "പരിശോധന പൂർത്തിയായി" }],
+  inspection_completed: [{ status: "started", en: "Start service", ml: "സർവീസ് തുടങ്ങുക" }],
+  started: [{ status: "completed", en: "Service completed", ml: "സർവീസ് പൂർത്തിയായി" }],
+  completed: [{ status: "ready_for_delivery", en: "Ready for delivery", ml: "ഡെലിവറിക്ക് തയ്യാർ" }],
+  invoiced: [{ status: "ready_for_delivery", en: "Ready for delivery", ml: "ഡെലിവറിക്ക് തയ്യാർ" }],
 };
 
 /** Accept/decline, then one big button for the next step, with an optional note. */
@@ -60,15 +75,23 @@ export function JobActions({ bookingId, status }: { bookingId: string; status: s
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => (next.status !== "completed" || window.confirm("Mark the service as completed?")) && run(() => advanceJobAction({ bookingId, status: next.status, note }))}
-          className="inline-flex h-14 items-center justify-center gap-2 rounded-xl bg-royal text-base font-semibold text-white hover:bg-royal-800 disabled:opacity-60"
-        >
-          {pending ? <Loader2 aria-hidden className="size-5 animate-spin" /> : null}
-          <L en={next.en} ml={next.ml} />
-        </button>
+        <div className="flex flex-col gap-2">
+          {next.map((s) => (
+            <button
+              key={s.status}
+              type="button"
+              disabled={pending}
+              onClick={() => (s.status !== "completed" || window.confirm("Mark the service as completed?")) && run(() => advanceJobAction({ bookingId, status: s.status, note }))}
+              className={cn(
+                "inline-flex items-center justify-center gap-2 rounded-xl font-semibold disabled:opacity-60",
+                s.secondary ? "h-11 border bg-white text-sm text-deep hover:bg-muted" : "h-14 bg-royal text-base text-white hover:bg-royal-800",
+              )}
+            >
+              {pending && !s.secondary ? <Loader2 aria-hidden className="size-5 animate-spin" /> : null}
+              <L en={s.en} ml={s.ml} />
+            </button>
+          ))}
+        </div>
       )}
       {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
     </div>

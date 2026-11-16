@@ -6,15 +6,15 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { Card, CardContent } from "@/components/ui/card";
 import { SERVICE_STATUSES, categoryLabel, statusLabel } from "@/features/service/constants";
+import { preferredDateText } from "@/features/service/constants";
 import { listTechnicians, type BookingRow, type Technician } from "@/features/service/queries";
 import { isSupabaseConfigured } from "@/lib/env";
-import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Service Management" };
 
-const OPEN = ["new", "assigned", "accepted", "on_the_way", "reached", "started"];
+const OPEN = ["new", "assigned", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"];
 
 async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
   const sp = await searchParams;
@@ -50,7 +50,15 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
 
   return (
     <>
-      <PageHeader title="Service Management" description="Customer service bookings. Assign technicians and follow every job to completion." />
+      <PageHeader
+        title="Service Management"
+        description="BEST FIT bookings. Assign technicians and follow every job from inspection to delivery."
+        actions={
+          <Link href="/admin/service/catalog" className="inline-flex h-10 items-center rounded-lg border bg-white px-4 text-sm font-semibold text-deep hover:bg-muted">
+            BEST FIT catalog
+          </Link>
+        }
+      />
       <AutoRefresh seconds={30} />
       {error ? (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning-soft p-4 text-sm text-warning">
@@ -110,7 +118,7 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
                         <span className="block truncate font-medium text-deep">{b.customer_name} · {b.mobile}</span>
                         <span className="block truncate text-xs text-muted-foreground">{categoryLabel(b.category)} · {b.product_name}</span>
                       </span>
-                      <span className="hidden w-28 text-xs text-muted-foreground md:block">{formatDate(new Date(b.preferred_date))}</span>
+                      <span className="hidden w-28 text-xs text-muted-foreground md:block">{preferredDateText(b.preferred_date)}</span>
                       <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", b.status === "new" ? "bg-warning-soft text-warning" : b.status === "cancelled" ? "bg-muted text-muted-foreground" : "bg-royal-50 text-royal")}>
                         {b.status === "new" && !b.assigned_to ? "Needs technician" : statusLabel(b.status)}
                       </span>

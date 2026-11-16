@@ -16,7 +16,8 @@ const bookingSchema = z
     customer_name: z.string().trim().min(2, "Enter your name.").max(120),
     mobile: phone,
     email: z.union([z.literal(""), z.email("Enter a valid email.").max(254)]),
-    category: z.enum(["jeep", "bike", "scooter", "cycle", "toys"], "Choose a category."),
+    category: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,40}$/, "Choose a category."),
+    booking_kind: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,40}$/).default("service"),
     purchase_source: z.enum(["kingday", "external"]),
     order_id: z.union([z.literal(""), z.uuid()]),
     product_name: z.string().trim().min(2, "Enter the product name.").max(200),
@@ -28,8 +29,9 @@ const bookingSchema = z
     address: z.string().trim().min(5, "Enter the service address.").max(500),
     latitude: z.number().min(-90).max(90).nullable(),
     longitude: z.number().min(-180).max(180).nullable(),
-    preferred_date: z.iso.date("Choose a date."),
-    service_type: z.enum(["repair", "general_service", "battery", "installation", "inspection", "other"]).default("repair"),
+    // Inspection first: the date is optional.
+    preferred_date: z.union([z.literal(""), z.iso.date("Choose a valid date.")]).default(""),
+    service_type: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,40}$/, "Choose a service type.").default("repair"),
     preferred_time: z.union([z.literal(""), z.enum(["morning", "afternoon", "evening"])]).default(""),
   })
   .refine((v) => v.complaint.length >= 5 || v.voice_path, { path: ["complaint"], message: "Describe the problem or record a voice note." })
@@ -87,7 +89,9 @@ export async function createServiceBookingAction(input: unknown): Promise<Bookin
       ? "You already have 5 open bookings. Please wait for them to be completed."
       : /preferred date/i.test(error.message)
         ? "Choose a date within the next 90 days."
-        : /order not found/i.test(error.message)
+        : /category|service type|not available/i.test(error.message)
+          ? "That choice is no longer available. Please refresh and choose again."
+          : /order not found/i.test(error.message)
           ? "That order wasn't found on your account."
           : "Couldn't save the booking. Please try again.";
     return { ok: false, error: msg };
@@ -128,7 +132,8 @@ export async function addToServiceCartAction(input: unknown): Promise<BookingRes
     address: v.address,
     latitude: v.latitude,
     longitude: v.longitude,
-    preferred_date: v.preferred_date,
+    preferred_date: v.preferred_date || null,
+    booking_kind: v.booking_kind,
     preferred_time: v.preferred_time || null,
   });
   if (error) return { ok: false, error: /full/i.test(error.message) ? "Your service cart holds up to 5 items. Book them first." : "Couldn't add to the service cart." };

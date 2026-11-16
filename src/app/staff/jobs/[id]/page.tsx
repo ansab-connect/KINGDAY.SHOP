@@ -10,6 +10,7 @@ import { InspectionForm, JobActions } from "@/components/staff/jobs/job-workflow
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireTeam } from "@/features/auth/session";
 import { categoryLabel, directionsLink, mapsLink, statusLabel } from "@/features/service/constants";
+import { preferredDateText } from "@/features/service/constants";
 import { bookingMedia, getInspection, getJobEvents, type BookingRow } from "@/features/service/queries";
 import { getDefaultBasicCharge, getInvoiceForBooking } from "@/features/service/invoices";
 import { formatDate } from "@/lib/format";
@@ -37,7 +38,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
   const [media, events, inspection, invoice, basicDefault] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), getInvoiceForBooking(id), getDefaultBasicCharge()]);
   const phone = b.mobile.replace(/\s/g, "");
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, I'm the KING DAY technician for booking ${b.booking_code}.`)}`;
-  const canReport = ["reached", "started", "completed"].includes(b.status);
+  const canReport = ["reached", "inspection_started", "inspection_completed", "started", "completed", "ready_for_delivery"].includes(b.status);
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,7 +46,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
       <div>
         <p className="font-mono text-sm font-bold text-royal">{b.booking_code}</p>
         <h1 className="text-2xl font-bold text-deep">{b.customer_name}</h1>
-        <p className="text-sm text-muted-foreground">{statusLabel(b.status)} · {formatDate(new Date(b.preferred_date))}</p>
+        <p className="text-sm text-muted-foreground">{statusLabel(b.status)} · {preferredDateText(b.preferred_date)}</p>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
@@ -58,7 +59,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
         )}
       </div>
 
-      {b.status === "assigned" || ["accepted", "on_the_way", "reached", "started"].includes(b.status) ? (
+      {b.status === "assigned" || ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"].includes(b.status) ? (
         <Card title={<L en="Update job" ml="ജോലി അപ്ഡേറ്റ്" />}>
           <JobActions bookingId={b.id} status={b.status} />
         </Card>

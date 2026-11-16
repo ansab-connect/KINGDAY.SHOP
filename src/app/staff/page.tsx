@@ -45,13 +45,13 @@ async function loadStats(user: SessionUser): Promise<Stat[]> {
     const jobs = (data ?? []) as { status: string; preferred_date: string; completed_at: string | null }[];
     const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const monthAgo = Date.now() - 30 * 86400000;
-    const open = (s: string) => !["completed", "invoiced", "cancelled"].includes(s);
+    const open = (s: string) => !["completed", "ready_for_delivery", "invoiced", "cancelled"].includes(s);
     const pendingJobs = jobs.filter((j) => j.status === "assigned").length;
     stats.push(
       { key: "jobsToday", en: "Today's jobs", ml: "ഇന്നത്തെ ജോലികൾ", value: jobs.filter((j) => j.preferred_date === todayIst && open(j.status)).length, href: "/staff/jobs", icon: CalendarClock },
       { key: "jobsPending", en: "New jobs to accept", ml: "സ്വീകരിക്കാനുള്ളവ", value: pendingJobs, href: "/staff/jobs?tab=pending", icon: Hourglass, tone: pendingJobs ? "warn" : undefined },
-      { key: "jobsProgress", en: "In progress", ml: "നടക്കുന്നവ", value: jobs.filter((j) => ["accepted", "on_the_way", "reached", "started"].includes(j.status)).length, href: "/staff/jobs?tab=progress", icon: Wrench },
-      { key: "jobsDone", en: "Completed (30 days)", ml: "പൂർത്തിയായവ (30 ദിവസം)", value: jobs.filter((j) => ["completed", "invoiced"].includes(j.status) && j.completed_at && new Date(j.completed_at).getTime() > monthAgo).length, href: "/staff/jobs?tab=completed", icon: CheckCircle2 },
+      { key: "jobsProgress", en: "In progress", ml: "നടക്കുന്നവ", value: jobs.filter((j) => ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"].includes(j.status)).length, href: "/staff/jobs?tab=progress", icon: Wrench },
+      { key: "jobsDone", en: "Completed (30 days)", ml: "പൂർത്തിയായവ (30 ദിവസം)", value: jobs.filter((j) => ["completed", "ready_for_delivery", "invoiced"].includes(j.status) && j.completed_at && new Date(j.completed_at).getTime() > monthAgo).length, href: "/staff/jobs?tab=completed", icon: CheckCircle2 },
     );
   }
   if (can(user, "orders")) {

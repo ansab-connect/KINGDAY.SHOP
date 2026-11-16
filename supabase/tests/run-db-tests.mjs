@@ -1086,5 +1086,55 @@ await test("password reset: expiry, rate limit and no self-approval", async () =
   await expectError(`select public.create_password_reset_request($1, 'mobile', '+919847000000', $2)`, [bob, HASH], /rate_limited/);
 });
 
+console.log("BEST FIT catalog & inspection-first (Update 01 phases 08-09)");
+await test("catalog: public reads active entries; only service managers edit", async () => {
+  await anon();
+  const opts = (await rows(`select slug from public.service_options order by sort_order`)).map((r) => r.slug);
+  assert(opts.join(",") === "service,fitting,other", `options ${opts}`);
+  await user(bob);
+  await expectError(`insert into public.service_types (slug, name) values ('hack', 'Hack')`, [], /row-level security/);
+  await user(admin2);
+  await db.query(`insert into public.service_categories (slug, name) values ('baby-walker', 'Baby Walker')`);
+  await db.query(`update public.service_categories set is_active = false where slug = 'baby-walker'`);
+  await anon();
+  assert((await rows(`select 1 from public.service_categories where slug = 'baby-walker'`)).length === 0, "inactive category is public");
+});
+let ifBooking;
+await test("inspection-first: no date needed, inactive choices refused, fitting kind kept", async () => {
+  await asSuperuser();
+  await db.query(`update public.service_bookings set status = 'cancelled' where customer_id = $1 and status not in ('completed','invoiced','cancelled')`, [alice]);
+  await user(alice);
+  const code = (await rows(`select public.create_service_booking($1::jsonb) as c`, [booking({ preferred_date: "", booking_kind: "fitting", service_type: "installation" })]))[0].c;
+  await asSuperuser();
+  const [b] = await rows(`select id, preferred_date, booking_kind, status from public.service_bookings where booking_code = $1`, [code]);
+  ifBooking = b.id;
+  assert(b.preferred_date === null && b.booking_kind === "fitting" && b.status === "new", JSON.stringify(b));
+  await user(alice);
+  await expectError(`select public.create_service_booking($1::jsonb)`, [booking({ category: "baby-walker" })], /category/);
+  await expectError(`select public.create_service_booking($1::jsonb)`, [booking({ booking_kind: "other" })], /not available/);
+});
+await test("inspection-first: timeline steps in order, by the technician or a manager", async () => {
+  await user(admin2);
+  await db.query(`select public.assign_service_booking($1, $2)`, [ifBooking, svc]);
+  await user(svc);
+  await db.query(`select public.respond_service_job($1, true)`, [ifBooking]);
+  await expectError(`select public.advance_service_job($1, 'completed')`, [ifBooking], /not available/);
+  await db.query(`select public.advance_service_job($1, 'inspection_started', 'Checking battery')`, [ifBooking]);
+  await db.query(`select public.advance_service_job($1, 'inspection_completed')`, [ifBooking]);
+  await user(admin2);
+  await db.query(`select public.advance_service_job($1, 'started')`, [ifBooking]);
+  await user(svc);
+  await db.query(`select public.advance_service_job($1, 'completed')`, [ifBooking]);
+  await db.query(`select public.advance_service_job($1, 'ready_for_delivery')`, [ifBooking]);
+  await asSuperuser();
+  const steps = (await rows(`select status, note from public.service_job_events where booking_id = $1 order by id`, [ifBooking])).map((e) => e.status);
+  assert(steps.join(",").endsWith("inspection_started,inspection_completed,started,completed,ready_for_delivery"), steps.join(","));
+  assert((await rows(`select 1 from public.service_job_events where booking_id = $1 and note = 'Checking battery'`, [ifBooking])).length === 1, "note not stored");
+  await user(alice);
+  assert((await rows(`select 1 from public.service_job_events where booking_id = $1`, [ifBooking])).length >= 5, "customer can't see own timeline");
+  await user(bob);
+  assert((await rows(`select 1 from public.service_job_events where booking_id = $1`, [ifBooking])).length === 0, "bob sees alice's timeline");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

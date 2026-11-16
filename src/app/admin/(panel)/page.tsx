@@ -40,7 +40,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Overview" };
 
-const IN_PROGRESS = ["assigned", "accepted", "on_the_way", "reached", "started"];
+const IN_PROGRESS = ["assigned", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"];
 
 /** Real service counts; RLS returns rows only to people who may view service bookings. */
 async function getServiceSummary() {
@@ -52,7 +52,7 @@ async function getServiceSummary() {
   const [unassigned, active, done] = await Promise.all([
     head().eq("status", "new").is("assigned_to", null),
     head().in("status", IN_PROGRESS),
-    head().in("status", ["completed", "invoiced"]).gte("updated_at", monthStart.toISOString()),
+    head().in("status", ["completed", "ready_for_delivery", "invoiced"]).gte("updated_at", monthStart.toISOString()),
   ]);
   return { unassigned: unassigned.count ?? 0, active: active.count ?? 0, doneThisMonth: done.count ?? 0 };
 }

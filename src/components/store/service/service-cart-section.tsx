@@ -2,10 +2,9 @@ import { L } from "@/components/i18n/lang";
 import { QuickAccount } from "@/components/store/quick-account";
 import { ServiceCartView, type ServiceCartLine } from "@/components/store/service/service-cart-view";
 import { getCurrentUser } from "@/features/auth/session";
-import { categoryLabel, preferredTimeLabel, serviceTypeLabel } from "@/features/service/constants";
+import { categoryLabel, preferredDateText, preferredTimeLabel, serviceTypeLabel } from "@/features/service/constants";
 import { getDefaultBasicCharge } from "@/features/service/invoices";
 import { isSupabaseConfigured } from "@/lib/env";
-import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 type Row = {
@@ -17,7 +16,7 @@ type Row = {
   voice_path: string | null;
   photo_paths: string[];
   address: string;
-  preferred_date: string;
+  preferred_date: string | null;
   preferred_time: string | null;
 };
 
@@ -46,7 +45,7 @@ export async function ServiceCartSection() {
     hasVoice: Boolean(r.voice_path),
     photos: r.photo_paths.length,
     address: r.address,
-    date: formatDate(new Date(r.preferred_date)),
+    date: preferredDateText(r.preferred_date),
     time: preferredTimeLabel(r.preferred_time),
   }));
   return <ServiceCartView lines={lines} basicCharge={basic} />;

@@ -8,7 +8,7 @@ import { L } from "@/components/i18n/lang";
 import { useLang } from "@/components/i18n/language-switcher";
 import { useRouter } from "next/navigation";
 import { addToServiceCartAction, createServiceBookingAction } from "@/features/service/actions";
-import { MAX_PHOTOS, PREFERRED_TIMES, SERVICE_CATEGORIES, SERVICE_MEDIA_BUCKET, SERVICE_TYPES } from "@/features/service/constants";
+import { MAX_PHOTOS, PREFERRED_TIMES, SERVICE_MEDIA_BUCKET } from "@/features/service/constants";
 import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,9 @@ import { VoiceRecorder, type VoiceNote } from "./voice-recorder";
 
 export type Purchase = { key: string; orderId: string; orderNumber: string; productName: string; placedAt: string };
 type Defaults = { name: string; mobile: string; email: string; address: string; code: string };
+/** Catalog choices from the database (Admin → Service Management → Catalog). */
+export type CatalogChoice = { slug: string; name: string; name_ml: string | null; parent?: string | null };
+export type BookingOption = { slug: string; title: string; title_ml: string | null; defaultType: string | null };
 
 function Field({ label, error, required, hint, className, children }: { label: React.ReactNode; error?: string; required?: boolean; hint?: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
@@ -43,22 +46,31 @@ function Step({ n, title, children }: { n: number; title: React.ReactNode; child
   );
 }
 
-const tomorrow = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-};
 const isoIn = (days: number) => {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 };
 
-export function BookingForm({ userId, defaults, purchases }: { userId: string; defaults: Defaults; purchases: Purchase[] }) {
+export function BookingForm({
+  userId,
+  defaults,
+  purchases,
+  option,
+  categories,
+  types,
+}: {
+  userId: string;
+  defaults: Defaults;
+  purchases: Purchase[];
+  option: BookingOption;
+  categories: CatalogChoice[];
+  types: CatalogChoice[];
+}) {
   const ml = useLang() === "ml";
   const router = useRouter();
   const known = Boolean(defaults.name && defaults.mobile);
-  const [serviceType, setServiceType] = useState("repair");
+  const [serviceType, setServiceType] = useState(option.defaultType && types.some((t) => t.slug === option.defaultType) ? option.defaultType : (types[0]?.slug ?? "repair"));
   const [preferredTime, setPreferredTime] = useState("");
   const [name, setName] = useState(defaults.name);
   const [mobile, setMobile] = useState(defaults.mobile);
@@ -74,7 +86,7 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   const [address, setAddress] = useState(defaults.address);
   const [location, setLocation] = useState<LatLng | null>(null);
-  const [preferred, setPreferred] = useState(tomorrow());
+  const [preferred, setPreferred] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fe, setFe] = useState<Record<string, string>>({});
@@ -133,6 +145,7 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
         latitude: location?.lat ?? null,
         longitude: location?.lng ?? null,
         preferred_date: preferred,
+        booking_kind: option.slug,
         service_type: serviceType,
         preferred_time: preferredTime,
       };
@@ -203,22 +216,22 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
       <Step n={2} title={<L en="Product" ml="ഉൽപ്പന്നം" />}>
         <Field label={<L en="Category" ml="വിഭാഗം" />} required error={fe.category} className="sm:col-span-2">
           <div className="flex flex-wrap gap-2">
-            {SERVICE_CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <button
-                key={c.value}
+                key={c.slug}
                 type="button"
-                aria-pressed={category === c.value}
-                onClick={() => setCategory(c.value)}
-                className={cn("h-10 rounded-full border px-4 text-sm font-semibold", category === c.value ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-300")}
+                aria-pressed={category === c.slug}
+                onClick={() => setCategory(c.slug)}
+                className={cn("h-10 rounded-full border px-4 text-sm font-semibold", category === c.slug ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-300")}
               >
-                <L en={c.en} ml={c.ml} />
+                <L en={c.name} ml={c.name_ml ?? c.name} />
               </button>
             ))}
           </div>
         </Field>
         <Field label={<L en="Service needed" ml="ആവശ്യമായ സർവീസ്" />} className="sm:col-span-2">
           <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className={inputClass}>
-            {SERVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{ml ? t.ml : t.en}</option>)}
+            {types.map((t) => <option key={t.slug} value={t.slug}>{ml && t.name_ml ? t.name_ml : t.name}</option>)}
           </select>
         </Field>
         <Field label={<L en="Where did you buy it?" ml="എവിടെ നിന്നാണ് വാങ്ങിയത്?" />} className="sm:col-span-2">
@@ -304,7 +317,7 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
         <div className="sm:col-span-2">
           <LocationPicker value={location} onChange={setLocation} />
         </div>
-        <Field label={<L en="Preferred service date" ml="ഇഷ്ടമുള്ള തീയതി" />} required error={fe.preferred_date}>
+        <Field label={<L en="Preferred date (optional)" ml="ഇഷ്ടമുള്ള തീയതി (ഐച്ഛികം)" />} error={fe.preferred_date} hint={<L en="We inspect first and then fix a date with you." ml="ആദ്യം പരിശോധിച്ച ശേഷം തീയതി ഉറപ്പിക്കും." />}>
           <input value={preferred} onChange={(e) => setPreferred(e.target.value)} type="date" min={isoIn(0)} max={isoIn(90)} className={inputClass} />
         </Field>
         <Field label={<L en="Preferred time" ml="ഇഷ്ടമുള്ള സമയം" />}>

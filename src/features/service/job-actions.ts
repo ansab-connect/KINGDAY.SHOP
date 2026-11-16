@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { assertCan, getCurrentUser, hasRole } from "@/features/auth/session";
+import { assertCan, can, getCurrentUser, hasRole } from "@/features/auth/session";
 import { fail, ok, type FormState } from "@/features/forms";
 import { createClient } from "@/lib/supabase/server";
 import { queuePushDispatch } from "@/features/push/send";
@@ -79,9 +79,17 @@ export async function respondJobAction(input: { bookingId: string; accept: boole
 }
 
 export async function advanceJobAction(input: { bookingId: string; status: string; note?: string }): Promise<{ ok: boolean; error?: string }> {
-  if (!(await technician())) return { ok: false, error: "Only service staff can do this." };
+  // Technicians move their own jobs; service managers (service edit) may move any job.
+  const me = await getCurrentUser();
+  if (!me || !(me.roles.includes("service_staff") || (hasRole(me, "staff") && can(me, "service", "edit")))) {
+    return { ok: false, error: "Only service staff can do this." };
+  }
   const parsed = z
-    .object({ bookingId: id, status: z.enum(["on_the_way", "reached", "started", "completed"]), note: note.optional() })
+    .object({
+      bookingId: id,
+      status: z.enum(["on_the_way", "reached", "inspection_started", "inspection_completed", "started", "completed", "ready_for_delivery"]),
+      note: note.optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request." };
   const supabase = await createClient();

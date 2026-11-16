@@ -8,9 +8,11 @@ import { AssignJobForm, CancelJobForm } from "@/components/admin/service/assign-
 import { StaffOnly } from "@/components/admin/staff-only";
 import { InvoiceEditor } from "@/components/service/invoice-editor";
 import { InspectionView, JobTimeline } from "@/components/service/job-views";
+import { JobActions } from "@/components/staff/jobs/job-workflow";
 import { Card, CardContent } from "@/components/ui/card";
 import { can, getCurrentUser } from "@/features/auth/session";
 import { categoryLabel, directionsLink, mapsLink, statusLabel } from "@/features/service/constants";
+import { preferredDateText } from "@/features/service/constants";
 import { bookingMedia, getInspection, getJobEvents, listTechnicians, type BookingRow } from "@/features/service/queries";
 import { getDefaultBasicCharge, getInvoiceForBooking } from "@/features/service/invoices";
 import { formatDate, formatDateTime, formatPaise } from "@/lib/format";
@@ -31,7 +33,9 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
   const tech = technicians.find((t) => t.user_id === b.assigned_to);
   const { data: cust } = b.customer_id ? await supabase.from("profiles").select("customer_code").eq("id", b.customer_id).maybeSingle() : { data: null };
   const customerCode = (cust as { customer_code?: string } | null)?.customer_code;
-  const open = !["completed", "invoiced", "cancelled"].includes(b.status);
+  const open = !["completed", "ready_for_delivery", "invoiced", "cancelled"].includes(b.status);
+  // Managers can move the timeline too (workshop jobs, or when the technician cannot).
+  const movable = ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "completed", "invoiced"].includes(b.status);
   const reassignable = ["new", "assigned", "accepted", "on_the_way", "reached"].includes(b.status);
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, this is KING DAY Service about booking ${b.booking_code}.`)}`;
 
@@ -55,7 +59,7 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
                   ["Bought", b.purchase_source === "kingday" ? "From KING DAY" : "Elsewhere"],
                   ["Purchase date", b.purchase_date ? formatDate(new Date(b.purchase_date)) : "—"],
                   ["Purchase details", b.purchase_details ?? "—"],
-                  ["Preferred date", formatDate(new Date(b.preferred_date))],
+                  ["Preferred date", preferredDateText(b.preferred_date)],
                 ].map(([k, v]) => (
                   <div key={k}><dt className="text-muted-foreground">{k}</dt><dd className="font-medium text-deep">{v}</dd></div>
                 ))}
@@ -137,6 +141,12 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
             </p>
             {manage && reassignable ? (
               <AssignJobForm bookingId={b.id} technicians={technicians} currentId={b.assigned_to} locked={!["new", "assigned"].includes(b.status)} />
+            ) : null}
+            {manage && movable ? (
+              <div className="flex flex-col gap-2 border-t pt-4">
+                <p className="text-sm font-semibold text-deep">Update progress</p>
+                <JobActions bookingId={b.id} status={b.status} />
+              </div>
             ) : null}
             {manage && open ? (
               <details className="rounded-lg border p-3">

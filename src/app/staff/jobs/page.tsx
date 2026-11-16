@@ -7,8 +7,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireTeam } from "@/features/auth/session";
 import { SERVICE_STATUSES, categoryLabel } from "@/features/service/constants";
+import { preferredDateText } from "@/features/service/constants";
 import type { BookingRow } from "@/features/service/queries";
-import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -25,13 +25,13 @@ type Group = (typeof GROUPS)[number]["key"];
 
 const inGroup = (b: BookingRow, g: Group, today: string) =>
   g === "today"
-    ? b.preferred_date === today && !["completed", "invoiced", "cancelled"].includes(b.status)
+    ? b.preferred_date === today && !["completed", "ready_for_delivery", "invoiced", "cancelled"].includes(b.status)
     : g === "pending"
       ? b.status === "assigned"
       : g === "progress"
-        ? ["accepted", "on_the_way", "reached", "started"].includes(b.status)
+        ? ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"].includes(b.status)
         : g === "completed"
-          ? ["completed", "invoiced"].includes(b.status)
+          ? ["completed", "ready_for_delivery", "invoiced"].includes(b.status)
           : b.status === "cancelled";
 
 async function Jobs({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -82,7 +82,7 @@ async function Jobs({ searchParams }: { searchParams: Promise<Record<string, str
                   </span>
                   <span className="mt-1 block truncate font-semibold text-deep">{b.customer_name} · {categoryLabel(b.category)}</span>
                   <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground"><MapPin aria-hidden className="size-3.5 shrink-0" /> {b.address}</span>
-                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><CalendarClock aria-hidden className="size-3.5" /> {formatDate(new Date(b.preferred_date))}</span>
+                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><CalendarClock aria-hidden className="size-3.5" /> {preferredDateText(b.preferred_date)}</span>
                 </span>
                 <ChevronRight aria-hidden className="size-5 shrink-0 text-muted-foreground" />
               </Link>
