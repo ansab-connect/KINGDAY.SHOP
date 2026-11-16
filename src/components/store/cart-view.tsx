@@ -8,7 +8,7 @@ import { OFFICIAL_WHATSAPP, supportMailto } from "@/config/storefront";
 import { removeFromCart, setCartQuantity, useCart } from "@/features/cart/cart-store";
 import { formatPaise } from "@/lib/format";
 
-/** Cart page body. Ordering happens on WhatsApp until online checkout launches. */
+/** Products tab of the cart: checkout (Cash on Delivery) or order on WhatsApp. */
 export type CartCustomer = { name: string; code: string; mobile: string | null } | null;
 
 export function CartView({ customer, accounts = true }: { customer: CartCustomer; accounts?: boolean }) {
@@ -64,18 +64,25 @@ export function CartView({ customer, accounts = true }: { customer: CartCustomer
           <div className="flex justify-between"><dt className="text-muted-foreground">Items</dt><dd className="tabular">{items.reduce((s, i) => s + i.quantity, 0)}</dd></div>
           <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>Estimated total</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
         </dl>
-        <p className="mt-2 text-xs text-muted-foreground">Final price, delivery and offers are confirmed by our team on WhatsApp.</p>
-        {customer || !accounts ? (
+        <p className="mt-2 text-xs text-muted-foreground">Delivery charge and final total are shown at checkout. Pay cash on delivery.</p>
+        {customer ? (
           <>
-            {customer ? <p className="mt-4 text-xs text-muted-foreground">Ordering as <span className="font-semibold text-deep">{customer.name}</span> · {customer.code}</p> : null}
-            <a href={orderHref} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3.5 text-sm font-bold tracking-wide text-deep uppercase hover:bg-gold-300">
-              <WhatsAppIcon className="size-5" /> Order on WhatsApp
+            <p className="mt-4 text-xs text-muted-foreground">Ordering as <span className="font-semibold text-deep">{customer.name}</span> · {customer.code}</p>
+            <Link href="/checkout" className="mt-3 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3.5 text-sm font-bold tracking-wide text-deep uppercase hover:bg-gold-300">
+              Proceed to checkout
+            </Link>
+            <a href={orderHref} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
+              <WhatsAppIcon className="size-4" /> Or order on WhatsApp
             </a>
           </>
+        ) : !accounts ? (
+          <a href={orderHref} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3.5 text-sm font-bold tracking-wide text-deep uppercase hover:bg-gold-300">
+            <WhatsAppIcon className="size-5" /> Order on WhatsApp
+          </a>
         ) : (
           <div className="mt-4">
             <p className="mb-3 text-sm text-deep">Sign in or create your account to place the order. It takes a few seconds and your cart is kept.</p>
-            <QuickAccount next="/cart" />
+            <QuickAccount next="/checkout" />
           </div>
         )}
         <a href={supportMailto("Cart enquiry")} className="mt-3 inline-flex w-full items-center justify-center gap-2 text-sm text-muted-foreground hover:text-royal">

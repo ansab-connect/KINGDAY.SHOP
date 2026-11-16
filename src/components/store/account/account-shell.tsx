@@ -7,7 +7,7 @@ const links = [
   { href: "/account/orders", label: "My Orders", icon: Package },
   { href: "/cart", label: "Product Cart", icon: ShoppingBag },
   { href: "/account/service", label: "My Services", icon: Wrench },
-  { href: "/service-cart", label: "Service Cart", icon: ShoppingCart },
+  { href: "/cart?tab=services", label: "Service Cart", icon: ShoppingCart },
   { href: "/account/addresses", label: "Saved Addresses", icon: MapPin },
   { href: "/account/notifications", label: "Notifications", icon: Bell },
   { href: "/wishlist", label: "Wishlist", icon: Heart },

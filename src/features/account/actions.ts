@@ -91,6 +91,7 @@ export async function saveAddressAction(_: FormState, fd: FormData): Promise<For
     : await supabase.from("addresses").insert(row);
   if (error) return fail(dbMessage(error, "Couldn't save the address."));
   revalidatePath("/account/addresses");
+  revalidatePath("/checkout");
   return ok(id ? "Address updated." : "Address added.");
 }
 

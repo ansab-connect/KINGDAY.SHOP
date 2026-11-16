@@ -960,5 +960,66 @@ await test("payroll: salary is private, payslips appear only after finalising", 
   assert((await rows(`select 1 from public.audit_logs where entity = 'payslips'`)).length >= 1, "payslip change not audited");
 });
 
+console.log("Product checkout (Update 01 phase 06)");
+const [ckVar] = await rows(
+  `select v.id, v.price from public.product_variants v join public.products p on p.id = v.product_id
+    where v.is_active and p.status = 'active' order by v.sku limit 1`,
+);
+await db.query(`update public.inventory set on_hand = 10, reserved = 0 where variant_id = $1`, [ckVar.id]);
+await db.query(`update public.store_settings set value = '0' where key = 'shipping.flat_rate'`);
+const [{ id: bobAddr }] = await rows(
+  `insert into public.addresses (user_id, full_name, phone, line1, city, state, postal_code) values ($1, 'Bob', '+91 98470 00000', 'Puthiyapalam Road', 'Kozhikode', 'Kerala', '673002') returning id`,
+  [bob],
+);
+const [{ id: aliceAddr }] = await rows(
+  `insert into public.addresses (user_id, full_name, phone, line1, city, state, postal_code) values ($1, 'Alice', '+91 98470 11111', 'Beach Road', 'Kozhikode', 'Kerala', '673001') returning id`,
+  [alice],
+);
+const order = (items, address, note) => JSON.stringify({ items, address_id: address, note });
+let ckOrder;
+await test("checkout: order priced from the database, stock reserved, cart cleared, team alerted", async () => {
+  await asSuperuser();
+  await db.query(`insert into public.cart_items (user_id, variant_id, quantity) values ($1, $2, 2) on conflict do nothing`, [bob, ckVar.id]);
+  await user(bob);
+  // A tampered price in the request is ignored; duplicate lines are merged.
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [order([{ variant_id: ckVar.id, quantity: 1, price: 1 }, { variant_id: ckVar.id, quantity: 1 }], bobAddr, "Ring the bell")]);
+  ckOrder = o.order_id;
+  assert(o.grand_total === ckVar.price * 2, `total ${o.grand_total} != ${ckVar.price * 2}`);
+  const [row] = await rows(`select payment_method, status, customer_name, shipping_address ->> 'city' as city from public.orders where id = $1`, [ckOrder]);
+  assert(row.payment_method === "cod" && row.status === "new" && row.city === "Kozhikode", "order fields wrong");
+  assert((await rows(`select 1 from public.order_items where order_id = $1 and quantity = 2`, [ckOrder])).length === 1, "items not merged");
+  await asSuperuser();
+  const [inv] = await rows(`select on_hand, reserved from public.inventory where variant_id = $1`, [ckVar.id]);
+  assert(inv.on_hand === 10 && inv.reserved === 2, `inventory ${inv.on_hand}/${inv.reserved}`);
+  assert((await rows(`select 1 from public.cart_items where user_id = $1`, [bob])).length === 0, "cart not cleared");
+  assert((await rows(`select 1 from public.payments where order_id = $1 and provider = 'cod'`, [ckOrder])).length === 1, "no payment row");
+  assert((await rows(`select 1 from public.notifications where user_id = $1 and title like 'New order%'`, [admin2])).length === 1, "admin not alerted");
+});
+await test("checkout: can't oversell, use someone else's address, or write order items directly", async () => {
+  await user(bob);
+  await expectError(`select * from public.place_order($1::jsonb)`, [order([{ variant_id: ckVar.id, quantity: 9 }], bobAddr)], /Only 8 left/);
+  await expectError(`select * from public.place_order($1::jsonb)`, [order([{ variant_id: ckVar.id, quantity: 1 }], aliceAddr)], /delivery address/);
+  await expectError(`select * from public.place_order($1::jsonb)`, [order([], bobAddr)], /empty/);
+  await expectError(`insert into public.order_items (order_id, product_name, sku, mrp, unit_price, quantity, line_total) values ($1, 'x', 'X-1', 1, 1, 1, 1)`, [ckOrder], /server only|row-level security/);
+  await anon();
+  await expectError(`select * from public.place_order($1::jsonb)`, [order([{ variant_id: ckVar.id, quantity: 1 }], bobAddr)], /sign in|permission denied/);
+});
+await test("checkout: cancelling releases stock, shipping records the sale", async () => {
+  await user(admin2);
+  await db.query(`update public.orders set status = 'cancelled' where id = $1`, [ckOrder]);
+  await asSuperuser();
+  assert((await rows(`select reserved from public.inventory where variant_id = $1`, [ckVar.id]))[0].reserved === 0, "reservation not released");
+  await user(alice);
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [order([{ variant_id: ckVar.id, quantity: 3 }], aliceAddr)]);
+  await user(admin2);
+  for (const s of ["confirmed", "packed", "shipped"]) await db.query(`update public.orders set status = $2 where id = $1`, [o.order_id, s]);
+  await asSuperuser();
+  const [inv] = await rows(`select on_hand, reserved from public.inventory where variant_id = $1`, [ckVar.id]);
+  assert(inv.on_hand === 7 && inv.reserved === 0, `after ship ${inv.on_hand}/${inv.reserved}`);
+  assert((await rows(`select 1 from public.stock_movements where reference_id = $1 and type = 'sale' and quantity = -3`, [o.order_id])).length === 1, "no sale movement");
+  await user(bob);
+  assert((await rows(`select id from public.orders where id = $1`, [o.order_id])).length === 0, "bob sees alice's order");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

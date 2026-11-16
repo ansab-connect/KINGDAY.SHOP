@@ -138,7 +138,7 @@ export function BookingForm({ userId, defaults, purchases }: { userId: string; d
       };
       const res = toCart ? await addToServiceCartAction(payload) : await createServiceBookingAction(payload);
       if (res.ok && toCart) {
-        router.push("/service-cart");
+        router.push("/cart?tab=services");
         return;
       }
       if (res.ok) {
