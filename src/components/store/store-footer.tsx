@@ -19,6 +19,7 @@ const companyLinks = [
 const policyLinks = [
   { title: <L en="Shipping Policy" ml="ഷിപ്പിംഗ് നയം" />, href: "/policies/shipping" },
   { title: <L en="Returns & Refunds" ml="റിട്ടേൺ & റീഫണ്ട്" />, href: "/policies/returns" },
+  { title: <L en="Warranty Policy" ml="വാറന്റി നയം" />, href: "/policies/warranty" },
   { title: <L en="Privacy Policy" ml="സ്വകാര്യതാ നയം" />, href: "/policies/privacy" },
   { title: <L en="Terms of Service" ml="സേവന നിബന്ധനകൾ" />, href: "/policies/terms" },
 ];
@@ -34,12 +35,12 @@ export function StoreFooter() {
   return (
     <footer className="mt-auto bg-deep text-white">
       <div aria-hidden className="gold-rule h-px" />
-      <Container className="grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:py-16">
-        <div>
+      <Container className="grid grid-cols-2 gap-x-6 gap-y-7 py-8 sm:gap-10 sm:py-12 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:py-16">
+        <div className="col-span-2 lg:col-span-1">
           <Logo tone="light" showTagline />
-          <InstallAppButton tone="dark" className="mt-5" />
-          <p className="mt-5 max-w-xs text-sm leading-relaxed text-white/65">{siteConfig.description}</p>
-          <ul className="mt-6 flex flex-col gap-2.5 text-sm text-white/75">
+          <InstallAppButton tone="dark" className="mt-4" />
+          <p className="mt-4 hidden max-w-xs text-sm leading-relaxed text-white/65 sm:block">{siteConfig.description}</p>
+          <ul className="mt-4 grid gap-2 text-sm text-white/75 sm:mt-6 sm:flex sm:flex-col sm:gap-2.5">
             {storeContact.phone ? (
               <li className="flex items-center gap-2.5"><Phone aria-hidden className="size-4 text-gold" /><a href={`tel:${storeContact.phone}`} className="hover:text-white">{storeContact.phone}</a></li>
             ) : null}
@@ -57,7 +58,7 @@ export function StoreFooter() {
 
         <FooterColumn title={<L en="Shop" ml="ഷോപ്പ്" />} links={productCategories.map((c) => ({ title: c.name, href: `/categories/${c.slug}` }))} />
         <FooterColumn title={<L en="Company" ml="കമ്പനി" />} links={companyLinks} />
-        <div>
+        <div className="col-span-2 sm:col-span-1">
           <FooterColumn title={<L en="Policies" ml="നയങ്ങൾ" />} links={policyLinks} />
           {social.length ? (
             <div className="mt-8">
@@ -76,9 +77,9 @@ export function StoreFooter() {
         </div>
       </Container>
       <div className="border-t border-white/10">
-        <Container className="flex flex-col gap-3 py-6 text-xs text-white/50 lg:flex-row lg:items-center lg:justify-between">
+        <Container className="flex flex-col items-center gap-1.5 py-4 text-center text-[0.7rem] text-white/50 sm:gap-3 sm:py-6 sm:text-xs lg:flex-row lg:items-center lg:justify-between lg:text-left">
           <p>© {siteConfig.copyrightYear} {siteConfig.legalName}. <L en="All rights reserved." ml="എല്ലാ അവകാശങ്ങളും നിക്ഷിപ്തം." /></p>
-          <p>Secure payments by Razorpay · Cash on delivery where available</p>
+          <p>Cash on delivery · Orders on WhatsApp</p>
           <p className="tracking-[0.18em] text-white/40 uppercase">Powered by <span className="font-semibold text-white/60">MotherBits Technologies LLP</span></p>
         </Container>
       </div>
@@ -90,7 +91,7 @@ function FooterColumn({ title, links }: { title: React.ReactNode; links: { title
   return (
     <div>
       <p className="font-heading text-sm font-semibold tracking-wide text-gold">{title}</p>
-      <ul className="mt-4 flex flex-col gap-2.5 text-sm">
+      <ul className="mt-3 flex flex-col gap-2 text-sm sm:mt-4 sm:gap-2.5">
         {links.map((l) => (
           <li key={l.href}>
             <Link href={l.href} className="text-white/70 transition-colors hover:text-white">{l.title}</Link>

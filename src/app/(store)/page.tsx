@@ -3,13 +3,15 @@ import Link from "next/link";
 import { ArrowRight, Camera, Check, Lock, MessageCircle, Quote, ShieldCheck, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { HeroArt } from "@/components/store/hero-art";
+import { getInstagramPosts, INSTAGRAM_URL } from "@/features/marketing/instagram";
+import { publicStorageUrl } from "@/lib/storage";
 import { NewsletterForm } from "@/components/store/newsletter-form";
 import { Stars } from "@/components/store/price";
 import { ProductCard, ProductGrid } from "@/components/store/product-card";
-import { CategoryIcon, ProductVisual } from "@/components/store/product-visual";
+import { CategoryIcon } from "@/components/store/product-visual";
 import { Container, SectionHeading } from "@/components/store/section";
 import { siteConfig } from "@/config/site";
-import { storeContact, whyChoose } from "@/config/storefront";
+import { whyChoose } from "@/config/storefront";
 import {
   getBestsellers,
   getCatalogSource,
@@ -30,7 +32,7 @@ export const metadata: Metadata = {
 const whyIcons = { shield: ShieldCheck, check: Check, lock: Lock, chat: MessageCircle } as const;
 
 export default async function HomePage() {
-  const [categories, bestsellers, newArrivals, allOffers, brands, reviews, source] = await Promise.all([
+  const [categories, bestsellers, newArrivals, allOffers, brands, reviews, source, instagram] = await Promise.all([
     getCategories(),
     getBestsellers(4),
     getNewArrivals(8),
@@ -38,6 +40,7 @@ export default async function HomePage() {
     getBrands(),
     getFeaturedReviews(3),
     getCatalogSource(),
+    getInstagramPosts(),
   ]);
   const offers = allOffers.slice(0, 3);
   const topDiscount = Math.max(...allOffers.map((p) => discountPercent(p.mrp, p.price)), 0);
@@ -47,37 +50,37 @@ export default async function HomePage() {
       {/* 1. Hero */}
       <section className="relative overflow-hidden bg-deep text-white">
         <div aria-hidden className="absolute inset-0 bg-[radial-gradient(60%_80%_at_85%_30%,rgb(109_38_168/0.45),transparent_70%)]" />
-        <Container className="relative grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:py-24">
+        <Container className="relative grid items-center gap-10 py-7 sm:py-16 lg:grid-cols-[1.1fr_1fr] lg:py-24">
           <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
             <p className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-semibold tracking-[0.16em] text-gold uppercase">
               <L en="Premium kids' rides" ml="കുട്ടികൾക്കുള്ള പ്രീമിയം റൈഡുകൾ" />
             </p>
-            <h1 className="mt-6 text-4xl leading-[1.05] font-extrabold sm:text-5xl lg:text-6xl">
+            <h1 className="mt-3 text-[1.85rem] leading-[1.1] font-extrabold sm:mt-6 sm:text-5xl lg:text-6xl">
               <L en={<>Every child deserves a <span className="text-gold">royal ride.</span></>} ml={<span className="block text-[0.72em] leading-tight">ഓരോ കുഞ്ഞിനും ഒരു <span className="text-gold">രാജകീയ യാത്ര.</span></span>} />
             </h1>
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-white/70 sm:text-lg">
+            <p className="mt-3 hidden max-w-lg text-base leading-relaxed text-white/70 sm:mt-5 sm:block sm:text-lg">
               <L en="Electric jeeps, bikes, scooters and more, chosen for safety, built to last and finished like royalty." ml="ഇലക്ട്രിക് ജീപ്പുകൾ, ബൈക്കുകൾ, സ്കൂട്ടറുകൾ എന്നിവയും മറ്റും. സുരക്ഷയ്ക്കായി തിരഞ്ഞെടുത്തത്, ദീർഘകാലം നിലനിൽക്കുന്നത്." />
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-8 sm:flex sm:flex-wrap sm:gap-3">
               <Link
                 href="/shop"
-                className="group inline-flex h-12 items-center gap-2 rounded-full bg-gold px-7 text-sm font-semibold text-deep shadow-[0_10px_30px_-10px_rgb(212_175_55/0.7)] transition-all hover:bg-gold-300 focus-visible:ring-3 focus-visible:ring-gold/40 focus-visible:outline-none"
+                className="group inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gold px-4 text-sm font-semibold sm:h-12 sm:px-7 text-deep shadow-[0_10px_30px_-10px_rgb(212_175_55/0.7)] transition-all hover:bg-gold-300 focus-visible:ring-3 focus-visible:ring-gold/40 focus-visible:outline-none"
               >
                 <L en="Shop the collection" ml="കളക്ഷൻ കാണുക" />
                 <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
               <Link
                 href="/book-service"
-                className="inline-flex h-12 items-center gap-2 rounded-full border border-white/25 px-7 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/5"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/25 px-4 text-sm font-semibold text-white sm:h-12 sm:px-7 transition-colors hover:border-white hover:bg-white/5"
               >
                 <Wrench aria-hidden className="size-4 text-gold" />
                 <L en="Book Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
               </Link>
             </div>
-            <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm text-white/70">
+            <ul className="mt-10 hidden flex-wrap gap-x-6 gap-y-3 text-sm text-white/70 sm:flex">
               {[
                 ["Safety-checked rides", "സുരക്ഷ ഉറപ്പാക്കിയ റൈഡുകൾ"],
-                ["Secure Razorpay checkout", "സുരക്ഷിത Razorpay പേയ്മെന്റ്"],
+                ["Cash on delivery", "ക്യാഷ് ഓൺ ഡെലിവറി"],
                 ["WhatsApp support", "WhatsApp സഹായം"],
               ].map(([en, ml]) => (
                 <li key={en} className="flex items-center gap-2">
@@ -86,36 +89,41 @@ export default async function HomePage() {
               ))}
             </ul>
           </div>
-          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
+          <div className="relative mx-auto hidden w-full max-w-md lg:block lg:max-w-none">
             <HeroArt className="h-auto w-full" />
           </div>
         </Container>
       </section>
 
       {/* 2. Featured categories */}
-      <section className="py-16 sm:py-20">
+      <section className="py-6 sm:py-16 lg:py-20">
         <Container>
           <SectionHeading eyebrow={<L en="Shop by category" ml="വിഭാഗം അനുസരിച്ച്" />} title={<L en="Find the perfect ride" ml="മികച്ച റൈഡ് കണ്ടെത്തൂ" />} href="/categories" linkLabel={<L en="All categories" ml="എല്ലാ വിഭാഗങ്ങളും" />} />
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
             {categories.map((c, i) => {
               const feature = i === 0;
               return (
-                <li key={c.slug} className={feature ? "col-span-2 sm:col-span-3 lg:col-span-2 lg:row-span-2" : ""}>
+                <li key={c.slug} className={feature ? "lg:col-span-2 lg:row-span-2" : ""}>
                   <Link
                     href={`/categories/${c.slug}`}
-                    className={`group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl p-5 ring-1 transition-all duration-500 ease-royal hover:-translate-y-1 hover:shadow-lift focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
-                      feature ? "min-h-48 bg-royal text-white ring-royal lg:min-h-full" : "min-h-36 bg-royal-50/60 text-deep ring-border/60 hover:bg-white"
+                    className={`group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl p-3.5 ring-1 sm:p-5 transition-all duration-500 ease-royal hover:-translate-y-1 hover:shadow-lift focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                      feature ? "min-h-28 bg-royal text-white ring-royal sm:min-h-36 lg:min-h-full" : "min-h-28 bg-royal-50/60 text-deep ring-border/60 hover:bg-white sm:min-h-36"
                     }`}
                   >
-                    <CategoryIcon
-                      slug={c.slug}
-                      strokeWidth={1.25}
-                      className={`transition-transform duration-500 ease-royal group-hover:scale-110 ${feature ? "size-20 text-gold" : "size-10 text-royal"}`}
-                    />
-                    <div className="mt-6">
-                      <p className={`font-heading font-bold ${feature ? "text-2xl" : "text-base"}`}>{c.name}</p>
+                    {c.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- category photos from our own storage
+                      <img src={c.imageUrl} alt="" loading={i < 4 ? "eager" : "lazy"} className="size-12 rounded-xl object-cover sm:size-16" />
+                    ) : (
+                      <CategoryIcon
+                        slug={c.slug}
+                        strokeWidth={1.25}
+                        className={`transition-transform duration-500 ease-royal group-hover:scale-110 ${feature ? "size-10 text-gold sm:size-14 lg:size-20" : "size-9 text-royal sm:size-10"}`}
+                      />
+                    )}
+                    <div className="mt-3 sm:mt-6">
+                      <p className={`font-heading text-sm leading-tight font-bold sm:text-base ${feature ? "lg:text-2xl" : ""}`}>{c.name}</p>
                       <p className={`mt-1 text-xs ${feature ? "text-white/70" : "text-muted-foreground"}`}>
-                        {feature ? c.description : <L en={`${c.productCount} products`} ml={`${c.productCount} ഉൽപ്പന്നങ്ങൾ`} />}
+                        <L en={`${c.productCount} products`} ml={`${c.productCount} ഉൽപ്പന്നങ്ങൾ`} />
                       </p>
                     </div>
                     <ArrowRight aria-hidden className={`absolute top-5 right-5 size-4 transition-transform group-hover:translate-x-0.5 ${feature ? "text-gold" : "text-royal-300"}`} />
@@ -271,22 +279,37 @@ export default async function HomePage() {
       {/* 10. Instagram */}
       <section className="pb-16 sm:pb-20">
         <Container>
-          <SectionHeading
-            eyebrow="#KingDayRides"
-            title="Royal moments"
-            description={storeContact.instagram ? `Follow ${storeContact.instagram} on Instagram` : "Our Instagram feed appears here once connected."}
-            align="center"
-          />
-          <ul className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
-            {categories.slice(0, 6).map((c) => (
-              <li key={c.slug} className="group relative">
-                <ProductVisual categorySlug={c.slug} className="aspect-square rounded-xl" />
-                <span aria-hidden className="absolute inset-0 grid place-items-center rounded-xl bg-deep/0 transition-colors group-hover:bg-deep/40">
-                  <Camera className="size-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
-                </span>
-              </li>
-            ))}
-          </ul>
+          <SectionHeading eyebrow="@kingday.official" title="Royal Moments" description="Real rides, real smiles, from our Instagram." align="center" />
+          {instagram.length ? (
+            <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6">
+              {instagram.map((p) => {
+                const src = publicStorageUrl("category-images", p.image_path);
+                return (
+                  <li key={p.url}>
+                    <a href={p.url} target="_blank" rel="noopener noreferrer" className="group relative block overflow-hidden rounded-xl" aria-label={p.caption || "Open this post on Instagram"}>
+                      {src ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- post thumbnails uploaded by the admin
+                        <img src={src} alt={p.caption} loading="lazy" className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      ) : null}
+                      <span aria-hidden className="absolute inset-0 grid place-items-center bg-deep/0 transition-colors group-hover:bg-deep/40">
+                        <Camera className="size-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          <div className="mt-6 flex justify-center">
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-gradient-to-r from-[#833AB4] via-[#E1306C] to-[#F77737] px-6 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            >
+              <Camera aria-hidden className="size-4" /> Follow @kingday.official
+            </a>
+          </div>
         </Container>
       </section>
 
