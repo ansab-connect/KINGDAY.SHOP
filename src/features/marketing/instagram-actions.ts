@@ -1,9 +1,9 @@
 "use server";
 
-import { refresh, revalidatePath } from "next/cache";
+import { refresh, revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { assertCan } from "@/features/auth/session";
-import { INSTAGRAM_SETTING, instagramPost } from "@/features/marketing/instagram";
+import { INSTAGRAM_SETTING, INSTAGRAM_TAG, instagramPost } from "@/features/marketing/instagram";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,6 +19,7 @@ export async function saveInstagramPostsAction(posts: unknown): Promise<{ ok: bo
   const supabase = await createClient();
   const { error } = await supabase.from("store_settings").upsert({ key: INSTAGRAM_SETTING, value: parsed.data, is_public: true }, { onConflict: "key" });
   if (error) return { ok: false, error: "Couldn't save. You need the Settings edit permission too." };
+  revalidateTag(INSTAGRAM_TAG, "max");
   revalidatePath("/");
   refresh();
   return { ok: true };
