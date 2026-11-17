@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Boxes, Film, Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
 import { AiFillPanel } from "@/components/admin/catalog/ai-fill-panel";
+import { AiWriteButtons } from "@/components/admin/catalog/ai-write-buttons";
 import { DeleteButton } from "@/components/admin/catalog/delete-button";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
@@ -267,7 +268,9 @@ export function ProductEditor({
           </div>
           <TextField id="p-age" label="Recommended age" placeholder="e.g. 3–8 years" maxLength={40} value={basics.age_range} error={errors.age_range} onChange={(v) => setB("age_range", v)} />
           <TextAreaField id="p-short" label="Short description" rows={2} maxLength={300} hint="Shown near the price and in search results." value={basics.short_description} error={errors.short_description} onChange={(v) => setB("short_description", v)} />
+          {aiEnabled ? <AiWriteButtons value={basics.short_description} onChange={(v) => setB("short_description", v.slice(0, 300))} productName={basics.name} only={["improve", "shorten", "malayalam"]} /> : null}
           <TextAreaField id="p-desc" label="Full description" rows={8} maxLength={10000} value={basics.description} error={errors.description} onChange={(v) => setB("description", v)} />
+          {aiEnabled ? <AiWriteButtons value={basics.description} onChange={(v) => setB("description", v.slice(0, 10000))} productName={basics.name} /> : null}
         </FormSection>
 
         <FormSection

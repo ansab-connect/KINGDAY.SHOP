@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bot,
   Camera,
   Cog,
   Crown,
@@ -79,6 +80,7 @@ export const adminNav: AdminNavGroup[] = [
     label: "Insights",
     items: [
       { title: "Analytics", href: "/admin/analytics", icon: BarChart3, module: "analytics", phase: 10 },
+      { title: "AI Analyst", href: "/admin/ai", icon: Bot, module: "analytics" },
       { title: "Reports", href: "/admin/reports", icon: FileText, module: "reports", phase: 10 },
     ],
   },
