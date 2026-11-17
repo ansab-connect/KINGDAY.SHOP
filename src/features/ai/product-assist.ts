@@ -60,7 +60,16 @@ export async function aiProductAssistAction(input: { text: string; categories: s
     "not_verified (string[]), conflicts (string[]).",
   ].join("\n");
 
-  const res = await geminiGenerate({ system, messages: [{ role: "user", text: `Product information from the shop owner:\n\n${text}` }], search: true, maxTokens: 3000 });
+  const ask = `Product information from the shop owner:\n\n${text}`;
+  let res = await geminiGenerate({ system, messages: [{ role: "user", text: ask }], search: true, maxTokens: 8192 });
+  // Google Search isn't part of every free plan: fall back to the owner's text only (no sources).
+  if (!res.ok && res.error === "limit") {
+    res = await geminiGenerate({
+      system: `${system}\nYou CANNOT search the web right now. Use ONLY the shop owner's text; put every specification you cannot read from it in not_verified.`,
+      messages: [{ role: "user", text: ask }],
+      maxTokens: 8192,
+    });
+  }
   if (!res.ok) {
     return {
       ok: false,

@@ -13,7 +13,9 @@ const HELLO: Msg = { role: "model", text: "Hi! I'm the KING DAY assistant. Ask m
 
 /** Turns plain links in the assistant's reply into tappable links (no HTML from the model). */
 function Linkified({ text }: { text: string }) {
-  const parts = text.split(/(https?:\/\/[^\s)]+)/g);
+  // Tidy any markdown the model still sends: [name](url) → url, **bold** → bold.
+  const clean = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1: $2").replace(/\*\*([^*]+)\*\*/g, "$1");
+  const parts = clean.split(/(https?:\/\/[^\s)]+)/g);
   return (
     <>
       {parts.map((p, i) =>

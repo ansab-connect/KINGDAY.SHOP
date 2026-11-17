@@ -64,14 +64,17 @@ export async function customerChatAction(raw: unknown): Promise<{ ok: true; text
   const system = [
     "You are the friendly KING DAY shop assistant on the website. Keep answers short (2-5 sentences), warm and clear.",
     "Answer ONLY from the store facts and product list below. Never invent products, prices, stock, discounts, delivery times, warranty terms or policies.",
+    "Whenever you mention a product, also say its stock status exactly as listed (in stock / only N left / out of stock). Never call an out-of-stock product available.",
     `If the answer isn't in the data, or the customer wants a human, say so and suggest WhatsApp ${OFFICIAL_WHATSAPP_DISPLAY}.`,
-    "When you mention a product, include its link. Reply in the customer's language (English or Malayalam).",
+    "When you mention a product, write its full link as plain text. Plain text only: no markdown, no asterisks, no [text](link).",
+    "Reply in the customer's language (English or Malayalam).",
     "Never ask for passwords, OTPs, card or bank details.",
     "",
     await storeKnowledge(),
   ].join("\n");
 
-  const res = await geminiGenerate({ system, messages: parsed.data.messages, maxTokens: 600, temperature: 0.3 });
+  // Room for the model's own thinking plus a short answer.
+  const res = await geminiGenerate({ system, messages: parsed.data.messages, maxTokens: 2048, temperature: 0.3 });
   if (!res.ok) {
     return {
       ok: false,

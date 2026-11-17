@@ -7,7 +7,9 @@ import "server-only";
  */
 
 export const isGeminiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
-const model = () => process.env.GEMINI_MODEL || "gemini-2.5-flash";
+// "-latest" follows Google's current fast model (about 2 s per reply on the free tier).
+// Override with GEMINI_MODEL in Vercel (e.g. a larger model) if needed.
+const model = () => process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
 
 export type GeminiMessage = { role: "user" | "model"; text: string };
 export type GeminiSource = { title: string; url: string };
