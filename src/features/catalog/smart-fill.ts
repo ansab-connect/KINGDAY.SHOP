@@ -15,7 +15,31 @@ export type ProductFill = {
   variants: { name: string; colour: string; mrp: number; price: number }[];
   seo_title: string;
   seo_description: string;
+  /** Key specs Smart fill looked for but did not find (shown as "Not provided"; never guessed). */
+  missing: string[];
 };
+
+/** Key specifications for kids' rides. Each is read only from the pasted text, never invented. */
+export const KEY_SPECS: { name: string; keys: RegExp; find: RegExp }[] = [
+  { name: "Battery", keys: /^batter(y|ies)$/i, find: /batter(?:y|ies)[^.\n:]{0,20}[:\-–]?\s*(\d{1,2}\s?v[^.\n,;]{0,25})|\b(\d{1,2}\s?v(?:olt)?(?:\s*[x×]\s*\d)?(?:\s*\d{1,3}(?:\.\d)?\s?ah)?)\s*(?:rechargeable\s*)?batter/i },
+  { name: "Motor", keys: /^motors?$/i, find: /motors?[^.\n:]{0,15}[:\-–]\s*([^.\n,;]{2,40})|\b(\d\s*[x×]\s*\d{1,3}\s?w|\d{1,3}\s?w(?:att)?s?|dual|twin|single)\s*(?:\w+\s)?motors?\b/i },
+  { name: "Weight capacity", keys: /^(max(imum)?\s*)?(weight|load)(\s*capacity)?$/i, find: /(?:max(?:imum)?\s*)?(?:weight|load)(?:\s*capacity)?\s*(?:of|up to|upto|:|-|–)?\s*(\d{1,3}\s?kg)/i },
+  { name: "Dimensions", keys: /^(dimensions?|size|product size)$/i, find: /(\d{2,3}(?:\.\d)?\s*[x×]\s*\d{2,3}(?:\.\d)?\s*[x×]\s*\d{2,3}(?:\.\d)?\s*(?:cm|mm|inch(?:es)?)?)/i },
+  { name: "Charging time", keys: /^charging(\s*time)?$/i, find: /charg(?:e|ing)\s*(?:time)?\s*(?:of|:|-|–)?\s*(\d{1,2}(?:\s*(?:-|–|to)\s*\d{1,2})?\s*(?:hrs?|hours?))/i },
+  { name: "Max speed", keys: /^(max(imum)?\s*)?speed$/i, find: /(?:max(?:imum)?\s*)?speed\s*(?:of|up to|upto|:|-|–)?\s*(\d{1,2}(?:\.\d)?(?:\s*-\s*\d{1,2})?\s*km\/?h)/i },
+  { name: "Remote control", keys: /^(parental\s*)?remote(\s*control)?$/i, find: /\b(2\.4\s?g(?:hz)?\s*(?:parental\s*)?remote(?:\s*control)?|parental remote(?:\s*control)?|remote control(?:led)?)\b/i },
+];
+function addKeySpecs(text: string, specs: { name: string; value: string }[]): string[] {
+  const missing: string[] = [];
+  for (const k of KEY_SPECS) {
+    if (specs.some((sp) => k.keys.test(sp.name.trim()))) continue;
+    const m = text.match(k.find);
+    const value = m ? (m.slice(1).find(Boolean) ?? m[0]).replace(/\s+/g, " ").trim() : "";
+    if (value) specs.push({ name: k.name, value: value.slice(0, 200) });
+    else missing.push(k.name);
+  }
+  return missing;
+}
 
 type Option = { id: string; name: string };
 
@@ -166,6 +190,8 @@ export function smartFill(raw: string, categories: Option[], brands: Option[]): 
     highlights.push(...sentences.slice(2, 7).map((s) => cut(s.replace(/[.!]+$/, ""), 120)));
   }
 
+  const missing = addKeySpecs(text, specifications);
+  if (!findAge(text)) missing.unshift("Age group");
   const { mrp, price } = findPrices(text);
   const variants = colours.length
     ? colours.map((c) => ({ name: c, colour: c, mrp, price }))
@@ -185,5 +211,6 @@ export function smartFill(raw: string, categories: Option[], brands: Option[]): 
     variants: variants.slice(0, 20),
     seo_title: cut(name, 60),
     seo_description: cut(short_description, 155),
+    missing,
   };
 }

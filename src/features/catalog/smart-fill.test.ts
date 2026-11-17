@@ -34,11 +34,13 @@ describe("smartFill", () => {
   });
 
   it("splits specifications and highlights", () => {
-    expect(r.specifications).toEqual([
+    expect(r.specifications.slice(0, 3)).toEqual([
       { name: "Battery", value: "12V 7Ah" },
       { name: "Motor", value: "2 x 35W" },
       { name: "Max Load", value: "30 kg" },
     ]);
+    // Key specs found in the rest of the text are added after the listed ones.
+    expect(r.specifications.slice(3).map((s) => s.name)).toEqual(["Remote control"]);
     expect(r.highlights).toEqual(["2.4G parental remote control", "LED headlights and MP3 music", "Seat belt and suspension"]);
   });
 
@@ -65,5 +67,28 @@ describe("smartFill", () => {
     expect(p.variants).toEqual([]);
     expect(p.brand_id).toBe("");
     expect(p.category_id).toBe("c-toys");
+  });
+});
+
+describe("smartFill key specs (Update 01 phase 14)", () => {
+  it("reads key specs from free text and lists the ones it couldn't find", () => {
+    const d = smartFill(
+      "Royal Thunder Jeep\nThis jeep runs on a 12V 7Ah battery with dual 35W motors. Max load 30 kg, size 120 x 70 x 60 cm. Comes with a 2.4G parental remote control.",
+      [],
+      [],
+    );
+    const spec = (n: string) => d.specifications.find((s) => s.name === n)?.value;
+    expect(spec("Battery")).toMatch(/12V 7Ah/i);
+    expect(spec("Motor")).toMatch(/dual|35W/i);
+    expect(spec("Weight capacity")).toBe("30 kg");
+    expect(spec("Dimensions")).toMatch(/120 x 70 x 60 cm/);
+    expect(spec("Remote control")).toMatch(/remote/i);
+    expect(d.missing).toEqual(expect.arrayContaining(["Charging time", "Max speed", "Age group"]));
+    expect(d.missing).not.toContain("Battery");
+  });
+  it("never invents a spec that isn't in the text", () => {
+    const d = smartFill("Mini Tricycle\nA sturdy tricycle with a basket.", [], []);
+    expect(d.specifications).toEqual([]);
+    expect(d.missing).toEqual(expect.arrayContaining(["Battery", "Motor", "Weight capacity"]));
   });
 });
