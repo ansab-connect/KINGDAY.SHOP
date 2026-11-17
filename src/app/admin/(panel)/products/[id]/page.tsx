@@ -1,3 +1,4 @@
+import { isGeminiConfigured } from "@/lib/gemini";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProductEditor } from "@/components/admin/catalog/product-editor";
@@ -24,7 +25,7 @@ async function EditProductContent({ params }: { params: PageProps<"/admin/produc
         description={`${product.variants.length} variant${product.variants.length === 1 ? "" : "s"} · /products/${product.slug}`}
         actions={<Pill tone={product.status === "active" ? "success" : product.status === "draft" ? "warning" : "neutral"}>{product.status}</Pill>}
       />
-      <ProductEditor product={product} categories={options.categories} brands={options.brands} canDelete={can(user, "products", "delete")} />
+      <ProductEditor product={product} categories={options.categories} brands={options.brands} canDelete={can(user, "products", "delete")} aiEnabled={isGeminiConfigured()} />
     </>
   );
 }

@@ -5,6 +5,8 @@ import { MobileTabBar } from "@/components/store/mobile-tab-bar";
 import { StoreFooter } from "@/components/store/store-footer";
 import { StoreHeader } from "@/components/store/store-header";
 import { isSupabaseConfigured } from "@/lib/env";
+import { isGeminiConfigured } from "@/lib/gemini";
+import { AiChat } from "@/components/store/ai-chat";
 
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -26,6 +28,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       <StoreFooter />
       {isSupabaseConfigured ? <CartSync /> : null}
       <MobileTabBar />
+      {isGeminiConfigured() ? <AiChat /> : null}
       <InstallBanner />
     </div>
   );

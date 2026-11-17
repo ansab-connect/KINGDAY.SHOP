@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronDown, Sparkles, X } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Bot, Check, ChevronDown, ExternalLink, Loader2, Sparkles, X } from "lucide-react";
+import { aiProductAssistAction } from "@/features/ai/product-assist";
 import { smartFill, type ProductFill } from "@/features/catalog/smart-fill";
 import { cn } from "@/lib/utils";
 
@@ -16,11 +17,16 @@ export function AiFillPanel({
   categories,
   brands,
   onFill,
+  aiEnabled = false,
 }: {
   categories: { id: string; name: string }[];
   brands: { id: string; name: string }[];
   onFill: (data: ProductFill) => string;
+  /** Gemini key configured on the server: show "Search with AI". */
+  aiEnabled?: boolean;
 }) {
+  const [aiPending, startAi] = useTransition();
+  const [extra, setExtra] = useState<{ sources: { title: string; url: string }[]; conflicts: string[]; notVerified: string[] } | null>(null);
   const [open, setOpen] = useState(true);
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<ProductFill | null>(null);
@@ -31,6 +37,42 @@ export function AiFillPanel({
 
   function read() {
     const d = smartFill(text, categories, brands);
+    setExtra(null);
+    review(d);
+  }
+
+  /** AI with Google Search; prices and colours still come only from the owner's own text (Smart fill). */
+  function searchWithAi() {
+    setStatus(null);
+    startAi(async () => {
+      const res = await aiProductAssistAction({ text, categories: categories.map((c) => c.name), brands: brands.map((b) => b.name) });
+      if (!res.ok) {
+        setStatus({ kind: "error", text: res.error });
+        return;
+      }
+      const a = res.draft;
+      const local = smartFill(text, categories, brands);
+      const idOf = (list: { id: string; name: string }[], name: string) => list.find((x) => x.name === name)?.id ?? "";
+      const d: ProductFill = {
+        name: a.name || local.name,
+        category_id: idOf(categories, a.category) || local.category_id,
+        brand_id: idOf(brands, a.brand) || local.brand_id,
+        age_range: a.age_group || local.age_range,
+        short_description: a.short_description || local.short_description,
+        description: a.description || local.description,
+        highlights: a.key_features.length ? a.key_features : local.highlights,
+        specifications: a.specifications.length ? a.specifications : local.specifications,
+        variants: local.variants,
+        seo_title: a.seo_title || local.seo_title,
+        seo_description: a.seo_description || local.seo_description,
+        missing: [...new Set([...a.not_verified, ...local.missing.filter((m) => !a.specifications.some((s) => s.name.toLowerCase() === m.toLowerCase()))])],
+      };
+      setExtra({ sources: a.sources, conflicts: a.conflicts, notVerified: a.not_verified });
+      review(d);
+    });
+  }
+
+  function review(d: ProductFill) {
     setDraft(d);
     setStatus(null);
     setPick({
@@ -96,7 +138,7 @@ export function AiFillPanel({
           <Sparkles aria-hidden className="size-4" />
         </span>
         <span className="flex-1">
-          <span className="block font-heading text-base font-semibold text-deep">Smart fill (free)</span>
+          <span className="block font-heading text-base font-semibold text-deep">{aiEnabled ? "Smart fill & AI assistant" : "Smart fill (free)"}</span>
           <span className="block text-sm text-muted-foreground">Paste the product text. Review what it found, then apply. Nothing is guessed or published automatically.</span>
         </span>
         <ChevronDown aria-hidden className={cn("size-5 text-muted-foreground transition-transform", open && "rotate-180")} />
@@ -125,6 +167,17 @@ export function AiFillPanel({
                 >
                   <Sparkles aria-hidden className="size-4" /> Read the text
                 </button>
+                {aiEnabled ? (
+                  <button
+                    type="button"
+                    disabled={text.trim().length < 3 || aiPending}
+                    onClick={searchWithAi}
+                    className="inline-flex h-10 items-center gap-2 rounded-lg border border-royal bg-white px-4 text-sm font-semibold text-royal hover:bg-royal-50 disabled:opacity-50"
+                  >
+                    {aiPending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Bot aria-hidden className="size-4" />}
+                    {aiPending ? "Searching the web…" : "Search with AI"}
+                  </button>
+                ) : null}
                 <span className="text-xs text-muted-foreground tabular">{text.length.toLocaleString("en-IN")}/12,000</span>
               </div>
             </>
@@ -153,9 +206,33 @@ export function AiFillPanel({
                   );
                 })}
               </ul>
+              {extra?.conflicts.length ? (
+                <div className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+                  <p className="font-semibold">Sources disagree. Check these before saving:</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {extra.conflicts.map((c) => <li key={c}>{c}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+              {extra?.sources.length ? (
+                <div className="rounded-xl border bg-white px-3 py-2 text-sm">
+                  <p className="font-semibold text-deep">Sources the AI used</p>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {extra.sources.map((src) => (
+                      <li key={src.url}>
+                        <a href={src.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 break-all text-royal hover:underline">
+                          <ExternalLink aria-hidden className="size-3.5 shrink-0" /> {src.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : extra ? (
+                <p className="rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning">The AI didn&apos;t show any sources for these details. Treat them as not verified.</p>
+              ) : null}
               {draft.missing.length ? (
                 <p className="rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning">
-                  <span className="font-semibold">Not provided in your text:</span> {draft.missing.join(", ")}. Add them by hand if you know them; Smart fill never guesses.
+                  <span className="font-semibold">{extra ? "Not verified:" : "Not provided in your text:"}</span> {draft.missing.join(", ")}. Add them by hand if you know them; nothing is guessed.
                 </p>
               ) : null}
               <p className="text-xs text-muted-foreground">Stock, SKUs and purchase price are never filled automatically. Prices are only taken from your own text.</p>

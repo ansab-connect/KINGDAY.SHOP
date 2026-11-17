@@ -1,3 +1,4 @@
+import { isGeminiConfigured } from "@/lib/gemini";
 import type { Metadata } from "next";
 import { PreviewSaveNotice } from "@/components/admin/catalog/preview-save-notice";
 import { NewProductEditor } from "@/components/admin/catalog/new-product-editor";
@@ -13,7 +14,7 @@ async function NewProductContent() {
     <>
       <PageHeader title="New product" description="Add a product with its variants, pricing and specifications" />
       <PreviewSaveNotice />
-      <NewProductEditor categories={categories} brands={brands} canDelete={false} />
+      <NewProductEditor categories={categories} brands={brands} canDelete={false} aiEnabled={isGeminiConfigured()} />
     </>
   );
 }

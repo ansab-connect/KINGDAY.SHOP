@@ -48,6 +48,7 @@ export function ProductEditor({
   brands,
   canDelete,
   onDirtyChange,
+  aiEnabled = false,
 }: {
   product: AdminProduct | null;
   categories: Option[];
@@ -55,6 +56,8 @@ export function ProductEditor({
   canDelete: boolean;
   /** Told whenever the form gains or loses unsaved changes. */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Gemini is configured on the server (shows "Search with AI"). */
+  aiEnabled?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -234,7 +237,7 @@ export function ProductEditor({
   return (
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_20rem]" noValidate>
       <div className="flex min-w-0 flex-col gap-6">
-        <AiFillPanel categories={categories.map((c) => ({ id: c.id, name: c.name }))} brands={brands} onFill={applyAi} />
+        <AiFillPanel categories={categories.map((c) => ({ id: c.id, name: c.name }))} brands={brands} onFill={applyAi} aiEnabled={aiEnabled} />
         <FormStatus status={status} />
 
         <FormSection title="Basics">
