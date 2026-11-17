@@ -12,7 +12,6 @@ import { MAX_PHOTOS, PREFERRED_TIMES, SERVICE_MEDIA_BUCKET } from "@/features/se
 import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { LocationPicker, type LatLng } from "./location-picker";
 import { VoiceRecorder, type VoiceNote } from "./voice-recorder";
 
 export type Purchase = { key: string; orderId: string; orderNumber: string; productName: string; placedAt: string };
@@ -85,7 +84,6 @@ export function BookingForm({
   const [voice, setVoice] = useState<VoiceNote | null>(null);
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   const [address, setAddress] = useState(defaults.address);
-  const [location, setLocation] = useState<LatLng | null>(null);
   const [preferred, setPreferred] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,8 +140,8 @@ export function BookingForm({
         voice_path: voicePath,
         photo_paths: photoPaths,
         address,
-        latitude: location?.lat ?? null,
-        longitude: location?.lng ?? null,
+        latitude: null,
+        longitude: null,
         preferred_date: preferred,
         booking_kind: option.slug,
         service_type: serviceType,
@@ -314,9 +312,6 @@ export function BookingForm({
         <Field label={<L en="Service address" ml="സർവീസ് വിലാസം" />} required error={fe.address} className="sm:col-span-2">
           <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} maxLength={500} autoComplete="street-address" className={cn(inputClass, "h-auto py-2")} />
         </Field>
-        <div className="sm:col-span-2">
-          <LocationPicker value={location} onChange={setLocation} />
-        </div>
         <Field label={<L en="Preferred date (optional)" ml="ഇഷ്ടമുള്ള തീയതി (ഐച്ഛികം)" />} error={fe.preferred_date} hint={<L en="We inspect first and then fix a date with you." ml="ആദ്യം പരിശോധിച്ച ശേഷം തീയതി ഉറപ്പിക്കും." />}>
           <input value={preferred} onChange={(e) => setPreferred(e.target.value)} type="date" min={isoIn(0)} max={isoIn(90)} className={inputClass} />
         </Field>
