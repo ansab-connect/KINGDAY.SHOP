@@ -42,8 +42,8 @@ export const whyChoose = [
   },
   {
     icon: "lock",
-    title: "Secure payments",
-    body: "Pay online through Razorpay, or choose cash on delivery where available.",
+    title: "Pay on delivery",
+    body: "Pay cash when your order arrives. Our team calls you first to confirm the delivery date.",
   },
   {
     icon: "chat",

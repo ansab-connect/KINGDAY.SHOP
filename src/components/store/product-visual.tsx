@@ -52,7 +52,7 @@ export function ProductVisual({
   return (
     <div
       role="img"
-      aria-label="Product photo coming soon"
+      aria-label="No photo yet"
       className={cn(
         "relative grid place-items-center overflow-hidden bg-[radial-gradient(120%_90%_at_50%_10%,var(--color-royal-50)_0%,#ffffff_60%,var(--color-gold-50)_100%)]",
         className,

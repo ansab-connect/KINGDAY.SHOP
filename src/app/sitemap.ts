@@ -4,7 +4,20 @@ import { getAllCategories, getAllProducts } from "@/features/catalog/queries";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteConfig.url;
-  const staticPages = ["", "/shop", "/categories", "/offers", "/about", "/contact"].map((path) => ({
+  const staticPages = [
+    "",
+    "/shop",
+    "/categories",
+    "/offers",
+    "/book-service",
+    "/about",
+    "/contact",
+    "/policies/shipping",
+    "/policies/returns",
+    "/policies/warranty",
+    "/policies/privacy",
+    "/policies/terms",
+  ].map((path) => ({
     url: `${base}${path}`,
     changeFrequency: "weekly" as const,
     priority: path === "" ? 1 : 0.7,
