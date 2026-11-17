@@ -8,10 +8,11 @@ import { L } from "@/components/i18n/lang";
 import { useLang } from "@/components/i18n/language-switcher";
 import { useRouter } from "next/navigation";
 import { addToServiceCartAction, createServiceBookingAction } from "@/features/service/actions";
-import { MAX_PHOTOS, PREFERRED_TIMES, SERVICE_MEDIA_BUCKET } from "@/features/service/constants";
+import { MAX_PHOTOS, SERVICE_MEDIA_BUCKET } from "@/features/service/constants";
 import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { LocationPicker, type LatLng } from "./location-picker";
 import { VoiceRecorder, type VoiceNote } from "./voice-recorder";
 
 export type Purchase = { key: string; orderId: string; orderNumber: string; productName: string; placedAt: string };
@@ -45,11 +46,6 @@ function Step({ n, title, children }: { n: number; title: React.ReactNode; child
   );
 }
 
-const isoIn = (days: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-};
 
 export function BookingForm({
   userId,
@@ -70,7 +66,6 @@ export function BookingForm({
   const router = useRouter();
   const known = Boolean(defaults.name && defaults.mobile);
   const [serviceType, setServiceType] = useState(option.defaultType && types.some((t) => t.slug === option.defaultType) ? option.defaultType : (types[0]?.slug ?? "repair"));
-  const [preferredTime, setPreferredTime] = useState("");
   const [name, setName] = useState(defaults.name);
   const [mobile, setMobile] = useState(defaults.mobile);
   const [email, setEmail] = useState(defaults.email);
@@ -84,7 +79,7 @@ export function BookingForm({
   const [voice, setVoice] = useState<VoiceNote | null>(null);
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   const [address, setAddress] = useState(defaults.address);
-  const [preferred, setPreferred] = useState("");
+  const [location, setLocation] = useState<LatLng | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fe, setFe] = useState<Record<string, string>>({});
@@ -140,12 +135,12 @@ export function BookingForm({
         voice_path: voicePath,
         photo_paths: photoPaths,
         address,
-        latitude: null,
-        longitude: null,
-        preferred_date: preferred,
+        latitude: location?.lat ?? null,
+        longitude: location?.lng ?? null,
+        preferred_date: "",
         booking_kind: option.slug,
         service_type: serviceType,
-        preferred_time: preferredTime,
+        preferred_time: "",
       };
       const res = toCart ? await addToServiceCartAction(payload) : await createServiceBookingAction(payload);
       if (res.ok && toCart) {
@@ -308,19 +303,16 @@ export function BookingForm({
         </div>
       </Step>
 
-      <Step n={4} title={<L en="Where & when" ml="എവിടെ, എപ്പോൾ" />}>
+      <Step n={4} title={<L en="Where" ml="എവിടെ" />}>
         <Field label={<L en="Service address" ml="സർവീസ് വിലാസം" />} required error={fe.address} className="sm:col-span-2">
           <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} maxLength={500} autoComplete="street-address" className={cn(inputClass, "h-auto py-2")} />
         </Field>
-        <Field label={<L en="Preferred date (optional)" ml="ഇഷ്ടമുള്ള തീയതി (ഐച്ഛികം)" />} error={fe.preferred_date} hint={<L en="We inspect first and then fix a date with you." ml="ആദ്യം പരിശോധിച്ച ശേഷം തീയതി ഉറപ്പിക്കും." />}>
-          <input value={preferred} onChange={(e) => setPreferred(e.target.value)} type="date" min={isoIn(0)} max={isoIn(90)} className={inputClass} />
-        </Field>
-        <Field label={<L en="Preferred time" ml="ഇഷ്ടമുള്ള സമയം" />}>
-          <select value={preferredTime} onChange={(e) => setPreferredTime(e.target.value)} className={inputClass}>
-            <option value="">{ml ? "ഏത് സമയവും" : "Any time"}</option>
-            {PREFERRED_TIMES.map((t) => <option key={t.value} value={t.value}>{ml ? t.ml : t.en}</option>)}
-          </select>
-        </Field>
+        <div className="sm:col-span-2">
+          <LocationPicker value={location} onChange={setLocation} />
+        </div>
+        <p className="text-sm text-muted-foreground sm:col-span-2">
+          <L en="No need to pick a date: we inspect first, then call you to fix a convenient time." ml="തീയതി തിരഞ്ഞെടുക്കേണ്ട: ആദ്യം പരിശോധിച്ച ശേഷം സൗകര്യപ്രദമായ സമയം വിളിച്ച് ഉറപ്പിക്കും." />
+        </p>
       </Step>
 
       {error ? <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}

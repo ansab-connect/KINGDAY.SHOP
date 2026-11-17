@@ -115,7 +115,7 @@ export function LocationPicker({ value, onChange }: { value: LatLng | null; onCh
           </button>
         ) : null}
       </div>
-      <div ref={box} className="h-64 w-full overflow-hidden rounded-xl border bg-muted sm:h-72" role="application" aria-label="Map: tap to set the service location" />
+      <div ref={box} className="relative z-0 h-64 w-full overflow-hidden rounded-xl border bg-muted sm:h-72" role="application" aria-label="Map: tap to set the service location" />
       <p className="text-xs text-muted-foreground">
         {error ?? <Tr en="Tap the map or drag the pin to your exact location (optional, helps the technician)." ml="മാപ്പിൽ തൊട്ട് കൃത്യമായ സ്ഥലം തിരഞ്ഞെടുക്കൂ (ഐച്ഛികം)." />}
       </p>
