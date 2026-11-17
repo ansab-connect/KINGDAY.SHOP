@@ -6,6 +6,7 @@ import { L } from "@/components/i18n/lang";
 import { Container } from "@/components/store/section";
 import { QuickAccount } from "@/components/store/quick-account";
 import { BookingForm } from "@/components/store/service/booking-form";
+import { BestFitHowItWorks } from "@/components/store/service/best-fit-how-it-works";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OFFICIAL_WHATSAPP } from "@/config/storefront";
@@ -64,7 +65,7 @@ async function BestFit({ searchParams }: PageProps<"/book-service">) {
 
   if (!chosen) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <h2 className="font-heading text-xl font-semibold text-deep"><L en="What do you need?" ml="എന്താണ് വേണ്ടത്?" /></h2>
         {active.length === 0 ? (
           <p className="rounded-2xl border bg-white p-6 text-sm text-muted-foreground">Booking options will appear here soon. Please contact us on WhatsApp.</p>
@@ -73,6 +74,7 @@ async function BestFit({ searchParams }: PageProps<"/book-service">) {
             {active.map((o) => <OptionCard key={o.id} o={o} />)}
           </div>
         )}
+        <BestFitHowItWorks />
       </div>
     );
   }

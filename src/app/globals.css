@@ -234,3 +234,33 @@ html[data-lang="ml"] header nav a {
   padding-inline: 0.5rem;
   font-size: 0.8125rem;
 }
+
+/* ------------------------------------------------------------------ BEST FIT "how it works" motion (10 s loop) */
+.bf-motion {
+  --bf-cycle: 10s;
+}
+@keyframes bf-fill-x { 0% { width: 0; } 90%, 100% { width: 100%; } }
+@keyframes bf-fill-y { 0% { height: 0; } 90%, 100% { height: 100%; } }
+@keyframes bf-step {
+  0%, 100% { border-color: rgb(255 255 255 / 0.2); color: rgb(255 255 255 / 0.6); background: var(--color-deep); transform: scale(1); }
+  4%, 16% { border-color: var(--color-gold); color: var(--color-deep); background: var(--color-gold); transform: scale(1.12); }
+  20%, 96% { border-color: var(--color-gold); color: var(--color-gold); background: var(--color-deep); transform: scale(1); }
+}
+@keyframes bf-label { 0%, 100% { color: rgb(255 255 255 / 0.7); } 4%, 96% { color: #fff; } }
+@keyframes bf-line { 0%, 2% { opacity: 0; transform: translateY(6px); } 8%, 94% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes bf-bar { 0%, 2% { background: var(--color-muted); } 6%, 94% { background: var(--color-royal); } 100% { background: var(--color-muted); } }
+.bf-fill-x { animation: bf-fill-x var(--bf-cycle) linear infinite; }
+.bf-fill-y { animation: bf-fill-y var(--bf-cycle) linear infinite; }
+/* Each step starts 1.8 s after the previous one; all fade back together at the end of the loop. */
+.bf-step { animation: bf-step var(--bf-cycle) ease-out infinite; animation-delay: calc(var(--i) * 1.8s); animation-fill-mode: both; }
+.bf-label { animation: bf-label var(--bf-cycle) ease-out infinite; animation-delay: calc(var(--i) * 1.8s); }
+.bf-line { opacity: 0; animation: bf-line var(--bf-cycle) ease-out infinite; animation-delay: calc(var(--i) * 1.8s); animation-fill-mode: both; }
+.bf-bar { animation: bf-bar var(--bf-cycle) ease-out infinite; animation-delay: calc(var(--i) * 1.8s); animation-fill-mode: both; }
+@media (prefers-reduced-motion: reduce) {
+  .bf-fill-x, .bf-fill-y, .bf-step, .bf-label, .bf-line, .bf-bar { animation: none; }
+  .bf-fill-x { width: 100%; }
+  .bf-fill-y { height: 100%; }
+  .bf-line { opacity: 1; }
+  .bf-bar { background: var(--color-royal); }
+  .bf-step { border-color: var(--color-gold); color: var(--color-gold); }
+}

@@ -79,7 +79,8 @@ describe("smartFill key specs (Update 01 phase 14)", () => {
     );
     const spec = (n: string) => d.specifications.find((s) => s.name === n)?.value;
     expect(spec("Battery")).toMatch(/12V 7Ah/i);
-    expect(spec("Motor")).toMatch(/dual|35W/i);
+    expect(spec("Motor")).toMatch(/dual 35W/i);
+    expect(d.highlights.join(" ")).not.toMatch(/(^|[^.])4G parental/);
     expect(spec("Weight capacity")).toBe("30 kg");
     expect(spec("Dimensions")).toMatch(/120 x 70 x 60 cm/);
     expect(spec("Remote control")).toMatch(/remote/i);

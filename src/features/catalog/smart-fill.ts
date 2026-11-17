@@ -22,7 +22,7 @@ export type ProductFill = {
 /** Key specifications for kids' rides. Each is read only from the pasted text, never invented. */
 export const KEY_SPECS: { name: string; keys: RegExp; find: RegExp }[] = [
   { name: "Battery", keys: /^batter(y|ies)$/i, find: /batter(?:y|ies)[^.\n:]{0,20}[:\-–]?\s*(\d{1,2}\s?v[^.\n,;]{0,25})|\b(\d{1,2}\s?v(?:olt)?(?:\s*[x×]\s*\d)?(?:\s*\d{1,3}(?:\.\d)?\s?ah)?)\s*(?:rechargeable\s*)?batter/i },
-  { name: "Motor", keys: /^motors?$/i, find: /motors?[^.\n:]{0,15}[:\-–]\s*([^.\n,;]{2,40})|\b(\d\s*[x×]\s*\d{1,3}\s?w|\d{1,3}\s?w(?:att)?s?|dual|twin|single)\s*(?:\w+\s)?motors?\b/i },
+  { name: "Motor", keys: /^motors?$/i, find: /motors?[^.\n:]{0,15}[:\-–]\s*([^.\n,;]{2,40})|\b(\d\s*[x×]\s*\d{1,3}\s?w|(?:dual|twin|single)?\s*\d{1,3}\s?w(?:att)?s?|dual|twin|single)\s*(?:\w+\s)?motors?\b/i },
   { name: "Weight capacity", keys: /^(max(imum)?\s*)?(weight|load)(\s*capacity)?$/i, find: /(?:max(?:imum)?\s*)?(?:weight|load)(?:\s*capacity)?\s*(?:of|up to|upto|:|-|–)?\s*(\d{1,3}\s?kg)/i },
   { name: "Dimensions", keys: /^(dimensions?|size|product size)$/i, find: /(\d{2,3}(?:\.\d)?\s*[x×]\s*\d{2,3}(?:\.\d)?\s*[x×]\s*\d{2,3}(?:\.\d)?\s*(?:cm|mm|inch(?:es)?)?)/i },
   { name: "Charging time", keys: /^charging(\s*time)?$/i, find: /charg(?:e|ing)\s*(?:time)?\s*(?:of|:|-|–)?\s*(\d{1,2}(?:\s*(?:-|–|to)\s*\d{1,2})?\s*(?:hrs?|hours?))/i },
@@ -68,7 +68,8 @@ const CATEGORY_HINTS: [RegExp, string[]][] = [
 const toNumber = (s: string) => Number(s.replace(/,/g, ""));
 const clean = (s: string) => s.replace(BULLET, "").replace(/\s+/g, " ").trim();
 const titleCase = (s: string) => s.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
-const sentenceSplit = (s: string) => s.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((x) => x.trim()).filter(Boolean) ?? [];
+// Split on . ! ? followed by a space or the end, so "2.4G" or "7.5 kg" stay whole.
+const sentenceSplit = (s: string) => s.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
 
 function cut(s: string, max: number): string {
   if (s.length <= max) return s;
