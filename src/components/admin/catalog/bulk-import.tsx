@@ -57,11 +57,11 @@ async function downloadTemplate(categories: Option[], brands: Option[]) {
   ws.columns = IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key, width: c.width }));
   const head = ws.getRow(1);
   head.height = 30;
-  head.eachCell((cell, i) => {
+  // No cell notes/comments: some spreadsheet apps re-save them in a form Excel readers choke on.
+  head.eachCell((cell) => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4B0082" } };
     cell.alignment = { vertical: "middle", wrapText: true };
-    cell.note = IMPORT_COLUMNS[i - 1].note;
   });
   const cat = categories[0]?.name ?? "Electric Jeeps & Cars";
   const samples = [
@@ -96,6 +96,9 @@ async function downloadTemplate(categories: Option[], brands: Option[]) {
     "   Then upload the images together with this file (as a ZIP, a folder, or selected images).",
     "6. Rows starting with 'SAMPLE' are ignored. Delete them when you're done.",
     "7. Products import as Draft unless Status is 'active'. You review every row before anything is saved.",
+    "",
+    "Columns:",
+    ...IMPORT_COLUMNS.map((c) => `• ${c.header}: ${c.note}`),
   ].forEach((t, i) => {
     help.getCell(i + 1, 1).value = t;
     if (i === 0) help.getCell(1, 1).font = { bold: true, size: 14, color: { argb: "FF4B0082" } };
