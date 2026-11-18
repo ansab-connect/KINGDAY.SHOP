@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, Package, Plus, Search, Star } from "lucide-react";
+import { ChevronRight, Package, Plus, Search, Star, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { PreviewNotice } from "@/components/admin/preview-notice";
 import { StaffOnly } from "@/components/admin/staff-only";
@@ -58,9 +58,14 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
         title="Products"
         description={`${rows.length} product${rows.length === 1 ? "" : "s"} · pricing, SKUs, variants and visibility`}
         actions={
-          <Button asChild>
-            <Link href="/admin/products/new"><Plus aria-hidden /> Add product</Link>
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <Link href="/admin/products/import"><FileSpreadsheet aria-hidden /> Import products</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/admin/products/new"><Plus aria-hidden /> Add product</Link>
+            </Button>
+          </>
         }
       />
       {!isSupabaseConfigured ? <PreviewNotice phase={5} /> : null}
