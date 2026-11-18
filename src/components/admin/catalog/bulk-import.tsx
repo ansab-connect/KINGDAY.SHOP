@@ -27,6 +27,8 @@ import {
   groupRows,
   imageKey,
   parseSpecs,
+  readCsv,
+  readXlsxPackage,
   rowsFromSheet,
   toProductInput,
   type ImportImage,
@@ -109,14 +111,48 @@ async function downloadTemplate(categories: Option[], brands: Option[]) {
 }
 
 async function readWorkbook(file: File, categories: Option[], brands: Option[]) {
-  const ExcelJS = (await import("exceljs")).default;
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
-  const ws = wb.getWorksheet("Products") ?? wb.worksheets.find((w) => w.state !== "hidden") ?? wb.worksheets[0];
-  if (!ws) throw new Error("The file has no sheets.");
-  const values: unknown[][] = [];
-  for (let r = 1; r <= ws.rowCount; r++) values.push((ws.getRow(r).values as unknown[]).slice(1));
-  return rowsFromSheet(values, categories, brands);
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".xls")) {
+    throw new Error('This is an old ".xls" file. In Excel choose File → Save As → "Excel Workbook (.xlsx)", then upload that file.');
+  }
+  if (name.endsWith(".csv")) return rowsFromSheet(readCsv(await file.text()), categories, brands);
+
+  const buf = await file.arrayBuffer();
+  const fallback = async () => {
+    const { unzipSync, strFromU8 } = await import("fflate");
+    const entries = unzipSync(new Uint8Array(buf), { filter: (f) => /\.(xml|rels)$/i.test(f.name) });
+    return rowsFromSheet(readXlsxPackage(Object.fromEntries(Object.entries(entries).map(([k, v]) => [k, strFromU8(v)]))), categories, brands);
+  };
+
+  let main: ReturnType<typeof rowsFromSheet> | null = null;
+  let mainError = "";
+  try {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    const ws = wb.getWorksheet("Products") ?? wb.worksheets.find((w) => w.state !== "hidden") ?? wb.worksheets[0];
+    if (ws) {
+      const values: unknown[][] = [];
+      for (let r = 1; r <= ws.rowCount; r++) values.push((ws.getRow(r).values as unknown[]).slice(1));
+      main = rowsFromSheet(values, categories, brands);
+    }
+  } catch (e) {
+    mainError = e instanceof Error ? e.message : String(e);
+  }
+  // Files saved by other spreadsheet apps sometimes trip the main reader: read the raw data instead.
+  if (!main || main.missingColumns.length || !main.rows.length) {
+    try {
+      const alt = await fallback();
+      if (!main || (!alt.missingColumns.length && alt.rows.length >= main.rows.length)) return alt;
+    } catch (e) {
+      if (!main) {
+        throw new Error(
+          `Couldn't read this Excel file (${mainError || (e instanceof Error ? e.message : "unknown error")}). Open it and use File → Save As → "Excel Workbook (.xlsx)" or "CSV", then upload again.`,
+        );
+      }
+    }
+  }
+  return main!;
 }
 
 async function readImages(files: FileList | File[]): Promise<ImportImage[]> {
@@ -170,9 +206,17 @@ export function BulkImport({ categories, brands }: { categories: Option[]; brand
     setBusy("Reading the Excel file…");
     setNotice(null);
     try {
-      const { rows: parsed, missingColumns } = await readWorkbook(file, categories, brands);
-      if (missingColumns.length) throw new Error(`Missing columns: ${missingColumns.join(", ")}. Please use the template.`);
-      if (!parsed.length) throw new Error("No products found. Fill the 'Products' sheet (rows starting with SAMPLE are ignored).");
+      const { rows: parsed, missingColumns, samplesSkipped } = await readWorkbook(file, categories, brands);
+      if (missingColumns.length) {
+        throw new Error(`These columns are missing in the first row: ${missingColumns.join(", ")}. Keep the template's header row as it is (row 1) and type products from row 2.`);
+      }
+      if (!parsed.length) {
+        throw new Error(
+          samplesSkipped
+            ? `Only the ${samplesSkipped} SAMPLE row(s) were found, and they are ignored on purpose. Type your products in new rows, or replace the word "SAMPLE" in the Product Name.`
+            : "No products found. Type your products on the 'Products' sheet, starting from row 2.",
+        );
+      }
       if (parsed.length > MAX_ROWS) throw new Error(`This file has ${parsed.length} rows. Import at most ${MAX_ROWS} at a time.`);
       const res = await findExistingSkus(parsed.map((r) => r.sku));
       if (!res.ok) throw new Error(res.error);
@@ -288,10 +332,10 @@ export function BulkImport({ categories, brands }: { categories: Option[]; brand
         </div>
         <div className="flex flex-col gap-3 rounded-2xl border bg-white p-5 shadow-card">
           <p className="flex items-center gap-2 font-heading font-semibold text-deep"><span className="grid size-6 place-items-center rounded-full bg-royal text-xs text-white">2</span> Upload Excel</p>
-          <p className="text-sm text-muted-foreground">{fileName ? <>Loaded <b className="text-deep">{fileName}</b> · {rows.length} row{rows.length === 1 ? "" : "s"}</> : "The completed template (.xlsx)."}</p>
+          <p className="text-sm text-muted-foreground">{fileName ? <>Loaded <b className="text-deep">{fileName}</b> · {rows.length} row{rows.length === 1 ? "" : "s"}</> : "The completed template (.xlsx or .csv)."}</p>
           <label className={cn("mt-auto inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg bg-royal px-4 text-sm font-semibold text-white hover:bg-royal-800", (busy || importing) && "pointer-events-none opacity-60")}>
             <FileSpreadsheet aria-hidden className="size-4" /> {fileName ? "Upload another file" : "Upload Excel"}
-            <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) loadExcel(f); }} />
+            <input type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) loadExcel(f); }} />
           </label>
         </div>
         <div className="flex flex-col gap-3 rounded-2xl border bg-white p-5 shadow-card">

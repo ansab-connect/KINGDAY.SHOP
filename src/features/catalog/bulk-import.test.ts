@@ -93,3 +93,40 @@ describe("excel round trip", () => {
     expect(checkRows(rows, new Set()).get(rows[0].key)!.errors).toEqual([]);
   });
 });
+
+describe("fallback readers", () => {
+  it("reads raw xlsx XML (shared strings, inline strings, numbers, gaps, hidden sheets)", async () => {
+    const { readXlsxPackage, readCsv } = await import("./bulk-import");
+    const files = {
+      "xl/workbook.xml": '<workbook xmlns:r="r"><sheets><sheet name="Lists" sheetId="1" state="hidden" r:id="rId1"/><sheet name="Products" sheetId="2" r:id="rId2"/></sheets></workbook>',
+      "xl/_rels/workbook.xml.rels": '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>',
+      "xl/sharedStrings.xml": '<sst><si><t>Product Name *</t></si><si><t>SKU *</t></si><si><r><t>Glide </t></r><r><t>Scooter &amp; Co</t></r></si><si><t>Category *</t></si><si><t>Scooters</t></si></sst>',
+      "xl/worksheets/sheet2.xml":
+        '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>3</v></c><c r="H1" t="inlineStr"><is><t>MRP (₹) *</t></is></c><c r="I1" t="inlineStr"><is><t>Selling Price (₹) *</t></is></c></row>' +
+        '<row r="3"><c r="A3" t="s"><v>2</v></c><c r="B3" t="str"><v>GLIDE-9</v></c><c r="C3" t="s"><v>4</v></c><c r="H3"><v>3499</v></c><c r="I3"><v>2799</v></c></row></sheetData></worksheet>',
+    };
+    const values = readXlsxPackage(files);
+    const { rows, missingColumns } = rowsFromSheet(values, cats, brands);
+    expect(missingColumns).toEqual([]);
+    expect(rows.map((r) => [r.name, r.sku, r.categoryId, r.mrp, r.price, r.rowNumber])).toEqual([["Glide Scooter & Co", "GLIDE-9", cats[1].id, "3499", "2799", 3]]);
+
+    const csv = readCsv('﻿Product Name *;SKU *;Category *;Brand;Variant / Colour;Short Description;Description;MRP (₹) *;Selling Price (₹) *\n"Jeep; ""Pro""";JEEP-1;Scooters;;;;;"1,999";1499\r\n');
+    const parsed = rowsFromSheet(csv, cats, brands);
+    expect(parsed.rows.map((r) => [r.name, r.sku, r.mrp, r.price])).toEqual([['Jeep; "Pro"', "JEEP-1", "1999", "1499"]]);
+  });
+
+  it("reads a real .xlsx through the fallback path too", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const { unzipSync, strFromU8 } = await import("fflate");
+    const { readXlsxPackage } = await import("./bulk-import");
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet("Lists", { state: "hidden" }).getCell("A1").value = "Scooters";
+    const ws = wb.addWorksheet("Products");
+    ws.columns = IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key }));
+    ws.addRow({ name: "Glide Scooter", sku: "GLIDE-3", category: "Scooters", mrp: 3499, price: 2799, stock: 4 });
+    const zip = unzipSync(new Uint8Array(await wb.xlsx.writeBuffer()), { filter: (f) => /\.(xml|rels)$/i.test(f.name) });
+    const values = readXlsxPackage(Object.fromEntries(Object.entries(zip).map(([k, v]) => [k, strFromU8(v)])));
+    const { rows } = rowsFromSheet(values, cats, brands);
+    expect(rows.map((r) => [r.sku, r.mrp, r.price, r.stock])).toEqual([["GLIDE-3", "3499", "2799", "4"]]);
+  });
+});

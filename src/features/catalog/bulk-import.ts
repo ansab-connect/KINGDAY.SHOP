@@ -66,8 +66,10 @@ export function cellText(v: unknown): string {
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === "object") {
-    const o = v as { richText?: { text: string }[]; text?: unknown; result?: unknown; hyperlink?: string };
+    const o = v as { richText?: { text: string }[]; text?: unknown; result?: unknown; hyperlink?: string; error?: unknown; formula?: unknown; sharedFormula?: unknown };
     if (o.richText) return o.richText.map((r) => r.text).join("").trim();
+    if (o.error !== undefined) return "";
+    if ((o.formula !== undefined || o.sharedFormula !== undefined) && o.result === undefined) return "";
     if (o.text !== undefined) return cellText(o.text);
     if (o.result !== undefined) return cellText(o.result);
   }
@@ -99,17 +101,21 @@ export function parseSpecs(text: string): { name: string; value: string }[] {
 }
 
 /** Builds rows from sheet values (array of row arrays, first = headers). Sample rows are skipped. */
-export function rowsFromSheet(values: unknown[][], categories: Option[], brands: Option[]): { rows: ImportRow[]; missingColumns: string[] } {
+export function rowsFromSheet(values: unknown[][], categories: Option[], brands: Option[]): { rows: ImportRow[]; missingColumns: string[]; samplesSkipped: number } {
   const [headerRow = [], ...body] = values;
   const map = mapHeaders(headerRow.map(cellText));
   const required: ColumnKey[] = ["name", "sku", "category", "mrp", "price"];
   const missingColumns = required.filter((k) => map[k] === undefined).map((k) => IMPORT_COLUMNS.find((c) => c.key === k)!.header);
   const get = (r: unknown[], k: ColumnKey) => (map[k] === undefined ? "" : cellText(r[map[k]!]));
   const rows: ImportRow[] = [];
+  let samplesSkipped = 0;
   body.forEach((r, i) => {
     if (!r || r.every((c) => cellText(c) === "")) return;
     const name = get(r, "name");
-    if (/^sample\b/i.test(name)) return; // template examples
+    if (/^sample\b/i.test(name)) {
+      samplesSkipped++; // template examples
+      return;
+    }
     const categoryText = get(r, "category");
     const brandText = get(r, "brand");
     rows.push({
@@ -134,7 +140,7 @@ export function rowsFromSheet(values: unknown[][], categories: Option[], brands:
       images: [],
     });
   });
-  return { rows, missingColumns };
+  return { rows, missingColumns, samplesSkipped };
 }
 
 /** Image lookup key: file name without folders, lower case. */
@@ -240,4 +246,91 @@ export function toProductInput(group: ImportRow[], slug?: string) {
       return true;
     }),
   };
+}
+
+// ---------------------------------------------------------------- Fallback readers
+const XML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+const unxml = (s: string) =>
+  s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (_, e: string) =>
+    e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : XML_ENTITIES[e.toLowerCase()],
+  );
+const allText = (xml: string) => [...xml.matchAll(/<(?:\w+:)?t\b[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map((m) => unxml(m[1])).join("");
+const colIndex = (ref: string) => [...ref.replace(/\d+/g, "")].reduce((n, ch) => n * 26 + ch.toUpperCase().charCodeAt(0) - 64, 0) - 1;
+
+/**
+ * Minimal .xlsx reader (values only) used when the main Excel library can't open a file
+ * saved by another spreadsheet app. `files` = unzipped package: path → text.
+ */
+export function readXlsxPackage(files: Record<string, string>): unknown[][] {
+  const workbook = files["xl/workbook.xml"] ?? "";
+  const rels = files["xl/_rels/workbook.xml.rels"] ?? "";
+  const sheets = [...workbook.matchAll(/<(?:\w+:)?sheet\b([^>]*)\/?>/g)].map((m) => ({
+    name: unxml(/\bname="([^"]*)"/.exec(m[1])?.[1] ?? ""),
+    rid: /\br:id="([^"]*)"/.exec(m[1])?.[1] ?? /\bid="([^"]*)"/.exec(m[1])?.[1] ?? "",
+    hidden: /\bstate="(hidden|veryHidden)"/.test(m[1]),
+  }));
+  const pick = sheets.find((s) => /^products$/i.test(s.name)) ?? sheets.find((s) => !s.hidden) ?? sheets[0];
+  let target = "";
+  if (pick) {
+    const rel = [...rels.matchAll(/<Relationship\b([^>]*)\/?>/g)].map((m) => m[1]).find((a) => /(?:^|\s)Id="([^"]*)"/.exec(a)?.[1] === pick.rid);
+    target = /\bTarget="([^"]*)"/.exec(rel ?? "")?.[1] ?? "";
+  }
+  const sheetPath = target ? (target.startsWith("/") ? target.slice(1) : `xl/${target.replace(/^\.\//, "")}`) : Object.keys(files).find((p) => /^xl\/worksheets\/sheet\d+\.xml$/.test(p)) ?? "";
+  const sheet = files[sheetPath];
+  if (!sheet) throw new Error("No worksheet found in this file.");
+  const shared = [...(files["xl/sharedStrings.xml"] ?? "").matchAll(/<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((m) => allText(m[1]));
+  const out: unknown[][] = [];
+  for (const row of sheet.matchAll(/<(?:\w+:)?row\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?row>/g)) {
+    const r = Number(/\br="(\d+)"/.exec(row[1])?.[1] ?? out.length + 1);
+    const cells: unknown[] = [];
+    let next = 0;
+    for (const c of row[2].matchAll(/<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g)) {
+      const ref = /\br="([A-Z]+\d+)"/.exec(c[1])?.[1];
+      const i = ref ? colIndex(ref) : next;
+      next = i + 1;
+      const type = /\bt="(\w+)"/.exec(c[1])?.[1];
+      const body = c[2] ?? "";
+      const v = /<(?:\w+:)?v>([\s\S]*?)<\/(?:\w+:)?v>/.exec(body)?.[1];
+      cells[i] = type === "s" ? shared[Number(v)] ?? "" : type === "inlineStr" ? allText(body) : type === "b" ? v === "1" : type === "e" ? "" : v !== undefined ? (type === "str" ? unxml(v) : Number.isFinite(Number(v)) ? Number(v) : unxml(v)) : "";
+    }
+    out[r - 1] = cells;
+  }
+  for (let i = 0; i < out.length; i++) out[i] ??= [];
+  return out;
+}
+
+/** CSV (comma or semicolon, quoted fields) → rows. */
+export function readCsv(text: string): unknown[][] {
+  const t = text.replace(/^﻿/, "");
+  const firstLine = t.split(/\r?\n/, 1)[0] ?? "";
+  const sep = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (quoted) {
+      if (ch === '"' && t[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === sep) {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && t[i + 1] === "\n") i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else field += ch;
+  }
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
 }
