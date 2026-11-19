@@ -59,7 +59,7 @@ type OrderRow = {
 };
 
 function toPaymentStatus(s: string): PaymentStatus {
-  return s === "paid" || s === "failed" || s === "refunded" ? s : "pending";
+  return s === "paid" || s === "failed" || s === "refunded" || s === "authorized" ? s : "pending";
 }
 
 function previewData(): AdminData {

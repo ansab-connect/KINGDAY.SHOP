@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Banknote, Loader2, MapPin, ShoppingBag } from "lucide-react";
+import { AlertCircle, Banknote, CreditCard, Loader2, Lock, MapPin, ShoppingBag } from "lucide-react";
+import { openRazorpayCheckout } from "@/components/store/checkout/razorpay-checkout";
 import { removeFromCart, useCart } from "@/features/cart/cart-store";
 import { placeOrderAction } from "@/features/orders/checkout-actions";
 import type { Address } from "@/features/account/queries";
@@ -11,18 +12,37 @@ import { formatPaise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Settings = { flatShipping: number; freeShippingAbove: number | null; codEnabled: boolean };
+type Method = "razorpay" | "cod";
+
+const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined);
 
 /**
  * Product checkout. Shows an estimate from the browser cart; the database re-prices
  * the order, checks stock and applies shipping when it is placed.
  */
-export function CheckoutView({ addresses, settings, customer }: { addresses: Address[]; settings: Settings; customer: { name: string; code: string } }) {
+export function CheckoutView({
+  addresses,
+  settings,
+  customer,
+  onlineEnabled,
+  testMode,
+}: {
+  addresses: Address[];
+  settings: Settings;
+  customer: { name: string; code: string };
+  onlineEnabled: boolean;
+  testMode: boolean;
+}) {
   const router = useRouter();
   const items = useCart();
   const [addressId, setAddressId] = useState(addresses.find((a) => a.is_default)?.id ?? addresses[0]?.id ?? "");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [method, setMethod] = useState<Method>(onlineEnabled ? "razorpay" : "cod");
+  // One key per checkout attempt: a double click or network retry returns the same order.
+  // A changed cart, address, method or note starts a new attempt.
+  const attempt = useRef<{ sig: string; key: string | undefined } | null>(null);
 
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const shipping = settings.freeShippingAbove !== null && subtotal >= settings.freeShippingAbove ? 0 : settings.flatShipping;
@@ -39,14 +59,41 @@ export function CheckoutView({ addresses, settings, customer }: { addresses: Add
 
   const place = () => {
     setError(null);
+    const sig = [items.map((i) => `${i.variantId}:${i.quantity}`).join(","), addressId, method, note].join("|");
+    if (attempt.current?.sig !== sig) attempt.current = { sig, key: newKey() };
+    const checkoutKey = attempt.current.key;
     start(async () => {
-      const res = await placeOrderAction({ items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), addressId, note });
+      const res = await placeOrderAction({
+        items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+        addressId,
+        note,
+        paymentMethod: method,
+        checkoutKey,
+      });
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      for (const i of items) removeFromCart(i.variantId);
-      router.push(`/checkout/success?order=${encodeURIComponent(res.orderNumber)}`);
+      // The order now holds the items (stock is reserved), so they leave the cart.
+      const clearCart = () => {
+        for (const i of items) removeFromCart(i.variantId);
+      };
+      const order = encodeURIComponent(res.orderNumber);
+      if (!res.payment) {
+        clearCart();
+        router.push(`/checkout/success?order=${order}`);
+        return;
+      }
+      // Redirect-mode payment leaves this page, so clear the cart before opening it.
+      clearCart();
+      try {
+        const outcome = await openRazorpayCheckout(res.payment);
+        if (outcome.kind === "paid") router.push(`/checkout/success?order=${order}`);
+        else router.push(`/checkout/payment?order=${order}${outcome.kind === "closed" && outcome.lastError ? "&failed=1" : ""}`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't open the payment window.");
+        router.push(`/checkout/payment?order=${order}`);
+      }
     });
   };
 
@@ -86,9 +133,32 @@ export function CheckoutView({ addresses, settings, customer }: { addresses: Add
           <h2 id="pay-h" className="flex items-center gap-2 font-heading text-lg font-semibold text-deep">
             <Banknote aria-hidden className="size-5 text-royal" /> Payment
           </h2>
-          <p className="mt-3 rounded-xl border border-royal bg-royal-50/60 p-4 text-sm text-deep">
-            <span className="font-semibold">Cash on delivery.</span> Our team calls you to confirm the order and delivery date. Online payment is coming soon.
-          </p>
+          <fieldset className="mt-3 grid gap-3">
+            <legend className="sr-only">Choose how to pay</legend>
+            {onlineEnabled ? (
+              <MethodOption
+                checked={method === "razorpay"}
+                onSelect={() => setMethod("razorpay")}
+                icon={<CreditCard aria-hidden className="size-5 text-royal" />}
+                title="Pay online"
+                body="UPI (GPay, PhonePe, Paytm), debit/credit cards or net banking. Secured by Razorpay."
+                badge={testMode ? "Test mode" : undefined}
+              />
+            ) : null}
+            <MethodOption
+              checked={method === "cod"}
+              onSelect={() => setMethod("cod")}
+              disabled={!settings.codEnabled}
+              icon={<Banknote aria-hidden className="size-5 text-royal" />}
+              title="Cash on delivery"
+              body={settings.codEnabled ? "Our team calls you to confirm the order and delivery date." : "Cash on delivery is paused right now."}
+            />
+          </fieldset>
+          {method === "razorpay" && testMode ? (
+            <p className="mt-3 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
+              Test mode: no real money is charged. Use Razorpay test cards or the test UPI ID success@razorpay.
+            </p>
+          ) : null}
           <label className="mt-4 flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-deep">Note for our team (optional)</span>
             <textarea
@@ -120,7 +190,7 @@ export function CheckoutView({ addresses, settings, customer }: { addresses: Add
         <dl className="mt-4 flex flex-col gap-2 border-t pt-3 text-sm">
           <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
           <div className="flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular">{shipping ? formatPaise(shipping) : "Free"}</dd></div>
-          <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>Total (pay on delivery)</dt><dd className="tabular">{formatPaise(subtotal + shipping)}</dd></div>
+          <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>{method === "razorpay" ? "Total to pay now" : "Total (pay on delivery)"}</dt><dd className="tabular">{formatPaise(subtotal + shipping)}</dd></div>
         </dl>
         <p className="mt-3 text-xs text-muted-foreground">Ordering as {customer.name}{customer.code ? ` · ${customer.code}` : ""}. Prices are confirmed when you place the order.</p>
         {error ? (
@@ -131,14 +201,51 @@ export function CheckoutView({ addresses, settings, customer }: { addresses: Add
         <button
           type="button"
           onClick={place}
-          disabled={pending || !addressId || !settings.codEnabled}
+          disabled={pending || !addressId || (method === "cod" && !settings.codEnabled)}
           className="mt-4 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3.5 text-sm font-bold tracking-wide text-deep uppercase hover:bg-gold-300 disabled:opacity-60"
         >
           {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
-          {pending ? "Placing order…" : "Place order"}
+          {pending ? (method === "razorpay" ? "Opening secure payment…" : "Placing order…") : method === "razorpay" ? <><Lock aria-hidden className="size-4" /> Pay {formatPaise(subtotal + shipping)}</> : "Place order"}
         </button>
-        {!settings.codEnabled ? <p className="mt-2 text-xs text-danger">Cash on delivery is paused. Please order on WhatsApp from your cart.</p> : null}
+        {!settings.codEnabled && !onlineEnabled ? <p className="mt-2 text-xs text-danger">Cash on delivery is paused. Please order on WhatsApp from your cart.</p> : null}
       </aside>
     </div>
+  );
+}
+
+function MethodOption({
+  checked,
+  onSelect,
+  disabled,
+  icon,
+  title,
+  body,
+  badge,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  badge?: string;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer gap-3 rounded-xl border p-4 text-sm",
+        checked ? "border-royal bg-royal-50/60 ring-1 ring-royal" : "hover:border-royal/40",
+        disabled && "cursor-not-allowed opacity-50",
+      )}
+    >
+      <input type="radio" name="payment" checked={checked} disabled={disabled} onChange={onSelect} className="mt-1 size-4 accent-royal" />
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-2 font-semibold text-deep">
+          {icon} {title}
+          {badge ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[0.7rem] font-semibold text-warning">{badge}</span> : null}
+        </span>
+        <span className="mt-1 block text-muted-foreground">{body}</span>
+      </span>
+    </label>
   );
 }

@@ -1021,6 +1021,74 @@ await test("checkout: cancelling releases stock, shipping records the sale", asy
   assert((await rows(`select id from public.orders where id = $1`, [o.order_id])).length === 0, "bob sees alice's order");
 });
 
+console.log("Razorpay online payments (0028)");
+const rzpOrder = (items, address, key) => JSON.stringify({ items, address_id: address, payment_method: "razorpay", checkout_key: key });
+const KEY1 = "11111111-2222-4333-8444-555555555555";
+let rzp;
+await test("razorpay: online order is pending, reserves stock, no early alerts; same checkout key never duplicates", async () => {
+  await asSuperuser();
+  await db.query(`update public.inventory set on_hand = 10, reserved = 0 where variant_id = $1`, [ckVar.id]);
+  await db.query(`delete from public.notifications`);
+  await user(bob);
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [rzpOrder([{ variant_id: ckVar.id, quantity: 2 }], bobAddr, KEY1)]);
+  rzp = o;
+  assert(o.is_new && o.payment_method === "razorpay" && o.order_status === "pending", `wrong order ${JSON.stringify(o)}`);
+  const [again] = await rows(`select * from public.place_order($1::jsonb)`, [rzpOrder([{ variant_id: ckVar.id, quantity: 2 }], bobAddr, KEY1)]);
+  assert(!again.is_new && again.order_id === o.order_id, "duplicate order created");
+  await asSuperuser();
+  assert((await rows(`select reserved from public.inventory where variant_id = $1`, [ckVar.id]))[0].reserved === 2, "stock not reserved once");
+  assert((await rows(`select 1 from public.payments where order_id = $1`, [o.order_id])).length === 0, "payment row before attempt");
+  assert((await rows(`select 1 from public.notifications where title like 'New%'`)).length === 0, "team alerted before payment");
+});
+await test("razorpay: only the server can attach attempts or record payments", async () => {
+  await user(bob);
+  await expectError(`select public.attach_razorpay_order($1, 'order_TEST123456', $2)`, [rzp.order_id, rzp.grand_total], /not authorized|permission denied/);
+  await expectError(`select public.record_razorpay_payment($1::jsonb)`, [JSON.stringify({ provider_order_id: "order_TEST123456", provider_payment_id: "pay_TEST123456", status: "captured", amount: rzp.grand_total })], /not authorized|permission denied/);
+  await db.query(`update public.orders set payment_status = 'paid' where id = $1`, [rzp.order_id]); // RLS: no rows
+  await asSuperuser();
+  assert((await rows(`select payment_status from public.orders where id = $1`, [rzp.order_id]))[0].payment_status === "pending", "customer marked own order paid");
+  await service();
+  await expectError(`select public.attach_razorpay_order($1, 'order_TEST123456', $2)`, [rzp.order_id, rzp.grand_total + 1], /amount mismatch/);
+});
+await test("razorpay: failure then success; payment applied once; duplicates flagged", async () => {
+  await service();
+  await rows(`select public.attach_razorpay_order($1, 'order_FAIL000001', $2)`, [rzp.order_id, rzp.grand_total]);
+  const pay = (order, id, status, amount = rzp.grand_total) =>
+    rows(`select public.record_razorpay_payment($1::jsonb) as r`, [JSON.stringify({ provider_order_id: order, provider_payment_id: id, status, amount, method: "upi", error: "Declined" })]);
+  assert((await pay("order_FAIL000001", "pay_FAIL000001", "failed"))[0].r === "failed", "failure not recorded");
+  await asSuperuser();
+  assert((await rows(`select payment_status, status from public.orders where id = $1`, [rzp.order_id]))[0].payment_status === "failed", "order not marked failed");
+  await service();
+  await rows(`select public.attach_razorpay_order($1, 'order_PAID000001', $2)`, [rzp.order_id, rzp.grand_total]);
+  assert((await pay("order_PAID000001", "pay_PAID000001", "captured", 1))[0].r === "amount_mismatch", "wrong amount accepted");
+  assert((await pay("order_PAID000001", "pay_PAID000001", "captured"))[0].r === "paid", "capture not applied");
+  assert((await pay("order_PAID000001", "pay_PAID000001", "captured"))[0].r === "already_paid", "webhook replay applied twice");
+  assert((await pay("order_PAID000001", "pay_OTHER00001", "captured"))[0].r === "duplicate", "second charge not flagged");
+  assert((await pay("order_NOPE000001", "pay_NOPE000001", "captured"))[0].r === "unknown_order", "unknown order accepted");
+  await asSuperuser();
+  const [o] = await rows(`select status, payment_status from public.orders where id = $1`, [rzp.order_id]);
+  assert(o.status === "confirmed" && o.payment_status === "paid", `order ${o.status}/${o.payment_status}`);
+  assert((await rows(`select 1 from public.notifications where title like 'New paid order%' and user_id = $1`, [admin2])).length === 1, "team not alerted once");
+  assert((await rows(`select 1 from public.notifications where title like 'Duplicate payment%'`)).length >= 1, "duplicate not flagged");
+  await service();
+  await expectError(`select public.attach_razorpay_order($1, 'order_LATE000001', $2)`, [rzp.order_id, rzp.grand_total], /no longer be paid/);
+});
+await test("razorpay: unpaid online orders expire after 30 minutes and release stock", async () => {
+  await user(alice);
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [rzpOrder([{ variant_id: ckVar.id, quantity: 1 }], aliceAddr, "99999999-2222-4333-8444-555555555555")]);
+  await asSuperuser();
+  await db.query(`update public.orders set placed_at = now() - interval '31 minutes' where id = $1`, [o.order_id]);
+  await user(alice);
+  await expectError(`select public.expire_unpaid_orders()`, [], /not authorized|permission denied/);
+  await service();
+  assert((await rows(`select public.expire_unpaid_orders() as n`))[0].n === 1, "not expired");
+  await asSuperuser();
+  assert((await rows(`select status from public.orders where id = $1`, [o.order_id]))[0].status === "cancelled", "not cancelled");
+  assert((await rows(`select reserved from public.inventory where variant_id = $1`, [ckVar.id]))[0].reserved === 2, "reservation not released");
+  await user(bob);
+  await expectError(`select * from public.payment_webhook_events`, [], /permission denied|row-level/);
+});
+
 console.log("Password resets (Update 01 phase 07)");
 const HASH = "$2b$12$" + "a".repeat(53);
 let prId;

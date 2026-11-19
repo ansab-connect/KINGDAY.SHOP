@@ -27,7 +27,7 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
   const wa = phoneDigits
     ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi ${o.customer_name}, this is KING DAY about your order ${o.order_number}.`)}`
     : null;
-  const payment = (["paid", "failed", "refunded"].includes(o.payment_status) ? o.payment_status : "pending") as PaymentStatus;
+  const payment = (["authorized", "paid", "failed", "refunded"].includes(o.payment_status) ? o.payment_status : "pending") as PaymentStatus;
 
   return (
     <>

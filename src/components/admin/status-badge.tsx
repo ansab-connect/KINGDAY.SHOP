@@ -52,6 +52,7 @@ export function OrderStatusBadge({ status }: { status: OrderStatus }) {
 
 const paymentTone: Record<PaymentStatus, Tone> = {
   pending: "warning",
+  authorized: "info",
   paid: "success",
   failed: "danger",
   refunded: "neutral",

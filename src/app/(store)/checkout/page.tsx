@@ -9,6 +9,7 @@ import { getAddresses } from "@/features/account/queries";
 import { requireUser } from "@/features/auth/session";
 import { getCheckoutSettings } from "@/features/orders/checkout";
 import { isSupabaseConfigured } from "@/lib/env";
+import { getRazorpayConfig } from "@/lib/razorpay";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Checkout", robots: { index: false } };
@@ -33,7 +34,16 @@ async function Checkout() {
       </div>
     );
   }
-  return <CheckoutView addresses={addresses} settings={settings} customer={{ name: p?.full_name ?? user.fullName ?? "Customer", code: p?.customer_code ?? "" }} />;
+  const rzp = getRazorpayConfig();
+  return (
+    <CheckoutView
+      addresses={addresses}
+      settings={settings}
+      customer={{ name: p?.full_name ?? user.fullName ?? "Customer", code: p?.customer_code ?? "" }}
+      onlineEnabled={rzp !== null}
+      testMode={rzp?.mode === "test"}
+    />
+  );
 }
 
 export default function CheckoutPage() {

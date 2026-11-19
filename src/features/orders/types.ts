@@ -13,7 +13,7 @@ export const ORDER_STATUSES = [
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+export type PaymentStatus = "pending" | "authorized" | "paid" | "failed" | "refunded";
 export type PaymentMethod = "razorpay" | "cod";
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {

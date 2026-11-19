@@ -19,8 +19,10 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     const { data, error } = await admin.rpc("queue_service_reminders");
     if (error) return NextResponse.json({ error: "reminders failed" }, { status: 500 });
+    // Unpaid online orders older than 30 minutes release their reserved stock.
+    const { data: expired } = await admin.rpc("expire_unpaid_orders");
     const push = await dispatchPush();
-    return NextResponse.json({ reminders: data ?? 0, ...push });
+    return NextResponse.json({ reminders: data ?? 0, expiredOrders: expired ?? 0, ...push });
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }

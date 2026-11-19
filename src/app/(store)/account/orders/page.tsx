@@ -45,6 +45,14 @@ async function OrdersContent() {
                   </div>
                   <div className="flex flex-wrap gap-2"><OrderStatusBadge status={o.status} /><PaymentStatusBadge status={o.payment_status} /></div>
                 </div>
+                {o.payment_method === "razorpay" && o.status === "pending" && o.payment_status !== "paid" ? (
+                  <Link
+                    href={`/checkout/payment?order=${o.order_number}`}
+                    className="mt-4 inline-flex h-10 items-center rounded-full bg-gold px-4 text-sm font-bold text-deep hover:bg-gold-300"
+                  >
+                    Complete payment
+                  </Link>
+                ) : null}
 
                 {!stopped ? (
                   <ol aria-label="Order progress" className="mt-5 grid grid-cols-4 gap-1">
