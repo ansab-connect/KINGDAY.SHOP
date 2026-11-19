@@ -402,6 +402,80 @@ await test("save_product refuses a variant from another product", async () => {
     id: comet, variants: [{ id: variantId, sku: "KD-TEST-001", mrp: 2899900, price: 2349900 }],
   }))], /does not belong/);
 });
+const sizeColour = (over = {}) => ({
+  name: "Volt Rider",
+  slug: "volt-rider",
+  category_id: scooterCat,
+  status: "active",
+  option1_name: "Size",
+  option2_name: "Colour",
+  variants: [
+    { sku: "KD-VR-S-BLU", option1: "Small", option2: "Volt Blue", mrp: 500000, price: 450000, opening_stock: 3, specs: [{ name: "Wheel", value: "6 inch" }] },
+    { sku: "KD-VR-S-GRN", option1: "Small", option2: "Dynamic Green", mrp: 500000, price: 450000, opening_stock: 0 },
+    { sku: "KD-VR-L-BLU", option1: "Large", option2: "Volt Blue", mrp: 700000, price: 650000, opening_stock: 5, is_default: true },
+  ],
+  ...over,
+});
+let voltRider;
+await test("multi-level variants: each size → colour combination has its own SKU, price, stock and specs", async () => {
+  await user(staff);
+  voltRider = (await rows(`select public.save_product($1::jsonb) as id`, [JSON.stringify(sizeColour())]))[0].id;
+  const p = (await rows(`select option1_name, option2_name from public.products where id = $1`, [voltRider]))[0];
+  assert(p.option1_name === "Size" && p.option2_name === "Colour", "option names not saved");
+  const v = await rows(`select v.sku, v.name, v.option1, v.option2, v.options, v.specs, v.price, v.is_default, i.on_hand
+    from public.product_variants v join public.inventory i on i.variant_id = v.id where v.product_id = $1 order by v.position`, [voltRider]);
+  assert(v.length === 3, "3 combinations expected");
+  assert(v[0].name === "Small · Volt Blue" && v[0].options.colour === "Volt Blue" && v[0].options.size === "Small", `names/options ${JSON.stringify(v[0])}`);
+  assert(v[0].on_hand === 3 && v[2].on_hand === 5 && v[1].on_hand === 0, "stock not per combination");
+  assert(v[0].specs.length === 1 && v[0].specs[0].name === "Wheel" && v[1].specs.length === 0, "specs not per combination");
+  assert(v[2].is_default && v[2].price === 650000, "default/price wrong");
+  // Large has only Volt Blue: sizes can offer different colours.
+  assert(v.filter((x) => x.option1 === "Large").length === 1, "large should have one colour");
+});
+await test("multi-level variants: duplicates and missing values are refused", async () => {
+  await user(staff);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(sizeColour({
+    slug: "volt-dup",
+    variants: [
+      { sku: "KD-VD-1", option1: "Small", option2: "Red", mrp: 100, price: 100 },
+      { sku: "KD-VD-2", option1: "small", option2: "red", mrp: 100, price: 100 },
+    ],
+  }))], /combination|duplicate key/);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(sizeColour({
+    slug: "volt-missing", variants: [{ sku: "KD-VM-1", option1: "Small", mrp: 100, price: 100 }],
+  }))], /needs a Colour/);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(sizeColour({
+    slug: "volt-noparent", option1_name: "", variants: [{ sku: "KD-VN-1", mrp: 100, price: 100 }],
+  }))], /main variant type/);
+});
+await test("multi-level variants: removing and re-adding a combination works; new type names are remembered", async () => {
+  await user(staff);
+  const cur = await rows(`select id, sku from public.product_variants where product_id = $1 order by position`, [voltRider]);
+  const id = (sku) => cur.find((x) => x.sku === sku).id;
+  // Drop Small · Dynamic Green, re-create it under a new SKU, add a new type name.
+  await db.query(`select public.save_product($1::jsonb)`, [JSON.stringify(sizeColour({
+    id: voltRider,
+    option1_name: "Wheel size",
+    variants: [
+      { id: id("KD-VR-S-BLU"), sku: "KD-VR-S-BLU", option1: "Small", option2: "Volt Blue", mrp: 500000, price: 450000 },
+      { sku: "KD-VR-S-GRN2", option1: "Small", option2: "Dynamic Green", mrp: 500000, price: 440000 },
+      { id: id("KD-VR-L-BLU"), sku: "KD-VR-L-BLU", option1: "Large", option2: "Volt Blue", mrp: 700000, price: 650000, is_default: true },
+    ],
+  }))]);
+  const v = await rows(`select sku, is_active from public.product_variants where product_id = $1 order by sku`, [voltRider]);
+  const by = Object.fromEntries(v.map((x) => [x.sku, x.is_active]));
+  assert(by["KD-VR-S-GRN"] === false && by["KD-VR-S-GRN2"] === true, `re-create failed ${JSON.stringify(by)}`);
+  assert((await rows(`select 1 from public.variant_option_types where lower(name) = 'wheel size'`)).length === 1, "new option type not remembered");
+  await anon();
+  assert((await rows(`select name from public.variant_option_types`)).length >= 6, "option types not publicly readable");
+});
+await test("multi-level variants: images belong to one combination", async () => {
+  await user(staff);
+  const [v] = await rows(`select id from public.product_variants where product_id = $1 and sku = 'KD-VR-S-BLU'`, [voltRider]);
+  await db.query(`insert into public.product_images (product_id, variant_id, storage_path, alt) values ($1, $2, 'products/x/blue-1.webp', 'Blue'), ($1, null, 'products/x/shared.webp', 'Shared')`, [voltRider, v.id]);
+  const imgs = await rows(`select variant_id from public.product_images where product_id = $1 order by storage_path`, [voltRider]);
+  assert(imgs.length === 2 && imgs[0].variant_id === v.id && imgs[1].variant_id === null, "variant image link wrong");
+});
 await test("customers and anonymous users cannot save products", async () => {
   await user(alice);
   await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(payload({ slug: "x-y" }))], /not authorized/);

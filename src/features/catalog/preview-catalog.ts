@@ -106,6 +106,10 @@ export const previewCatalog: StoreProduct[] = previewProducts
       price: p.price,
       stock: k === 0 ? p.stock : Math.max(0, p.stock - 2 * k),
       colour: c.name,
+      option1: c.name,
+      option2: null,
+      images: [],
+      specs: [],
     }));
     return {
       id: p.id,
@@ -119,6 +123,8 @@ export const previewCatalog: StoreProduct[] = previewProducts
       stock: variants.reduce((sum, v) => sum + v.stock, 0),
       variants,
       defaultVariantId: variants[0].id,
+      option1Name: "Colour",
+      option2Name: null,
       rating: Math.min(rating, 4.9),
       reviewCount: 6 + ((i * 13) % 40),
       ageRange: tpl.age,
@@ -130,6 +136,7 @@ export const previewCatalog: StoreProduct[] = previewProducts
       highlights: tpl.highlights,
       specs: [{ label: "Recommended age", value: tpl.age }, ...tpl.specs.map(([label, value]) => ({ label, value }))],
       images: [],
+      sharedImages: [],
       video: null,
       seoTitle: null,
       seoDescription: null,

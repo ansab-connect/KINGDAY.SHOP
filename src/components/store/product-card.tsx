@@ -60,7 +60,7 @@ export function ProductCard({ product, priority = false }: { product: StoreProdu
           </span>
           {single && !out && v ? (
             <CardQuickAdd
-              item={{ variantId: v.id, productName: product.name, sku: v.sku, price: v.price, maxQty: Math.max(1, Math.min(v.stock, 5)), url: `${siteConfig.url}/products/${product.slug}` }}
+              item={{ variantId: v.id, productName: product.name, sku: v.sku, price: v.price, maxQty: Math.max(1, Math.min(v.stock, 5)), url: `${siteConfig.url}/products/${product.slug}`, image: product.images[0]?.src ?? null }}
             />
           ) : null}
         </div>

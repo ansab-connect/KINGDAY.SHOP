@@ -78,8 +78,9 @@ describe("excel round trip", () => {
     ws.getCell("A4").value = { richText: [{ text: "Rich " }, { text: "Name" }] };
     ws.getCell("B4").value = "RICH-1";
     ws.getCell("C4").value = "Scooters";
-    ws.getCell("H4").value = { formula: "1000+999", result: 1999 };
-    ws.getCell("I4").value = 1500;
+    const letter = (key: string) => String.fromCharCode(65 + IMPORT_COLUMNS.findIndex((c) => c.key === key));
+    ws.getCell(`${letter("mrp")}4`).value = { formula: "1000+999", result: 1999 };
+    ws.getCell(`${letter("price")}4`).value = 1500;
     const loaded = new ExcelJS.Workbook();
     await loaded.xlsx.load(await wb.xlsx.writeBuffer());
     const sheet = loaded.getWorksheet("Products")!;
@@ -128,5 +129,50 @@ describe("fallback readers", () => {
     const values = readXlsxPackage(Object.fromEntries(Object.entries(zip).map(([k, v]) => [k, strFromU8(v)])));
     const { rows } = rowsFromSheet(values, cats, brands);
     expect(rows.map((r) => [r.sku, r.mrp, r.price, r.stock])).toEqual([["GLIDE-3", "3499", "2799", "4"]]);
+  });
+});
+
+describe("multi-level variants", () => {
+  const base = { category: "Scooters", mrp: 3000, price: 2500 };
+  const sheet = (rows: Record<string, unknown>[]) => {
+    const headers = IMPORT_COLUMNS.map((c) => c.header);
+    return [headers, ...rows.map((r) => IMPORT_COLUMNS.map((c) => (r[c.key] ?? "") as unknown))];
+  };
+  it("groups size → colour rows into one product with per-variant specs", () => {
+    const { rows } = rowsFromSheet(
+      sheet([
+        { ...base, name: "Volt Rider", sku: "VR-S-BLU", option1Name: "Size", option1: "Small", option2Name: "Colour", option2: "Volt Blue", specs: "Wheel: 6 inch" },
+        { ...base, name: "Volt Rider", sku: "VR-S-GRN", option1: "Small", option2: "Dynamic Green" },
+        { ...base, name: "Volt Rider", sku: "VR-L-BLU", option1: "Large", option2: "Volt Blue", specs: "Wheel: 8 inch" },
+      ]),
+      cats,
+      brands,
+    );
+    const checks = checkRows(rows, new Set());
+    expect(rows.every((r) => checks.get(r.key)!.errors.length === 0)).toBe(true);
+    const input = toProductInput(groupRows(rows)[0]);
+    expect(input.option1_name).toBe("Size");
+    expect(input.option2_name).toBe("Colour");
+    expect(input.variants.map((v) => [v.option1, v.option2, v.colour])).toEqual([
+      ["Small", "Volt Blue", "Volt Blue"],
+      ["Small", "Dynamic Green", "Dynamic Green"],
+      ["Large", "Volt Blue", "Volt Blue"],
+    ]);
+    expect(input.variants[2].specs).toEqual([{ name: "Wheel", value: "8 inch" }]);
+    expect(input.variants[0].specs).toEqual([]);
+  });
+  it("flags duplicate combinations and missing values", () => {
+    const { rows } = rowsFromSheet(
+      sheet([
+        { ...base, name: "Volt Rider", sku: "VR-1", option1Name: "Size", option1: "Small", option2Name: "Colour", option2: "Red" },
+        { ...base, name: "Volt Rider", sku: "VR-2", option1: "small", option2: "red" },
+        { ...base, name: "Volt Rider", sku: "VR-3", option1: "Large" },
+      ]),
+      cats,
+      brands,
+    );
+    const checks = checkRows(rows, new Set());
+    expect(checks.get(rows[1].key)!.errors.join(" ")).toMatch(/Same variant combination/);
+    expect(checks.get(rows[2].key)!.errors.join(" ")).toMatch(/Sub Variant \(Colour\) is missing/);
   });
 });

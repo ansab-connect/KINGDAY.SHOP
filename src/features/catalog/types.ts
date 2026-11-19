@@ -12,6 +12,14 @@ export type StoreVariant = {
   price: number;
   stock: number;
   colour: string | null;
+  /** Main variant value (e.g. "12V") when the product has a main variant type. */
+  option1: string | null;
+  /** Sub variant value (e.g. "Volt Blue") when the product has a sub variant type. */
+  option2: string | null;
+  /** This combination's own gallery. Empty = use the product's shared images. */
+  images: ProductImage[];
+  /** Specifications for this combination (override product specs with the same label). */
+  specs: { label: string; value: string }[];
 };
 
 export type StoreProduct = {
@@ -29,6 +37,12 @@ export type StoreProduct = {
   stock: number;
   variants: StoreVariant[];
   defaultVariantId: string;
+  /** Main variant type, e.g. "Size". Null = simple variant list. */
+  option1Name: string | null;
+  /** Sub variant type under each main value, e.g. "Colour". */
+  option2Name: string | null;
+  /** Images not tied to a variant (used when a variant has none of its own). */
+  sharedImages: ProductImage[];
   rating: number;
   reviewCount: number;
   ageRange: string | null;
@@ -36,6 +50,7 @@ export type StoreProduct = {
   description: string[];
   highlights: string[];
   specs: { label: string; value: string }[];
+  /** Listing images: shared images, or the default variant's gallery when there are none. */
   images: ProductImage[];
   video: string | null;
   seoTitle: string | null;

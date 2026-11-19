@@ -6,19 +6,23 @@
 import { rupeesToPaise, SKU_RE } from "./schemas";
 
 export const IMPORT_COLUMNS = [
-  { key: "name", header: "Product Name *", width: 34, note: "Rows with the same name and category become one product with several colours/variants." },
+  { key: "name", header: "Product Name *", width: 34, note: "Rows with the same name and category become one product with several variants (one row per size/colour combination)." },
   { key: "sku", header: "SKU *", width: 20, note: "3–40 capital letters, numbers or hyphens. Must be unique." },
   { key: "category", header: "Category *", width: 24, note: "Pick from the list (existing categories)." },
   { key: "brand", header: "Brand", width: 18, note: "Optional. Pick from the list." },
-  { key: "colour", header: "Variant / Colour", width: 16, note: "e.g. Red. Leave empty for a single-variant product." },
+  { key: "option1Name", header: "Main Variant Type", width: 16, note: "Optional, e.g. Size, Model or Voltage. Same on every row of the product." },
+  { key: "option1", header: "Main Variant", width: 14, note: "e.g. Large, 12V. Required when Main Variant Type is used." },
+  { key: "option2Name", header: "Sub Variant Type", width: 16, note: "Optional, e.g. Colour. Each Main Variant can list its own colours." },
+  { key: "option2", header: "Sub Variant", width: 16, note: "e.g. Volt Blue. One row per Main + Sub combination, each with its own SKU, price, stock and images." },
+  { key: "colour", header: "Variant / Colour", width: 16, note: "Simple products only: e.g. Red. Leave empty when you use the variant type columns." },
   { key: "short", header: "Short Description", width: 40, note: "1–2 lines shown near the price (max 300 characters)." },
   { key: "description", header: "Description", width: 50, note: "Full description." },
   { key: "mrp", header: "MRP (₹) *", width: 12, note: "Number only, e.g. 28999" },
   { key: "price", header: "Selling Price (₹) *", width: 16, note: "Can't be higher than MRP." },
   { key: "stock", header: "Stock", width: 10, note: "Opening stock (whole number). Empty = 0." },
-  { key: "specs", header: "Specifications", width: 44, note: "Name: value; separated by semicolons. e.g. Battery: 12V 7Ah; Motor: 2 x 35W" },
+  { key: "specs", header: "Specifications", width: 44, note: "Name: value; separated by semicolons. e.g. Battery: 12V 7Ah. The first row's specs are the product's; other rows' specs apply to that variant only." },
   { key: "age", header: "Age Range", width: 14, note: "e.g. 3–8 years" },
-  { key: "images", header: "Image File Names", width: 34, note: "Comma separated, matching files in your ZIP/folder. Empty = files named after the SKU (SKU.jpg, SKU-2.jpg)." },
+  { key: "images", header: "Image File Names", width: 34, note: "Comma separated, matching files in your ZIP/folder. Empty = files named after the SKU (SKU.jpg, SKU-2.jpg). With several variants, each row's images become that variant's own gallery." },
   { key: "status", header: "Status", width: 12, note: "draft (default) or active" },
 ] as const;
 
@@ -37,6 +41,10 @@ export type ImportRow = {
   brandId: string;
   brandText: string;
   colour: string;
+  option1Name: string;
+  option1: string;
+  option2Name: string;
+  option2: string;
   short: string;
   description: string;
   mrp: string;
@@ -128,6 +136,10 @@ export function rowsFromSheet(values: unknown[][], categories: Option[], brands:
       brandId: matchOption(brandText, brands),
       brandText,
       colour: get(r, "colour"),
+      option1Name: get(r, "option1Name"),
+      option1: get(r, "option1"),
+      option2Name: get(r, "option2Name"),
+      option2: get(r, "option2"),
       short: get(r, "short"),
       description: get(r, "description"),
       mrp: get(r, "mrp").replace(/[,₹\s]/g, ""),
@@ -198,9 +210,35 @@ export function checkRows(rows: ImportRow[], existingSkus: Set<string>): Map<str
     if (r.imageNames.length && r.images.length < r.imageNames.length) warnings.push(`${r.imageNames.length - r.images.length} image file(s) not found in the upload.`);
     if (!r.images.length) warnings.push("No images.");
     if (r.specs && !parseSpecs(r.specs).length) warnings.push('Specifications not understood. Use "Name: value; Name: value".');
+    if (r.option1.length > 60 || r.option2.length > 60) errors.push("Variant values can be at most 60 characters.");
+    if (r.option1Name.length > 30 || r.option2Name.length > 30) errors.push("Variant types can be at most 30 characters.");
     out.set(r.key, { errors, warnings });
   }
+  // Variant rules apply per product (rows grouped by name + category).
+  for (const group of groupRows(rows)) {
+    const types = groupOptionNames(group);
+    const seen = new Map<string, number>();
+    for (const r of group) {
+      const check = out.get(r.key)!;
+      if (types.option2 && !types.option1) check.errors.push("Sub Variant Type needs a Main Variant Type.");
+      if (types.option1 && !r.option1) check.errors.push(`Main Variant (${types.option1}) is missing.`);
+      if (types.option2 && !r.option2) check.errors.push(`Sub Variant (${types.option2}) is missing.`);
+      if (!types.option1 && (r.option1 || r.option2)) check.errors.push("Fill Main Variant Type for the variant values to be used.");
+      if (types.option1 && r.option1) {
+        const k = `${r.option1.toLowerCase()}|${types.option2 ? r.option2.toLowerCase() : ""}`;
+        if (seen.has(k)) check.errors.push(`Same variant combination as row ${seen.get(k)}.`);
+        else seen.set(k, r.rowNumber);
+      }
+    }
+  }
   return out;
+}
+
+/** Variant type names for a product: the first non-empty value on any of its rows. */
+export function groupOptionNames(group: ImportRow[]): { option1: string; option2: string } {
+  const option1 = group.map((r) => r.option1Name.trim()).find(Boolean) ?? "";
+  const option2 = option1 ? (group.map((r) => r.option2Name.trim()).find(Boolean) ?? "") : "";
+  return { option1, option2 };
 }
 
 /** Rows with the same name + category become one product with one variant per row. */
@@ -216,8 +254,10 @@ export function groupRows(rows: ImportRow[]): ImportRow[][] {
 /** Input for the existing saveProduct() server action (validated there again). */
 export function toProductInput(group: ImportRow[], slug?: string) {
   const first = group[0];
-  const attributes = parseSpecs(group.map((r) => r.specs).find(Boolean) ?? "");
+  const productSpecsText = group.map((r) => r.specs).find(Boolean) ?? "";
+  const attributes = parseSpecs(productSpecsText);
   const seen = new Set<string>();
+  const types = groupOptionNames(group);
   return {
     name: first.name.trim(),
     slug: slug ?? "",
@@ -229,10 +269,17 @@ export function toProductInput(group: ImportRow[], slug?: string) {
     age_range: first.age || undefined,
     status: group.some((r) => r.status === "active") ? "active" : "draft",
     is_featured: false,
+    option1_name: types.option1 || undefined,
+    option2_name: types.option2 || undefined,
     variants: group.map((r, i) => ({
       sku: r.sku,
-      name: r.colour || (group.length > 1 ? r.sku : "Default"),
-      colour: r.colour || undefined,
+      // With variant types the name is built from the values ("12V · Volt Blue").
+      name: types.option1 ? "" : r.colour || (group.length > 1 ? r.sku : "Default"),
+      colour: r.colour || (/colou?r/i.test(types.option2) ? r.option2 : /colou?r/i.test(types.option1) ? r.option1 : "") || undefined,
+      option1: types.option1 ? r.option1 : undefined,
+      option2: types.option2 ? r.option2 : undefined,
+      // A row's specs that differ from the product's become that variant's own specs.
+      specs: r.specs && r.specs !== productSpecsText ? parseSpecs(r.specs) : [],
       mrp: r.mrp,
       price: r.price,
       opening_stock: r.stock ? Number(r.stock) : 0,

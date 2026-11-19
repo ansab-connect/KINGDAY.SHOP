@@ -1,5 +1,5 @@
 import "server-only";
-import { listBrands, listCategories } from "@/features/catalog/admin-repo";
+import { listBrands, listCategories, listVariantOptionTypes } from "@/features/catalog/admin-repo";
 import { previewBrands, previewCategories } from "@/features/preview/data";
 import { isSupabaseConfigured } from "@/lib/env";
 
@@ -10,11 +10,13 @@ export async function loadEditorOptions() {
     return {
       categories: previewCategories.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent ? parents.get(c.parent) ?? null : null })),
       brands: previewBrands.map((b) => ({ id: b.id, name: b.name })),
+      optionTypes: ["Size", "Colour", "Model", "Voltage", "Age group", "Material"],
     };
   }
-  const [categories, brands] = await Promise.all([listCategories(), listBrands()]);
+  const [categories, brands, optionTypes] = await Promise.all([listCategories(), listBrands(), listVariantOptionTypes()]);
   return {
     categories: categories.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent_id })),
     brands: brands.map((b) => ({ id: b.id, name: b.name })),
+    optionTypes,
   };
 }

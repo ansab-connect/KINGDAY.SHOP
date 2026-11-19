@@ -31,6 +31,9 @@ type PgError = { code?: string; message: string; details?: string | null };
 function dbError(e: PgError, what: string): ActionResult<never> {
   switch (e.code) {
     case "23505": {
+      if (/combination/i.test(e.message + (e.details ?? ""))) {
+        return { ok: false, error: "Two active variants have the same combination (e.g. the same size and colour). Change one of them." };
+      }
       const field = /sku/i.test(e.message + (e.details ?? "")) ? "SKU" : /slug/i.test(e.message + (e.details ?? "")) ? "URL slug" : "value";
       return { ok: false, error: `That ${field} is already used by another ${what}.` };
     }
@@ -159,8 +162,30 @@ export async function saveProduct(input: unknown): Promise<ActionResult<{ id: st
   const { data, error } = await supabase.rpc("save_product", { p: toSaveProductPayload(parsed.data) });
   if (error) return dbError(error, "product");
 
+  // Stock typed into the editor for saved variants: record the difference in the stock
+  // ledger (same as an Inventory adjustment), measured against the live count.
+  const targets = parsed.data.variants.filter((v) => v.id && v.stock_target !== undefined);
+  let stockNote = "";
+  if (targets.length) {
+    const { data: inv } = await supabase.from("inventory").select("variant_id, on_hand").in("variant_id", targets.map((v) => v.id!));
+    const onHand = new Map(((inv ?? []) as { variant_id: string; on_hand: number }[]).map((r) => [r.variant_id, r.on_hand]));
+    let failed = 0;
+    for (const v of targets) {
+      const delta = v.stock_target! - (onHand.get(v.id!) ?? 0);
+      if (!delta) continue;
+      const { error: adjErr } = await supabase.rpc("adjust_stock", {
+        p_variant_id: v.id,
+        p_quantity: delta,
+        p_type: "adjustment",
+        p_reason: "Stock set in the product editor",
+      });
+      if (adjErr) failed++;
+    }
+    if (failed) stockNote = ` ${failed} stock change${failed === 1 ? "" : "s"} couldn't be saved (stock can't go below what's reserved for open orders).`;
+  }
+
   updateTag(CATALOG_TAG);
-  return { ok: true, data: { id: data as string }, message: "Product saved." };
+  return { ok: true, data: { id: data as string }, message: `Product saved.${stockNote}` };
 }
 
 export async function deleteProduct(id: string): Promise<ActionResult> {
@@ -191,6 +216,9 @@ export async function addProductImage(input: {
   alt: string;
   width?: number;
   height?: number;
+  /** Gallery of one combination. Give the variant ID, or its SKU (bulk import). Empty = shared product images. */
+  variantId?: string | null;
+  variantSku?: string | null;
 }): Promise<ActionResult<{ id: string }>> {
   const denied = await guard("products", ["create", "edit"]);
   if (denied) return denied;
@@ -198,13 +226,25 @@ export async function addProductImage(input: {
   if (!productImagePathSchema(input.productId).safeParse(input.path).success) return { ok: false, error: "Invalid image path." };
 
   const supabase = await createClient();
-  const { count } = await supabase.from("product_images").select("id", { count: "exact", head: true }).eq("product_id", input.productId);
-  if ((count ?? 0) >= 12) return { ok: false, error: "A product can have at most 12 images." };
+  let variantId: string | null = null;
+  if (input.variantId || input.variantSku) {
+    let q = supabase.from("product_variants").select("id").eq("product_id", input.productId);
+    q = input.variantId ? q.eq("id", input.variantId) : q.eq("sku", String(input.variantSku).toUpperCase());
+    const { data: v } = await q.maybeSingle();
+    if (!v) return { ok: false, error: "That variant doesn't belong to this product." };
+    variantId = v.id as string;
+  }
+  // 12 images per gallery: the shared product gallery and each combination's own gallery.
+  let countQ = supabase.from("product_images").select("id", { count: "exact", head: true }).eq("product_id", input.productId);
+  countQ = variantId ? countQ.eq("variant_id", variantId) : countQ.is("variant_id", null);
+  const { count } = await countQ;
+  if ((count ?? 0) >= 12) return { ok: false, error: "This gallery already has 12 images." };
 
   const { data, error } = await supabase
     .from("product_images")
     .insert({
       product_id: input.productId,
+      variant_id: variantId,
       storage_path: input.path,
       alt: String(input.alt ?? "").slice(0, 200),
       width: Number.isInteger(input.width) ? input.width : null,

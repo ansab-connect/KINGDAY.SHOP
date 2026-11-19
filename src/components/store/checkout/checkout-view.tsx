@@ -3,9 +3,10 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Banknote, CreditCard, Loader2, Lock, MapPin, ShoppingBag } from "lucide-react";
+import { AlertCircle, Banknote, CreditCard, Loader2, Lock, MapPin, ShoppingBag, Zap } from "lucide-react";
+import { CartLine } from "@/components/store/cart-line";
 import { openRazorpayCheckout } from "@/components/store/checkout/razorpay-checkout";
-import { removeFromCart, useCart } from "@/features/cart/cart-store";
+import { clearBuyNow, removeBuyNow, removeFromCart, setBuyNowQuantity, setCartQuantity, useBuyNow, useCart } from "@/features/cart/cart-store";
 import { placeOrderAction } from "@/features/orders/checkout-actions";
 import type { Address } from "@/features/account/queries";
 import { formatPaise } from "@/lib/format";
@@ -17,8 +18,10 @@ type Method = "razorpay" | "cod";
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined);
 
 /**
- * Product checkout. Shows an estimate from the browser cart; the database re-prices
- * the order, checks stock and applies shipping when it is placed.
+ * Product checkout. "cart" checks out the browser cart; "buynow" checks out only the
+ * product from the Buy now button (at its chosen quantity) and leaves the cart alone.
+ * Totals shown are estimates; the database re-prices the order, checks stock and
+ * applies shipping when it is placed.
  */
 export function CheckoutView({
   addresses,
@@ -26,15 +29,22 @@ export function CheckoutView({
   customer,
   onlineEnabled,
   testMode,
+  mode = "cart",
 }: {
   addresses: Address[];
   settings: Settings;
   customer: { name: string; code: string };
   onlineEnabled: boolean;
   testMode: boolean;
+  mode?: "cart" | "buynow";
 }) {
   const router = useRouter();
-  const items = useCart();
+  const cartItems = useCart();
+  const buyNowItems = useBuyNow();
+  const buying = mode === "buynow";
+  const items = buying ? buyNowItems : cartItems;
+  const setQuantity = buying ? setBuyNowQuantity : setCartQuantity;
+  const removeItem = buying ? removeBuyNow : removeFromCart;
   const [addressId, setAddressId] = useState(addresses.find((a) => a.is_default)?.id ?? addresses[0]?.id ?? "");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +61,13 @@ export function CheckoutView({
     return (
       <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-16 text-center">
         <ShoppingBag aria-hidden className="size-10 text-royal-300" />
-        <p className="mt-4 font-heading text-lg font-semibold text-deep">Your product cart is empty</p>
-        <Link href="/shop" className="mt-6 rounded-full bg-royal px-5 py-2.5 text-sm font-semibold text-white">Continue shopping</Link>
+        <p className="mt-4 font-heading text-lg font-semibold text-deep">{buying ? "Nothing to buy right now" : "Your product cart is empty"}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {buying && cartItems.length ? (
+            <Link href="/checkout" className="rounded-full border px-5 py-2.5 text-sm font-semibold text-deep hover:bg-muted">Check out your cart ({cartItems.length})</Link>
+          ) : null}
+          <Link href="/shop" className="rounded-full bg-royal px-5 py-2.5 text-sm font-semibold text-white">Continue shopping</Link>
+        </div>
       </div>
     );
   }
@@ -74,9 +89,11 @@ export function CheckoutView({
         setError(res.error);
         return;
       }
-      // The order now holds the items (stock is reserved), so they leave the cart.
+      // The order now holds the items (stock is reserved): they leave the cart, or the
+      // Buy now item is cleared (the cart is left as it was).
       const clearCart = () => {
-        for (const i of items) removeFromCart(i.variantId);
+        if (buying) clearBuyNow();
+        else for (const i of items) removeFromCart(i.variantId);
       };
       const order = encodeURIComponent(res.orderNumber);
       if (!res.payment) {
@@ -175,20 +192,28 @@ export function CheckoutView({
 
       <aside className="h-fit rounded-2xl border p-5 lg:sticky lg:top-28">
         <h2 className="font-heading text-lg font-semibold text-deep">Order summary</h2>
-        <ul className="mt-4 flex flex-col gap-3 text-sm">
+        {buying ? (
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-royal-50 px-3 py-2 text-xs text-royal-800">
+            <Zap aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              Buy now: only this product is ordered. Your cart stays as it is
+              {cartItems.length ? (
+                <>
+                  {" "}
+                  (<Link href="/checkout" className="font-semibold underline underline-offset-2">check out the cart instead</Link>)
+                </>
+              ) : null}
+              .
+            </span>
+          </p>
+        ) : null}
+        <ul className="mt-2 flex flex-col divide-y" aria-label="Products in this order">
           {items.map((i) => (
-            <li key={i.variantId} className="flex justify-between gap-3">
-              <span className="min-w-0 break-words text-deep">
-                {i.productName}
-                {i.variantName ? <span className="text-muted-foreground"> · {i.variantName}</span> : null}
-                <span className="text-muted-foreground"> × {i.quantity}</span>
-              </span>
-              <span className="shrink-0 tabular">{formatPaise(i.price * i.quantity)}</span>
-            </li>
+            <CartLine key={i.variantId} item={i} compact onQuantity={(q) => setQuantity(i.variantId, q)} onRemove={() => removeItem(i.variantId)} />
           ))}
         </ul>
-        <dl className="mt-4 flex flex-col gap-2 border-t pt-3 text-sm">
-          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
+        <dl className="mt-2 flex flex-col gap-2 border-t pt-3 text-sm" aria-live="polite">
+          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal ({items.reduce((n, i) => n + i.quantity, 0)} item{items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"})</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
           <div className="flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular">{shipping ? formatPaise(shipping) : "Free"}</dd></div>
           <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>{method === "razorpay" ? "Total to pay now" : "Total (pay on delivery)"}</dt><dd className="tabular">{formatPaise(subtotal + shipping)}</dd></div>
         </dl>

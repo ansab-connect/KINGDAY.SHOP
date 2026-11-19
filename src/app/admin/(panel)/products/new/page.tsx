@@ -9,12 +9,12 @@ import { loadEditorOptions } from "../editor-options";
 export const metadata: Metadata = { title: "New product" };
 
 async function NewProductContent() {
-  const { categories, brands } = await loadEditorOptions();
+  const { categories, brands, optionTypes } = await loadEditorOptions();
   return (
     <>
       <PageHeader title="New product" description="Add a product with its variants, pricing and specifications" />
       <PreviewSaveNotice />
-      <NewProductEditor categories={categories} brands={brands} canDelete={false} aiEnabled={isGeminiConfigured()} />
+      <NewProductEditor categories={categories} brands={brands} optionTypes={optionTypes} canDelete={false} aiEnabled={isGeminiConfigured()} />
     </>
   );
 }

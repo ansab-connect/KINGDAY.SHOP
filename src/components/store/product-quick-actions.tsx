@@ -32,7 +32,7 @@ export function CardWishlist({ productId, name }: { productId: string; name: str
   );
 }
 
-type QuickItem = { variantId: string; productName: string; sku: string; price: number; maxQty: number; url: string };
+type QuickItem = { variantId: string; productName: string; sku: string; price: number; maxQty: number; url: string; image?: string | null };
 
 /** One-tap "Add" for single-option products that are in stock. */
 export function CardQuickAdd({ item }: { item: QuickItem }) {

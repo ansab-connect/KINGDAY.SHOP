@@ -25,7 +25,7 @@ async function EditProductContent({ params }: { params: PageProps<"/admin/produc
         description={`${product.variants.length} variant${product.variants.length === 1 ? "" : "s"} · /products/${product.slug}`}
         actions={<Pill tone={product.status === "active" ? "success" : product.status === "draft" ? "warning" : "neutral"}>{product.status}</Pill>}
       />
-      <ProductEditor product={product} categories={options.categories} brands={options.brands} canDelete={can(user, "products", "delete")} aiEnabled={isGeminiConfigured()} />
+      <ProductEditor product={product} categories={options.categories} brands={options.brands} optionTypes={options.optionTypes} canDelete={can(user, "products", "delete")} aiEnabled={isGeminiConfigured()} />
     </>
   );
 }

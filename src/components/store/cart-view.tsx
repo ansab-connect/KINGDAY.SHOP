@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { Mail, ShoppingBag } from "lucide-react";
+import { CartLine } from "@/components/store/cart-line";
 import { QuickAccount } from "@/components/store/quick-account";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { OFFICIAL_WHATSAPP, supportMailto } from "@/config/storefront";
@@ -11,9 +12,14 @@ import { formatPaise } from "@/lib/format";
 /** Products tab of the cart: checkout (Cash on Delivery) or order on WhatsApp. */
 export type CartCustomer = { name: string; code: string; mobile: string | null } | null;
 
-export function CartView({ customer, accounts = true }: { customer: CartCustomer; accounts?: boolean }) {
+/** Public delivery settings (display only; the database applies them when the order is placed). */
+export type DeliverySettings = { flatShipping: number; freeShippingAbove: number | null } | null;
+
+export function CartView({ customer, accounts = true, delivery = null }: { customer: CartCustomer; accounts?: boolean; delivery?: DeliverySettings }) {
   const items = useCart();
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const shipping = delivery ? (delivery.freeShippingAbove !== null && subtotal >= delivery.freeShippingAbove ? 0 : delivery.flatShipping) : null;
+  const count = items.reduce((s, i) => s + i.quantity, 0);
 
   if (items.length === 0) {
     return (
@@ -32,39 +38,32 @@ export function CartView({ customer, accounts = true }: { customer: CartCustomer
     "",
     ...items.map((i, n) => `${n + 1}. ${i.productName}${i.variantName ? ` (${i.variantName})` : ""}, SKU ${i.sku}, qty ${i.quantity}, ${formatPaise(i.price)} each\n   ${i.url}`),
     "",
-    `Estimated total: ${formatPaise(subtotal)}`,
+    `Estimated total: ${formatPaise(subtotal + (shipping ?? 0))}`,
   ].join("\n");
   const orderHref = `https://wa.me/${OFFICIAL_WHATSAPP}?text=${encodeURIComponent(message)}`;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
-      <ul className="flex flex-col divide-y rounded-2xl border">
+      <ul className="flex flex-col divide-y rounded-2xl border" aria-label="Products in your cart">
         {items.map((i) => (
-          <li key={i.variantId} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
-            <div className="min-w-0 flex-1">
-              <Link href={i.url.replace(/^https?:\/\/[^/]+/, "")} className="font-heading font-semibold text-deep hover:text-royal">{i.productName}</Link>
-              <p className="text-xs text-muted-foreground">{i.variantName ? `${i.variantName} · ` : ""}{formatPaise(i.price)} each</p>
-            </div>
-            <div className="flex items-center justify-between gap-4 sm:justify-end">
-              <div className="flex h-10 items-center rounded-full border">
-                <button type="button" aria-label={`Decrease quantity of ${i.productName}`} disabled={i.quantity <= 1} onClick={() => setCartQuantity(i.variantId, i.quantity - 1)} className="grid size-10 place-items-center rounded-full hover:bg-muted disabled:opacity-40"><Minus className="size-4" /></button>
-                <span className="w-8 text-center text-sm font-semibold tabular">{i.quantity}</span>
-                <button type="button" aria-label={`Increase quantity of ${i.productName}`} disabled={i.quantity >= i.maxQty} onClick={() => setCartQuantity(i.variantId, i.quantity + 1)} className="grid size-10 place-items-center rounded-full hover:bg-muted disabled:opacity-40"><Plus className="size-4" /></button>
-              </div>
-              <span className="w-24 text-right font-semibold tabular">{formatPaise(i.price * i.quantity)}</span>
-              <button type="button" aria-label={`Remove ${i.productName}`} onClick={() => removeFromCart(i.variantId)} className="grid size-10 place-items-center rounded-full text-danger hover:bg-danger-soft"><Trash2 className="size-4" /></button>
-            </div>
-          </li>
+          <CartLine key={i.variantId} item={i} onQuantity={(q) => setCartQuantity(i.variantId, q)} onRemove={() => removeFromCart(i.variantId)} />
         ))}
       </ul>
 
       <aside className="h-fit rounded-2xl border p-5 lg:sticky lg:top-28">
         <h2 className="font-heading text-lg font-semibold text-deep">Order summary</h2>
-        <dl className="mt-4 flex flex-col gap-2 text-sm">
-          <div className="flex justify-between"><dt className="text-muted-foreground">Items</dt><dd className="tabular">{items.reduce((s, i) => s + i.quantity, 0)}</dd></div>
-          <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>Estimated total</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
+        <dl className="mt-4 flex flex-col gap-2 text-sm" aria-live="polite">
+          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal ({count} item{count === 1 ? "" : "s"})</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Delivery</dt>
+            <dd className="tabular">{shipping === null ? "At checkout" : shipping ? formatPaise(shipping) : "Free"}</dd>
+          </div>
+          <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>Total</dt><dd className="tabular">{formatPaise(subtotal + (shipping ?? 0))}</dd></div>
         </dl>
-        <p className="mt-2 text-xs text-muted-foreground">Delivery charge and final total are shown at checkout. Pay cash on delivery.</p>
+        {delivery?.freeShippingAbove && shipping ? (
+          <p className="mt-2 text-xs text-muted-foreground">Add {formatPaise(delivery.freeShippingAbove - subtotal)} more for free delivery.</p>
+        ) : null}
+        <p className="mt-2 text-xs text-muted-foreground">Prices are confirmed when you place the order.</p>
         {customer ? (
           <>
             <p className="mt-4 text-xs text-muted-foreground">Ordering as <span className="font-semibold text-deep">{customer.name}</span> · {customer.code}</p>

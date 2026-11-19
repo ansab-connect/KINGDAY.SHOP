@@ -9,7 +9,7 @@ import { L } from "@/components/i18n/lang";
 import { Breadcrumbs } from "@/components/store/page-hero";
 import { Rating, Stars } from "@/components/store/price";
 import { ProductGrid } from "@/components/store/product-card";
-import { ProductGallery } from "@/components/store/product/product-gallery";
+import { VariantGallery, VariantSelectionProvider, VariantSpecs } from "@/components/store/product/variant-selection";
 import { PurchasePanel } from "@/components/store/product/purchase-panel";
 import { Container, SectionHeading } from "@/components/store/section";
 import { siteConfig } from "@/config/site";
@@ -101,8 +101,9 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
           ]}
         />
 
+        <VariantSelectionProvider variants={product.variants} defaultVariantId={product.defaultVariantId}>
         <div className="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-14">
-          <ProductGallery images={product.images} video={product.video} categorySlug={product.category.slug} name={product.name} />
+          <VariantGallery sharedImages={product.sharedImages} video={product.video} categorySlug={product.category.slug} name={product.name} />
 
           <div className="lg:pt-2">
             {product.brand ? <p className="text-xs font-semibold tracking-[0.16em] text-gold-600 uppercase">{product.brand.name}</p> : null}
@@ -121,8 +122,9 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 productId={product.id}
                 name={product.name}
                 shortDescription={product.shortDescription}
-                variants={product.variants}
-                defaultVariantId={product.defaultVariantId}
+                option1Name={product.option1Name}
+                option2Name={product.option2Name}
+                fallbackImage={product.sharedImages[0]?.src ?? product.images[0]?.src ?? null}
                 whatsappNumber={waNumber}
                 productUrl={productUrl}
               />
@@ -170,20 +172,10 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
 
           <section aria-labelledby="spec-heading">
             <h2 id="spec-heading" className="text-2xl font-bold text-deep"><L en="Specifications" ml="സവിശേഷതകൾ" /></h2>
-            <dl className="mt-4 divide-y overflow-hidden rounded-2xl border">
-              {product.specs.map((s) => (
-                <div key={s.label} className="grid grid-cols-[42%_1fr] gap-4 px-5 py-3 text-sm odd:bg-muted/40">
-                  <dt className="text-muted-foreground">{s.label}</dt>
-                  <dd className="font-medium text-deep">{s.value}</dd>
-                </div>
-              ))}
-              <div className="grid grid-cols-[42%_1fr] gap-4 px-5 py-3 text-sm">
-                <dt className="text-muted-foreground"><L en="Category" ml="വിഭാഗം" /></dt>
-                <dd className="font-medium text-deep">{product.category.name}</dd>
-              </div>
-            </dl>
+            <VariantSpecs specs={product.specs} categoryName={product.category.name} />
           </section>
         </div>
+        </VariantSelectionProvider>
 
         {/* Reviews */}
         <section id="reviews" aria-labelledby="reviews-heading" className="mt-16 scroll-mt-28">

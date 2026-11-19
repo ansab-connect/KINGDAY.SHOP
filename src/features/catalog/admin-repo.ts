@@ -38,6 +38,9 @@ export type AdminVariant = {
   sku: string;
   name: string;
   options: Record<string, string>;
+  option1: string | null;
+  option2: string | null;
+  specs: { name: string; value: string }[];
   mrp: number;
   price: number;
   weight_grams: number | null;
@@ -47,7 +50,7 @@ export type AdminVariant = {
   reserved: number;
 };
 
-export type AdminProductImage = { id: string; storage_path: string; url: string | null; alt: string; position: number };
+export type AdminProductImage = { id: string; storage_path: string; url: string | null; alt: string; position: number; variant_id: string | null };
 
 export type AdminProduct = {
   id: string;
@@ -65,6 +68,8 @@ export type AdminProduct = {
   is_featured: boolean;
   seo_title: string | null;
   seo_description: string | null;
+  option1_name: string | null;
+  option2_name: string | null;
   variants: AdminVariant[];
   attributes: { name: string; value: string }[];
   images: AdminProductImage[];
@@ -103,6 +108,13 @@ export async function listCategories(): Promise<AdminCategory[]> {
     ...c,
     product_count: (c.products as unknown as { count: number }[])?.[0]?.count ?? 0,
   })) as AdminCategory[];
+}
+
+/** Reusable variant type names (Size, Colour, …) for the product editor. */
+export async function listVariantOptionTypes(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("variant_option_types").select("name, position").order("position").order("name");
+  return ((data ?? []) as { name: string }[]).map((t) => t.name);
 }
 
 export async function listBrands(): Promise<AdminBrand[]> {
@@ -174,10 +186,10 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
     .from("products")
     .select(
       `id, name, slug, category_id, brand_id, short_description, description, highlights, age_range, video_path,
-       status, is_featured, seo_title, seo_description,
-       product_variants(id, sku, name, options, mrp, price, weight_grams, is_default, is_active, position, inventory(on_hand, reserved)),
+       status, is_featured, seo_title, seo_description, option1_name, option2_name,
+       product_variants(id, sku, name, options, option1, option2, specs, mrp, price, weight_grams, is_default, is_active, position, inventory(on_hand, reserved)),
        product_attributes(name, value, position),
-       product_images(id, storage_path, alt, position)`,
+       product_images(id, storage_path, alt, position, variant_id)`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -188,7 +200,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
   const d = data as unknown as Omit<AdminProduct, "variants" | "attributes" | "images" | "video_url"> & {
     product_variants: RawVariant[];
     product_attributes: { name: string; value: string; position: number }[];
-    product_images: { id: string; storage_path: string; alt: string; position: number }[];
+    product_images: { id: string; storage_path: string; alt: string; position: number; variant_id: string | null }[];
   };
 
   return {

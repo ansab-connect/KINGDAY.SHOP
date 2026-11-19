@@ -12,11 +12,28 @@ import { cn } from "@/lib/utils";
 
 const MAX_IMAGES = 12;
 
-/** Product gallery manager: upload (optimised in-browser), alt text, reorder, delete. */
-export function ProductImages({ productId, productName, images }: { productId: string; productName: string; images: AdminProductImage[] }) {
+/**
+ * Gallery manager: upload (optimised in-browser), alt text, reorder, delete.
+ * With `variantId` it manages that combination's own gallery; without it, the shared
+ * product images (used only for combinations that have no images of their own).
+ */
+export function ProductImages({
+  productId,
+  productName,
+  images,
+  variantId = null,
+  compact = false,
+}: {
+  productId: string;
+  productName: string;
+  images: AdminProductImage[];
+  variantId?: string | null;
+  compact?: boolean;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [items, setItems] = useState(images);
+  const [items, setItems] = useState(() => images.filter((i) => (i.variant_id ?? null) === variantId));
+  const inputId = `product-images-input-${variantId ?? "shared"}`;
   const [uploading, setUploading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -34,7 +51,7 @@ export function ProductImages({ productId, productName, images }: { productId: s
           .from("product-images")
           .upload(path, img.blob, { contentType: img.blob.type, cacheControl: "31536000", upsert: false });
         if (upErr) throw new Error("Upload failed. Check your permissions and try again.");
-        const r = await addProductImage({ productId, path, alt: productName, width: img.width, height: img.height });
+        const r = await addProductImage({ productId, path, alt: productName, width: img.width, height: img.height, variantId });
         if (!r.ok) {
           await supabase.storage.from("product-images").remove([path]);
           throw new Error(r.error);
@@ -74,7 +91,7 @@ export function ProductImages({ productId, productName, images }: { productId: s
   return (
     <div className="flex flex-col gap-4">
       {items.length ? (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <ul className={cn("grid gap-3", compact ? "grid-cols-3 sm:grid-cols-4 lg:grid-cols-6" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4")}>
           {items.map((img, i) => (
             <li key={img.id} className="flex flex-col gap-2 rounded-xl border p-2">
               <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
@@ -120,7 +137,7 @@ export function ProductImages({ productId, productName, images }: { productId: s
       <div>
         <input
           ref={inputRef}
-          id="product-images-input"
+          id={inputId}
           type="file"
           multiple
           accept="image/jpeg,image/png,image/webp,image/avif"
@@ -129,11 +146,12 @@ export function ProductImages({ productId, productName, images }: { productId: s
           onChange={(e) => e.target.files?.length && upload(e.target.files)}
         />
         <label
-          htmlFor="product-images-input"
+          htmlFor={inputId}
           aria-disabled={Boolean(uploading) || items.length >= MAX_IMAGES || !isSupabaseConfigured}
           className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center text-sm text-muted-foreground transition-colors hover:border-royal-300 hover:bg-royal-50/50",
+            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center text-sm text-muted-foreground transition-colors hover:border-royal-300 hover:bg-royal-50/50",
             "aria-disabled:cursor-not-allowed aria-disabled:opacity-60",
+            compact ? "p-3" : "p-6",
           )}
         >
           {uploading ? <Loader2 aria-hidden className="size-6 animate-spin text-royal" /> : <ImagePlus aria-hidden className="size-6 text-royal" />}

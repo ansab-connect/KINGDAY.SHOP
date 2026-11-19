@@ -9,6 +9,7 @@ import { Container } from "@/components/store/section";
 import { ServiceCartSection } from "@/components/store/service/service-cart-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCurrentUser } from "@/features/auth/session";
+import { getCheckoutSettings } from "@/features/orders/checkout";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -18,12 +19,13 @@ export const metadata: Metadata = { title: "Cart", robots: { index: false } };
 /** Products tab: signed-in customers check out under their Customer ID; first-time buyers register here. */
 async function ProductCart() {
   if (!isSupabaseConfigured) return <CartView customer={null} accounts={false} />;
-  const user = await getCurrentUser();
-  if (!user) return <CartView customer={null} />;
+  const [user, settings] = await Promise.all([getCurrentUser(), getCheckoutSettings()]);
+  const delivery = { flatShipping: settings.flatShipping, freeShippingAbove: settings.freeShippingAbove };
+  if (!user) return <CartView customer={null} delivery={delivery} />;
   const supabase = await createClient();
   const { data } = await supabase.from("profiles").select("full_name, phone, customer_code").eq("id", user.id).maybeSingle();
   const p = data as { full_name: string | null; phone: string | null; customer_code: string | null } | null;
-  return <CartView customer={{ name: p?.full_name ?? user.fullName ?? "Customer", code: p?.customer_code ?? "", mobile: p?.phone ?? null }} />;
+  return <CartView customer={{ name: p?.full_name ?? user.fullName ?? "Customer", code: p?.customer_code ?? "", mobile: p?.phone ?? null }} delivery={delivery} />;
 }
 
 const TABS = [

@@ -64,9 +64,12 @@ async function downloadTemplate(categories: Option[], brands: Option[]) {
     cell.alignment = { vertical: "middle", wrapText: true };
   });
   const cat = categories[0]?.name ?? "Electric Jeeps & Cars";
+  const brand = brands[0]?.name ?? "";
   const samples = [
-    { name: "SAMPLE Thunder 12V Jeep (delete this row)", sku: "SAMPLE-JEEP-RED", category: cat, brand: brands[0]?.name ?? "", colour: "Red", short: "Powerful 12V ride-on jeep with parental remote.", description: "Soft-start motors, LED lights and MP3 music. Built for smooth outdoor rides.", mrp: 28999, price: 23499, stock: 5, specs: "Battery: 12V 7Ah; Motor: 2 x 35W; Max load: 30 kg", age: "3–8 years", images: "jeep-red-1.jpg, jeep-red-2.jpg", status: "draft" },
-    { name: "SAMPLE Thunder 12V Jeep (delete this row)", sku: "SAMPLE-JEEP-BLK", category: cat, brand: brands[0]?.name ?? "", colour: "Black", short: "", description: "", mrp: 28999, price: 23499, stock: 3, specs: "", age: "", images: "", status: "draft" },
+    { name: "SAMPLE Thunder Jeep (delete these rows)", sku: "SAMPLE-JEEP-12-BLU", category: cat, brand, option1Name: "Voltage", option1: "12V", option2Name: "Colour", option2: "Volt Blue", short: "Ride-on jeep with parental remote.", description: "Soft-start motors, LED lights and MP3 music.", mrp: 28999, price: 23499, stock: 5, specs: "Battery: 12V 7Ah; Motor: 2 x 35W; Max load: 30 kg", age: "3–8 years", images: "jeep-12v-blue-1.jpg, jeep-12v-blue-2.jpg", status: "draft" },
+    { name: "SAMPLE Thunder Jeep (delete these rows)", sku: "SAMPLE-JEEP-12-GRN", category: cat, brand, option1Name: "Voltage", option1: "12V", option2Name: "Colour", option2: "Dynamic Green", mrp: 28999, price: 23499, stock: 3, images: "jeep-12v-green-1.jpg", status: "draft" },
+    { name: "SAMPLE Thunder Jeep (delete these rows)", sku: "SAMPLE-JEEP-24-BLU", category: cat, brand, option1Name: "Voltage", option1: "24V", option2Name: "Colour", option2: "Volt Blue", mrp: 38999, price: 33499, stock: 2, specs: "Battery: 24V 9Ah; Motor: 2 x 45W", images: "jeep-24v-blue-1.jpg", status: "draft" },
+    { name: "SAMPLE Comet Scooter (delete this row)", sku: "SAMPLE-COMET-RED", category: cat, brand, colour: "Red", mrp: 2999, price: 2499, stock: 4, status: "draft" },
   ];
   samples.forEach((s) => ws.addRow(s).eachCell((c) => (c.font = { italic: true, color: { argb: "FF7A6F8A" } })));
 
@@ -89,7 +92,10 @@ async function downloadTemplate(categories: Option[], brands: Option[]) {
     "KING DAY – Bulk product import",
     "",
     "1. Fill one row per product on the 'Products' sheet. Columns marked * are required.",
-    "2. Several colours of the same product: use the same Product Name and Category on each row, a different SKU and Variant / Colour.",
+    "2. Several variants of the same product: use the same Product Name and Category on each row, with a different SKU.",
+    "   Two levels (e.g. Voltage → Colour): fill Main Variant Type + Main Variant, and Sub Variant Type + Sub Variant, one row per combination.",
+    "   Each Main Variant can have its own colours (12V: Blue, Green; 24V: Blue only). Each row has its own price, stock, specs and images.",
+    "   One level only: just Variant / Colour (simple), or Main Variant Type + Main Variant.",
     "3. Prices are in rupees, numbers only (e.g. 28999). Selling price can't be higher than MRP.",
     "4. Specifications: Name: value; Name: value   (e.g. Battery: 12V 7Ah; Motor: 2 x 35W)",
     "5. Images: list file names in 'Image File Names', or name the files after the SKU (THUNDER-RED.jpg, THUNDER-RED-2.jpg).",
@@ -280,15 +286,19 @@ export function BulkImport({ categories, brands }: { categories: Option[]; brand
           mark({ status: "failed", error: field ? `${res.error} ${field}` : res.error });
         } else {
           const productId = res.data.id;
-          const imgs = [...new Map(group.flatMap((r) => r.images).map((i) => [i.name, i])).values()].slice(0, 12);
+          // One variant: images are the product's. Several: each row's images are that variant's own gallery.
+          const uploads =
+            group.length > 1
+              ? group.flatMap((r) => r.images.slice(0, 12).map((img) => ({ img, variantSku: r.sku })))
+              : [...new Map(group.flatMap((r) => r.images).map((i) => [i.name, i])).values()].slice(0, 12).map((img) => ({ img, variantSku: null as string | null }));
           let imageErrors = 0;
-          for (const img of imgs) {
+          for (const { img, variantSku } of uploads) {
             try {
               const opt = await optimizeImage(img.file);
               const path = `products/${productId}/${randomFileId()}.${opt.extension}`;
               const up = await storage.upload(path, opt.blob, { contentType: opt.blob.type, cacheControl: "31536000", upsert: false });
               if (up.error) throw up.error;
-              const added = await addProductImage({ productId, path, alt: group[0].name, width: opt.width, height: opt.height });
+              const added = await addProductImage({ productId, path, alt: group[0].name, width: opt.width, height: opt.height, variantSku });
               if (!added.ok) {
                 await storage.remove([path]);
                 throw new Error(added.error);
@@ -449,7 +459,7 @@ function RowSummary({ row: r, check: c, result, grouped, locked, onEdit, onRemov
         {[
           ["Category", categoriesLabel(r)],
           ["Brand", r.brandId ? r.brandText : r.brandText ? `${r.brandText} (not found)` : "—"],
-          ["Variant / Colour", r.colour || "—"],
+          ["Variant", [r.option1Name && r.option1 ? `${r.option1Name}: ${r.option1}` : "", r.option2Name && r.option2 ? `${r.option2Name}: ${r.option2}` : ""].filter(Boolean).join(" · ") || r.option1 || r.option2 || r.colour || "—"],
           ["Status", r.status === "active" ? "Active" : "Draft"],
           ["MRP", rupees(r.mrp)],
           ["Selling price", rupees(r.price)],
@@ -507,7 +517,7 @@ function RowEditor({
   onClose: () => void;
   onAddImages: (files: FileList) => Promise<void>;
 }) {
-  const field = (label: string, key: "name" | "sku" | "colour" | "mrp" | "price" | "stock" | "age", extra?: React.InputHTMLAttributes<HTMLInputElement>) => (
+  const field = (label: string, key: "name" | "sku" | "colour" | "option1" | "option2" | "mrp" | "price" | "stock" | "age", extra?: React.InputHTMLAttributes<HTMLInputElement>) => (
     <label className="flex flex-col gap-1 text-sm font-medium text-deep">
       {label}
       <input
@@ -523,7 +533,8 @@ function RowEditor({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="sm:col-span-2">{field("Product name", "name", { maxLength: 160 })}</div>
         {field("SKU", "sku", { maxLength: 40 })}
-        {field("Variant / Colour", "colour", { maxLength: 40 })}
+        {r.option1Name ? field(r.option1Name, "option1", { maxLength: 60 }) : field("Variant / Colour", "colour", { maxLength: 40 })}
+        {r.option2Name ? field(r.option2Name, "option2", { maxLength: 60 }) : null}
         <label className="flex flex-col gap-1 text-sm font-medium text-deep">
           Category
           <select value={r.categoryId} onChange={(e) => onChange({ categoryId: e.target.value, categoryText: categories.find((c) => c.id === e.target.value)?.name ?? "" })} className={inputClass}>

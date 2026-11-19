@@ -25,11 +25,14 @@ type Raw = {
   created_at: string;
   category: { slug: string; name: string; parent: { slug: string } | null } | null;
   brand: { slug: string; name: string } | null;
+  option1_name: string | null;
+  option2_name: string | null;
   product_variants: {
     id: string; sku: string; name: string; options: Record<string, string> | null; mrp: number; price: number;
+    option1: string | null; option2: string | null; specs: { name: string; value: string }[] | null;
     is_default: boolean; is_active: boolean; position: number; inventory: { on_hand: number; reserved: number } | null;
   }[];
-  product_images: { storage_path: string; alt: string; position: number }[];
+  product_images: { storage_path: string; alt: string; position: number; variant_id: string | null }[];
   product_attributes: { name: string; value: string; position: number }[];
 };
 
@@ -43,11 +46,11 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .from("products")
       .select(
         `id, name, slug, short_description, description, highlights, age_range, video_path, is_featured,
-         seo_title, seo_description, published_at, created_at,
+         seo_title, seo_description, published_at, created_at, option1_name, option2_name,
          category:categories(slug, name, parent:parent_id(slug)),
          brand:brands(slug, name),
-         product_variants(id, sku, name, options, mrp, price, is_default, is_active, position, inventory(on_hand, reserved)),
-         product_images(storage_path, alt, position),
+         product_variants(id, sku, name, options, option1, option2, specs, mrp, price, is_default, is_active, position, inventory(on_hand, reserved)),
+         product_images(storage_path, alt, position, variant_id),
          product_attributes(name, value, position)`,
       )
       .eq("status", "active")
@@ -98,6 +101,9 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
   const products: StoreProduct[] = raws
     .filter((p) => p.category && p.product_variants.some((v) => v.is_active))
     .map((p, index) => {
+      const toImage = (i: { storage_path: string; alt: string }) => ({ src: publicStorageUrl("product-images", i.storage_path)!, alt: i.alt || p.name });
+      const sortedImages = [...p.product_images].sort((a, b) => a.position - b.position);
+      const imagesFor = (variantId: string | null) => sortedImages.filter((i) => (i.variant_id ?? null) === variantId).map(toImage).filter((i) => i.src);
       const variants: StoreVariant[] = [...p.product_variants]
         .filter((v) => v.is_active)
         .sort((a, b) => a.position - b.position)
@@ -109,13 +115,15 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
           price: v.price,
           stock: Math.max(0, (v.inventory?.on_hand ?? 0) - (v.inventory?.reserved ?? 0)),
           colour: v.options?.colour ?? null,
+          option1: p.option1_name ? v.option1 : null,
+          option2: p.option1_name && p.option2_name ? v.option2 : null,
+          images: imagesFor(v.id),
+          specs: (v.specs ?? []).map((sp) => ({ label: sp.name, value: sp.value })),
         }));
       const def = variants.find((v) => p.product_variants.find((x) => x.id === v.id)?.is_default) ?? variants[0];
       const agg = ratingBySlug.get(p.slug);
-      const images = [...p.product_images]
-        .sort((a, b) => a.position - b.position)
-        .map((i) => ({ src: publicStorageUrl("product-images", i.storage_path)!, alt: i.alt || p.name }))
-        .filter((i) => i.src);
+      const sharedImages = imagesFor(null);
+      const images = sharedImages.length ? sharedImages : def.images;
       return {
         id: p.id,
         slug: p.slug,
@@ -128,6 +136,9 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
         stock: variants.reduce((s, v) => s + v.stock, 0),
         variants,
         defaultVariantId: def.id,
+        option1Name: p.option1_name,
+        option2Name: p.option1_name ? p.option2_name : null,
+        sharedImages,
         rating: agg ? Math.round((agg.sum / agg.count) * 10) / 10 : 0,
         reviewCount: agg?.count ?? 0,
         ageRange: p.age_range,

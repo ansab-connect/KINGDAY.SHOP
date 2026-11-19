@@ -8,8 +8,9 @@ import { L } from "@/components/i18n/lang";
 import { Price } from "@/components/store/price";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { WishlistButton } from "@/components/store/wishlist-button";
+import { useVariantSelection } from "@/components/store/product/variant-selection";
 import { OFFICIAL_WHATSAPP, supportMailto, whatsappLink } from "@/config/storefront";
-import { addToCart } from "@/features/cart/cart-store";
+import { addToCart, startBuyNow } from "@/features/cart/cart-store";
 import { whatsappOrderUrl } from "@/lib/whatsapp";
 import { formatPaise } from "@/lib/format";
 import type { StoreVariant } from "@/features/catalog/types";
@@ -20,8 +21,12 @@ type Props = {
   productId: string;
   name: string;
   shortDescription: string;
-  variants: StoreVariant[];
-  defaultVariantId: string;
+  /** Main variant type (e.g. "Size"), or null for a simple variant list. */
+  option1Name: string | null;
+  /** Sub variant type under each main value (e.g. "Colour"). */
+  option2Name: string | null;
+  /** Product image used for the cart thumbnail when the variant has none of its own. */
+  fallbackImage?: string | null;
   /** Digits-only WhatsApp number, or null when not configured. */
   whatsappNumber: string | null;
   productUrl: string;
@@ -32,22 +37,50 @@ type Props = {
  * a pre-filled order message; the cart is kept in the browser. Prices shown are
  * display-only: online checkout (Phase 8) re-reads them from the database.
  */
-export function PurchasePanel({ productId, name, shortDescription, variants, defaultVariantId, whatsappNumber, productUrl }: Props) {
-  const [variantId, setVariantId] = useState(defaultVariantId);
+export function PurchasePanel({ productId, name, shortDescription, option1Name, option2Name, fallbackImage = null, whatsappNumber, productUrl }: Props) {
+  const { variants, variant, select } = useVariantSelection();
   const [qty, setQty] = useState(1);
   const [notice, setNotice] = useState(false);
   const router = useRouter();
-  const variant = variants.find((v) => v.id === variantId) ?? variants[0];
   const out = variant.stock <= 0;
   const maxQty = Math.max(1, Math.min(variant.stock, 5));
-  const showPicker = variants.length > 1;
-  const pickerLabel = variants.every((v) => v.colour) ? "Colour" : "Option";
+  const choose = (id: string) => {
+    select(id);
+    setQty(1);
+    setNotice(false);
+  };
+  const variantLabel = variants.length > 1 && variant.name !== "Default" ? variant.name : null;
+  const lineItem = {
+    variantId: variant.id,
+    productName: name,
+    variantName: variantLabel,
+    sku: variant.sku,
+    price: variant.price,
+    maxQty,
+    url: productUrl,
+    image: variant.images[0]?.src ?? fallbackImage,
+  };
+
+  // Main values in display order, and the sub values available for the chosen main value.
+  const mainValues = option1Name
+    ? [...new Map(variants.filter((v) => v.option1).map((v) => [v.option1!.toLowerCase(), v.option1!])).values()]
+    : [];
+  const sameMain = (v: StoreVariant, value: string | null) => (v.option1 ?? "").toLowerCase() === (value ?? "").toLowerCase();
+  const subChoices = option2Name ? variants.filter((v) => sameMain(v, variant.option1) && v.option2) : [];
+  const pickMain = (value: string) => {
+    const group = variants.filter((v) => sameMain(v, value));
+    const next =
+      group.find((v) => v.option2 && variant.option2 && v.option2.toLowerCase() === variant.option2.toLowerCase() && v.stock > 0) ??
+      group.find((v) => v.stock > 0) ??
+      group[0];
+    if (next) choose(next.id);
+  };
 
   const waOrder = {
     name,
     sku: variant.sku,
     price: variant.price,
-    variant: variants.length > 1 ? (variant.colour ?? variant.name) : null,
+    variant: variantLabel,
     quantity: qty,
     url: productUrl,
   };
@@ -64,59 +97,76 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
           </p>
         ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
-          <L en="MRP inclusive of all taxes" ml="എല്ലാ നികുതികളും ഉൾപ്പെടെ" />
+          <L en="MRP inclusive of all taxes" ml="എല്ലാ നികുതികളും ഉൾപ്പെടെ" /> · SKU <span className="font-medium text-deep" aria-live="polite">{variant.sku}</span>
         </p>
       </div>
 
       {shortDescription ? <p className="text-base leading-relaxed text-muted-foreground">{shortDescription}</p> : null}
 
-      {showPicker ? (
+      {option1Name && mainValues.length ? (
         <fieldset>
           <legend className="text-sm font-medium text-deep">
-            {pickerLabel}: <span className="font-normal text-muted-foreground">{variant.colour ?? variant.name}</span>
+            {option1Name}: <span className="font-normal text-muted-foreground">{variant.option1}</span>
           </legend>
           <div className="mt-3 flex flex-wrap gap-2.5">
-            {variants.map((v) => {
-              const swatch = swatchFor(v.colour);
-              const label = v.colour ?? v.name;
+            {mainValues.map((value) => {
+              const group = variants.filter((v) => sameMain(v, value));
+              const soldOut = group.every((v) => v.stock <= 0);
+              const one = !option2Name ? group[0] : null;
               return (
-                <label key={v.id} className="relative cursor-pointer" title={`${v.name}${v.stock <= 0 ? " (out of stock)" : ""}`}>
-                  <input
-                    type="radio"
-                    name="variant"
-                    value={v.id}
-                    checked={variantId === v.id}
-                    onChange={() => {
-                      setVariantId(v.id);
-                      setQty(1);
-                    }}
-                    className="peer sr-only"
-                  />
-                  {swatch ? (
-                    <>
-                      <span className="sr-only">{label}{v.stock <= 0 ? " (out of stock)" : ""}</span>
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "block size-9 rounded-full ring-1 ring-black/10 ring-offset-2 transition-all peer-checked:ring-2 peer-checked:ring-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
-                          v.stock <= 0 && "opacity-40",
-                        )}
-                        style={{ backgroundColor: swatch }}
-                      />
-                    </>
-                  ) : (
-                    <span
-                      className={cn(
-                        "inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium text-deep transition-colors peer-checked:border-royal peer-checked:bg-royal-50 peer-checked:text-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
-                        v.stock <= 0 && "text-muted-foreground line-through",
-                      )}
-                    >
-                      {label}
-                    </span>
-                  )}
-                </label>
+                <Choice
+                  key={value}
+                  name="option1"
+                  label={value}
+                  checked={sameMain(variant, value)}
+                  soldOut={soldOut}
+                  swatch={/colou?r/i.test(option1Name) ? swatchFor(value) : null}
+                  onSelect={() => (one ? choose(one.id) : pickMain(value))}
+                />
               );
             })}
+          </div>
+        </fieldset>
+      ) : null}
+
+      {option2Name && subChoices.length ? (
+        <fieldset>
+          <legend className="text-sm font-medium text-deep">
+            {option2Name}: <span className="font-normal text-muted-foreground">{variant.option2}</span>
+          </legend>
+          <div className="mt-3 flex flex-wrap gap-2.5">
+            {subChoices.map((v) => (
+              <Choice
+                key={v.id}
+                name="option2"
+                label={v.option2!}
+                checked={v.id === variant.id}
+                soldOut={v.stock <= 0}
+                swatch={/colou?r/i.test(option2Name) ? swatchFor(v.option2) : null}
+                onSelect={() => choose(v.id)}
+              />
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
+      {!option1Name && variants.length > 1 ? (
+        <fieldset>
+          <legend className="text-sm font-medium text-deep">
+            {variants.every((v) => v.colour) ? "Colour" : "Option"}: <span className="font-normal text-muted-foreground">{variant.colour ?? variant.name}</span>
+          </legend>
+          <div className="mt-3 flex flex-wrap gap-2.5">
+            {variants.map((v) => (
+              <Choice
+                key={v.id}
+                name="variant"
+                label={v.colour ?? v.name}
+                checked={v.id === variant.id}
+                soldOut={v.stock <= 0}
+                swatch={swatchFor(v.colour)}
+                onSelect={() => choose(v.id)}
+              />
+            ))}
           </div>
         </fieldset>
       ) : null}
@@ -140,8 +190,9 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
         type="button"
         disabled={out}
         onClick={() => {
-          addToCart({ variantId: variant.id, productName: name, variantName: variants.length > 1 ? (variant.colour ?? variant.name) : null, sku: variant.sku, price: variant.price, maxQty, url: productUrl }, qty);
-          router.push("/checkout");
+          // Checkout shows exactly this product at this quantity; the cart is not touched.
+          startBuyNow(lineItem, qty);
+          router.push("/checkout?buy=1");
         }}
         className="inline-flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full bg-gold px-6 py-4 text-base font-bold tracking-wide text-deep uppercase shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] transition-colors hover:bg-gold-300 focus-visible:ring-2 focus-visible:ring-royal focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
@@ -153,7 +204,7 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
           type="button"
           disabled={out}
           onClick={() => {
-            addToCart({ variantId: variant.id, productName: name, variantName: variants.length > 1 ? (variant.colour ?? variant.name) : null, sku: variant.sku, price: variant.price, maxQty, url: productUrl }, qty);
+            addToCart(lineItem, qty);
             setNotice(true);
           }}
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-royal px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgb(75_0_130/0.6)] transition-colors hover:bg-royal-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -193,5 +244,53 @@ export function PurchasePanel({ productId, name, shortDescription, variants, def
         </a>
       </div>
     </div>
+  );
+}
+
+/** One selectable value: a colour swatch, or a text chip. Sold-out values stay selectable but dimmed. */
+function Choice({
+  name,
+  label,
+  checked,
+  soldOut,
+  swatch,
+  onSelect,
+}: {
+  name: string;
+  label: string;
+  checked: boolean;
+  soldOut: boolean;
+  swatch: string | null;
+  onSelect: () => void;
+}) {
+  return (
+    <label className="relative cursor-pointer" title={`${label}${soldOut ? " (out of stock)" : ""}`}>
+      <input type="radio" name={name} value={label} checked={checked} onChange={onSelect} className="peer sr-only" />
+      {swatch ? (
+        <>
+          <span className="sr-only">
+            {label}
+            {soldOut ? " (out of stock)" : ""}
+          </span>
+          <span
+            aria-hidden
+            className={cn(
+              "block size-9 rounded-full ring-1 ring-black/10 ring-offset-2 transition-all peer-checked:ring-2 peer-checked:ring-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+              soldOut && "opacity-40",
+            )}
+            style={{ backgroundColor: swatch }}
+          />
+        </>
+      ) : (
+        <span
+          className={cn(
+            "inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium text-deep transition-colors peer-checked:border-royal peer-checked:bg-royal-50 peer-checked:text-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+            soldOut && "text-muted-foreground line-through",
+          )}
+        >
+          {label}
+        </span>
+      )}
+    </label>
   );
 }

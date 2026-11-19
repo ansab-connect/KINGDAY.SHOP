@@ -11,7 +11,13 @@ const SWATCHES: Record<string, string> = {
   orange: "#E07A2E", grey: "#8A8794", gray: "#8A8794", silver: "#C9C7D0", gold: "#D4AF37",
 };
 
+const WORDS = Object.keys(SWATCHES).filter((k) => !k.includes(" "));
+
+/** Exact name first, then a known colour word inside a marketing name ("Volt Blue" → blue). */
 export function swatchFor(colour: string | null | undefined): string | null {
   if (!colour) return null;
-  return SWATCHES[colour.trim().toLowerCase()] ?? null;
+  const name = colour.trim().toLowerCase();
+  if (SWATCHES[name]) return SWATCHES[name];
+  const word = name.split(/[^a-z]+/).reverse().find((w) => WORDS.includes(w));
+  return word ? SWATCHES[word] : null;
 }

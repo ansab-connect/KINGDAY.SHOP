@@ -3,8 +3,8 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * Browser cart (localStorage). Prices stored here are for display only: any
- * order (WhatsApp now, online checkout later) is re-priced by the store.
+ * Browser cart (localStorage) and the one-item "Buy now" list (sessionStorage).
+ * Prices stored here are for display only: every order is re-priced by the database.
  */
 export type CartItem = {
   variantId: string;
@@ -16,82 +16,115 @@ export type CartItem = {
   quantity: number;
   maxQty: number;
   url: string;
+  /** Thumbnail URL, display only. */
+  image?: string | null;
 };
 
-const KEY = "kingday.cart.v1";
-const listeners = new Set<() => void>();
 const EMPTY: CartItem[] = [];
-let cache: CartItem[] | null = null;
 
-function read(): CartItem[] {
-  if (cache) return cache;
-  try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-    cache = Array.isArray(raw)
-      ? raw.filter((i): i is CartItem => i && typeof i.variantId === "string" && Number.isInteger(i.quantity) && i.quantity > 0)
-      : [];
-  } catch {
-    cache = [];
-  }
-  return cache;
-}
+const clampQty = (quantity: number, maxQty: number) => Math.min(Math.max(1, Math.round(quantity) || 1), Math.max(1, maxQty));
 
-function write(items: CartItem[]) {
-  cache = items;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(items));
-  } catch {
-    /* storage unavailable (private mode): cart lives for this page only */
-  }
-  listeners.forEach((l) => l());
-}
+function createItemStore(storageName: "localStorage" | "sessionStorage", key: string) {
+  const listeners = new Set<() => void>();
+  let cache: CartItem[] | null = null;
+  const storage = () => (typeof window === "undefined" ? null : window[storageName]);
 
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === KEY) {
-      cache = null;
-      listener();
+  function read(): CartItem[] {
+    if (cache) return cache;
+    try {
+      const raw = JSON.parse(storage()?.getItem(key) ?? "[]");
+      cache = Array.isArray(raw)
+        ? raw.filter((i): i is CartItem => i && typeof i.variantId === "string" && Number.isInteger(i.quantity) && i.quantity > 0)
+        : [];
+    } catch {
+      cache = [];
     }
-  };
-  window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
-  };
+    return cache;
+  }
+
+  function write(items: CartItem[]) {
+    cache = items;
+    try {
+      storage()?.setItem(key, JSON.stringify(items));
+    } catch {
+      /* storage unavailable (private mode): items live for this page only */
+    }
+    listeners.forEach((l) => l());
+  }
+
+  function subscribe(listener: () => void) {
+    listeners.add(listener);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === key) {
+        cache = null;
+        listener();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      listeners.delete(listener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }
+
+  const use = () => useSyncExternalStore(subscribe, read, () => EMPTY);
+  const setQuantity = (variantId: string, quantity: number) =>
+    write(read().map((i) => (i.variantId === variantId ? { ...i, quantity: clampQty(quantity, i.maxQty) } : i)));
+  const remove = (variantId: string) => write(read().filter((i) => i.variantId !== variantId));
+
+  return { read, write, use, setQuantity, remove };
 }
+
+// ---------------------------------------------------------------- Cart
+const cart = createItemStore("localStorage", "kingday.cart.v1");
 
 export function useCart(): CartItem[] {
-  return useSyncExternalStore(subscribe, read, () => EMPTY);
+  return cart.use();
 }
 
 export function addToCart(item: Omit<CartItem, "quantity">, quantity: number) {
-  const items = [...read()];
+  const items = [...cart.read()];
   const i = items.findIndex((x) => x.variantId === item.variantId);
-  const max = Math.max(1, item.maxQty);
-  if (i >= 0) items[i] = { ...items[i], ...item, quantity: Math.min(max, items[i].quantity + quantity) };
-  else items.push({ ...item, quantity: Math.min(max, Math.max(1, quantity)) });
-  write(items);
+  if (i >= 0) items[i] = { ...items[i], ...item, image: item.image ?? items[i].image, quantity: clampQty(items[i].quantity + quantity, item.maxQty) };
+  else items.push({ ...item, quantity: clampQty(quantity, item.maxQty) });
+  cart.write(items);
 }
 
-export function setCartQuantity(variantId: string, quantity: number) {
-  write(read().map((i) => (i.variantId === variantId ? { ...i, quantity: Math.min(Math.max(1, quantity), Math.max(1, i.maxQty)) } : i)));
-}
-
-export function removeFromCart(variantId: string) {
-  write(read().filter((i) => i.variantId !== variantId));
-}
+export const setCartQuantity = cart.setQuantity;
+export const removeFromCart = cart.remove;
 
 export function clearCart() {
-  write([]);
+  cart.write([]);
 }
 
 /** Replace the whole cart (used when merging with the customer's saved cart). */
 export function replaceCart(items: CartItem[]) {
-  write(items);
+  cart.write(items);
 }
 
 /** Current cart outside React (read straight from storage). */
 export function readCart(): CartItem[] {
-  return read();
+  return cart.read();
+}
+
+// ---------------------------------------------------------------- Buy now
+/**
+ * "Buy now" checks out exactly one product at the chosen quantity, without touching
+ * (or being mixed with) whatever is already in the cart. Kept for this browser tab only.
+ */
+const buyNow = createItemStore("sessionStorage", "kingday.buynow.v1");
+
+export function useBuyNow(): CartItem[] {
+  return buyNow.use();
+}
+
+export function startBuyNow(item: Omit<CartItem, "quantity">, quantity: number) {
+  buyNow.write([{ ...item, quantity: clampQty(quantity, item.maxQty) }]);
+}
+
+export const setBuyNowQuantity = buyNow.setQuantity;
+export const removeBuyNow = buyNow.remove;
+
+export function clearBuyNow() {
+  buyNow.write([]);
 }

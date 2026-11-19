@@ -3,51 +3,30 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Boxes, Film, Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
+import { Film, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { AiFillPanel } from "@/components/admin/catalog/ai-fill-panel";
 import { AiWriteButtons } from "@/components/admin/catalog/ai-write-buttons";
 import { DeleteButton } from "@/components/admin/catalog/delete-button";
 import { ProductImages } from "@/components/admin/catalog/product-images";
+import { newVariantRow, nextKey, VariantEditor, type OptionNames, type VariantRow } from "@/components/admin/catalog/variant-editor";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
 import { deleteProduct, saveProduct } from "@/features/catalog/admin-actions";
 import type { ProductFill } from "@/features/catalog/smart-fill";
 import type { AdminProduct } from "@/features/catalog/admin-repo";
-import { paiseToRupees, rupeesToPaise, slugify } from "@/features/catalog/schemas";
+import { paiseToRupees, slugify } from "@/features/catalog/schemas";
 import { isSupabaseConfigured } from "@/lib/env";
-import { discountPercent } from "@/lib/format";
 import { randomFileId } from "@/lib/image-optimize";
 import { publicStorageUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
-
-type VariantRow = {
-  key: string;
-  id: string | null;
-  sku: string;
-  name: string;
-  colour: string;
-  mrp: string;
-  price: string;
-  opening_stock: string;
-  on_hand: number | null;
-  is_active: boolean;
-  is_default: boolean;
-};
 
 type Option = { id: string; name: string; parent_id?: string | null };
-
-let keySeq = 0;
-const nextKey = () => `row-${++keySeq}`;
-
-function newVariant(isDefault = false): VariantRow {
-  return { key: nextKey(), id: null, sku: "", name: "", colour: "", mrp: "", price: "", opening_stock: "0", on_hand: null, is_active: true, is_default: isDefault };
-}
 
 export function ProductEditor({
   product,
   categories,
   brands,
   canDelete,
+  optionTypes = [],
   onDirtyChange,
   aiEnabled = false,
 }: {
@@ -55,6 +34,8 @@ export function ProductEditor({
   categories: Option[];
   brands: Option[];
   canDelete: boolean;
+  /** Reusable variant type names (Size, Colour, …). */
+  optionTypes?: string[];
   /** Told whenever the form gains or loses unsaved changes. */
   onDirtyChange?: (dirty: boolean) => void;
   /** Gemini is configured on the server (shows "Search with AI"). */
@@ -81,30 +62,45 @@ export function ProductEditor({
     video_path: product?.video_path ?? null,
   });
   const [highlights, setHighlights] = useState<string[]>(product?.highlights.length ? product.highlights : [""]);
-  const [variants, setVariants] = useState<VariantRow[]>(
-    product?.variants.length
-      ? product.variants.map((v) => ({
-          key: nextKey(),
-          id: v.id,
-          sku: v.sku,
-          name: v.name === "Default" ? "" : v.name,
-          colour: v.options?.colour ?? "",
-          mrp: paiseToRupees(v.mrp),
-          price: paiseToRupees(v.price),
-          opening_stock: "0",
-          on_hand: v.on_hand,
-          is_active: v.is_active,
-          is_default: v.is_default,
-        }))
-      : [newVariant(true)],
-  );
+  const [optionNames, setOptionNames] = useState<OptionNames>({
+    option1_name: product?.option1_name ?? "",
+    option2_name: product?.option2_name ?? "",
+  });
+  const [variants, setVariants] = useState<VariantRow[]>(() => {
+    if (!product?.variants.length) return [newVariantRow({ is_default: true })];
+    const groupOf = new Map<string, string>();
+    return product.variants.map((v) => {
+      const row = newVariantRow({
+        id: v.id,
+        sku: v.sku,
+        // Names the database built from the options stay "automatic".
+        name: v.name === "Default" || v.name === [v.option1, v.option2].filter(Boolean).join(" · ") ? "" : v.name,
+        colour: v.options?.colour ?? "",
+        option1: v.option1 ?? "",
+        option2: v.option2 ?? "",
+        specs: (v.specs ?? []).map((sp) => ({ key: nextKey(), ...sp })),
+        mrp: paiseToRupees(v.mrp),
+        price: paiseToRupees(v.price),
+        opening_stock: String(v.on_hand ?? 0),
+        on_hand: v.on_hand,
+        is_active: v.is_active,
+        is_default: v.is_default,
+      });
+      const g = (v.option1 ?? "").toLowerCase();
+      if (g) {
+        if (!groupOf.has(g)) groupOf.set(g, row.group);
+        row.group = groupOf.get(g)!;
+      }
+      return row;
+    });
+  });
   const [attributes, setAttributes] = useState(
     product?.attributes.length ? product.attributes.map((a) => ({ key: nextKey(), ...a })) : [{ key: nextKey(), name: "", value: "" }],
   );
   const [videoBusy, setVideoBusy] = useState(false);
 
   // Unsaved changes: warn before leaving the page, and let the "new product" wrapper ask before clearing.
-  const snapshot = JSON.stringify({ basics, highlights, variants, attributes });
+  const snapshot = JSON.stringify({ basics, highlights, variants, attributes, optionNames });
   const [initialSnapshot] = useState(snapshot);
   const dirty = snapshot !== initialSnapshot;
   useEffect(() => {
@@ -116,8 +112,6 @@ export function ProductEditor({
   }, [dirty, onDirtyChange]);
 
   const setB = <K extends keyof typeof basics>(k: K, val: (typeof basics)[K]) => setBasics((p) => ({ ...p, [k]: val }));
-  const setVariant = (key: string, patch: Partial<VariantRow>) =>
-    setVariants((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : patch.is_default ? { ...r, is_default: false } : r)));
 
   const categoryOptions = categories
     .filter((c) => !c.parent_id)
@@ -126,12 +120,13 @@ export function ProductEditor({
       ...categories.filter((c) => c.parent_id === p.id).map((c) => ({ value: c.id, label: `— ${c.name}` })),
     ]);
 
-  function suggestSku(row: VariantRow) {
+  function suggestSku(row: VariantRow): string {
     const cat = categories.find((c) => c.id === basics.category_id)?.name ?? "KD";
     const prefix = cat.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "GEN";
-    const colour = row.colour.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase();
+    const part = (t: string) => t.replace(/[^A-Za-z0-9]/g, "").slice(0, 3).toUpperCase();
+    const opts = optionNames.option1_name.trim() ? [part(row.option1), optionNames.option2_name.trim() ? part(row.option2) : ""] : [part(row.colour)];
     const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-    setVariant(row.key, { sku: ["KD", prefix, rand, colour].filter(Boolean).join("-") });
+    return ["KD", prefix, rand, ...opts].filter(Boolean).join("-").slice(0, 40);
   }
 
   async function uploadVideo(file: File) {
@@ -155,22 +150,29 @@ export function ProductEditor({
         id: product?.id ?? null,
         video_path: basics.video_path ?? "",
         highlights,
+        option1_name: optionNames.option1_name.trim(),
+        option2_name: optionNames.option1_name.trim() ? optionNames.option2_name.trim() : "",
         attributes: attributes.map(({ name, value }) => ({ name, value })),
         variants: variants.map((v) => ({
           id: v.id,
           sku: v.sku,
-          name: v.name || v.colour || "Default",
+          name: optionNames.option1_name.trim() ? v.name : v.name || v.colour || "Default",
           colour: v.colour,
+          option1: v.option1,
+          option2: v.option2,
+          specs: v.specs.map(({ name, value }) => ({ name, value })),
           mrp: v.mrp,
           price: v.price,
-          opening_stock: v.opening_stock || "0",
+          opening_stock: v.id ? "0" : v.opening_stock || "0",
+          // Saved variants: a changed stock count is recorded as an adjustment.
+          stock_target: v.id && v.opening_stock !== "" && Number(v.opening_stock) !== (v.on_hand ?? 0) ? Number(v.opening_stock) : undefined,
           is_active: v.is_active,
           is_default: v.is_default,
         })),
       });
       if (r.ok) {
         setErrors({});
-        setStatus({ kind: "success", text: product ? "Product saved." : "Product created. You can now add images." });
+        setStatus({ kind: "success", text: product ? (r.message ?? "Product saved.") : "Product created. You can now add images." });
         if (!product) router.push(`/admin/products/${r.data.id}`);
         else router.refresh();
       } else {
@@ -214,14 +216,19 @@ export function ProductEditor({
     let variantNote = "";
     if (d.variants.length) {
       if (variants.every((v) => !v.id)) {
+        const colours = d.variants.some((v) => v.colour);
+        if (colours && !optionNames.option1_name) setOptionNames({ option1_name: "Colour", option2_name: "" });
         setVariants(
-          d.variants.map((v, i) => ({
-            ...newVariant(i === 0),
-            name: v.name.slice(0, 120),
-            colour: v.colour.slice(0, 40),
-            mrp: v.mrp ? String(v.mrp) : "",
-            price: v.price ? String(v.price) : "",
-          })),
+          d.variants.map((v, i) =>
+            newVariantRow({
+              is_default: i === 0,
+              name: colours ? "" : v.name.slice(0, 120),
+              colour: v.colour.slice(0, 40),
+              option1: v.colour.slice(0, 60),
+              mrp: v.mrp ? String(v.mrp) : "",
+              price: v.price ? String(v.price) : "",
+            }),
+          ),
         );
         filled.push(`${d.variants.length} variant${d.variants.length === 1 ? "" : "s"}`);
       } else {
@@ -273,79 +280,30 @@ export function ProductEditor({
           {aiEnabled ? <AiWriteButtons value={basics.description} onChange={(v) => setB("description", v.slice(0, 10000))} productName={basics.name} /> : null}
         </FormSection>
 
-        <FormSection
-          title="Variants, pricing & SKUs"
-          description="Every colour or model is a variant with its own SKU, price and stock."
-          aside={
-            <button type="button" onClick={() => setVariants((v) => [...v, newVariant(false)])} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium text-deep hover:bg-muted">
-              <Plus aria-hidden className="size-4" /> Add variant
-            </button>
-          }
-        >
-          {errors.variants ? <p className="text-xs text-danger">{errors.variants}</p> : null}
-          <ul className="flex flex-col gap-4">
-            {variants.map((v, i) => {
-              const err = (f: string) => errors[`variants.${i}.${f}`];
-              const off = discountPercent(rupeesToPaise(v.mrp) || 0, rupeesToPaise(v.price) || 0);
-              return (
-                <li key={v.key} className={cn("rounded-xl border p-4", !v.is_active && "bg-muted/50 opacity-80")}>
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-heading text-sm font-semibold text-deep">
-                      Variant {i + 1}
-                      {!v.is_active ? <span className="ml-2 text-xs font-normal text-muted-foreground">(inactive)</span> : null}
-                    </p>
-                    <div className="flex items-center gap-3 text-sm">
-                      <label className="flex items-center gap-1.5">
-                        <input type="radio" name="default-variant" checked={v.is_default} onChange={() => setVariant(v.key, { is_default: true })} className="accent-royal" />
-                        Default
-                      </label>
-                      <label className="flex items-center gap-1.5">
-                        <input type="checkbox" checked={v.is_active} onChange={(e) => setVariant(v.key, { is_active: e.target.checked })} className="accent-royal" />
-                        Active
-                      </label>
-                      {!v.id && variants.length > 1 ? (
-                        <button type="button" aria-label={`Remove variant ${i + 1}`} onClick={() => setVariants((rows) => rows.filter((r) => r.key !== v.key))} className="grid size-8 place-items-center rounded-md text-danger hover:bg-danger-soft">
-                          <Trash2 className="size-4" />
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <TextField id={`v-name-${v.key}`} label="Variant name" placeholder="e.g. Red / 12V" maxLength={120} value={v.name} error={err("name")} onChange={(val) => setVariant(v.key, { name: val })} />
-                    <TextField id={`v-colour-${v.key}`} label="Colour" placeholder="e.g. Red" maxLength={40} value={v.colour} error={err("colour")} onChange={(val) => setVariant(v.key, { colour: val })} />
-                    <div className="sm:col-span-2">
-                      <div className="flex items-end gap-2">
-                        <TextField id={`v-sku-${v.key}`} label="SKU" required className="flex-1" maxLength={40} value={v.sku} error={err("sku")} onChange={(val) => setVariant(v.key, { sku: val.toUpperCase() })} />
-                        <button type="button" onClick={() => suggestSku(v)} title="Generate SKU" aria-label="Generate SKU" className={cn("grid size-10 shrink-0 place-items-center rounded-lg border text-royal hover:bg-royal-50", err("sku") && "mb-5")}>
-                          <Sparkles className="size-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <TextField id={`v-mrp-${v.key}`} label="MRP" required prefix="₹" inputMode="decimal" value={v.mrp} error={err("mrp")} onChange={(val) => setVariant(v.key, { mrp: val })} />
-                    <TextField id={`v-price-${v.key}`} label="Selling price" required prefix="₹" inputMode="decimal" value={v.price} error={err("price")} hint={off > 0 ? `${off}% off MRP` : undefined} onChange={(val) => setVariant(v.key, { price: val })} />
-                    {v.id ? (
-                      <div className="flex flex-col gap-1.5 sm:col-span-2">
-                        <span className="text-sm font-medium text-deep">Stock on hand</span>
-                        <p className="flex h-10 items-center gap-2 text-sm">
-                          <span className="font-semibold tabular">{v.on_hand ?? 0}</span>
-                          <Link href="/admin/inventory" className="inline-flex items-center gap-1 text-royal hover:underline">
-                            <Boxes aria-hidden className="size-4" /> Adjust in Inventory
-                          </Link>
-                        </p>
-                      </div>
-                    ) : (
-                      <TextField id={`v-stock-${v.key}`} label="Opening stock" inputMode="numeric" value={v.opening_stock} error={err("opening_stock")} hint="Recorded in the stock ledger." onChange={(val) => setVariant(v.key, { opening_stock: val })} />
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+        <FormSection title="Variants, pricing & SKUs" description="Each variant (or each combination, e.g. Size + Colour) has its own SKU, price, stock, specifications and images.">
+          <VariantEditor
+            names={optionNames}
+            onNamesChange={setOptionNames}
+            rows={variants}
+            onRowsChange={setVariants}
+            optionTypes={optionTypes}
+            errors={errors}
+            product={product ? { id: product.id, name: basics.name, images: product.images } : null}
+            onSuggestSku={suggestSku}
+          />
         </FormSection>
 
-        <FormSection title="Images">
+        <FormSection
+          title={optionNames.option1_name.trim() ? "Shared images" : "Images"}
+          description={optionNames.option1_name.trim() ? "Optional. Shown only for variants that have no images of their own. Add images per variant above." : undefined}
+        >
           {product ? (
-            <ProductImages productId={product.id} productName={basics.name} images={product.images} />
+            <ProductImages
+              key={product.images.filter((i) => !i.variant_id).map((i) => i.id).join(",")}
+              productId={product.id}
+              productName={basics.name}
+              images={product.images}
+            />
           ) : (
             <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then add images.</p>
           )}
@@ -373,10 +331,10 @@ export function ProductEditor({
         <FormSection title="Specifications" description="Shown as a table on the product page.">
           {attributes.map((a, i) => (
             <div key={a.key} className="grid grid-cols-[1fr_1.4fr_auto] gap-2">
-              <label htmlFor={`a-name-${a.key}`} className="sr-only">Specification name</label>
-              <input id={`a-name-${a.key}`} value={a.name} placeholder="e.g. Battery" maxLength={60} aria-invalid={Boolean(errors[`attributes.${i}.name`])} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, name: e.target.value } : x)))} className={inputClass} />
-              <label htmlFor={`a-value-${a.key}`} className="sr-only">Specification value</label>
-              <input id={`a-value-${a.key}`} value={a.value} placeholder="e.g. 12V 7Ah" maxLength={200} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, value: e.target.value } : x)))} className={inputClass} />
+              <label htmlFor={`a-name-${i}`} className="sr-only">Specification name</label>
+              <input id={`a-name-${i}`} value={a.name} placeholder="e.g. Battery" maxLength={60} aria-invalid={Boolean(errors[`attributes.${i}.name`])} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, name: e.target.value } : x)))} className={inputClass} />
+              <label htmlFor={`a-value-${i}`} className="sr-only">Specification value</label>
+              <input id={`a-value-${i}`} value={a.value} placeholder="e.g. 12V 7Ah" maxLength={200} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, value: e.target.value } : x)))} className={inputClass} />
               <button type="button" aria-label="Remove specification" onClick={() => setAttributes((l) => (l.length > 1 ? l.filter((x) => x.key !== a.key) : [{ key: nextKey(), name: "", value: "" }]))} className="grid size-10 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
                 <X className="size-4" />
               </button>

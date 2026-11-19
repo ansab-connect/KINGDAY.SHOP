@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { readCart, replaceCart, useCart, type CartItem } from "@/features/cart/cart-store";
+import { publicStorageUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/client";
 
 const OWNER_KEY = "kingday.cart.owner";
@@ -15,7 +16,7 @@ type Row = {
     name: string | null;
     price: number;
     is_active: boolean;
-    products: { name: string; slug: string } | null;
+    products: { name: string; slug: string; product_images: { storage_path: string; position: number; variant_id: string | null }[] } | null;
     inventory: { on_hand: number; reserved: number } | { on_hand: number; reserved: number }[] | null;
   } | null;
 };
@@ -67,7 +68,7 @@ export function CartSync() {
       userId.current = uid;
       const { data: rows } = await supabase
         .from("cart_items")
-        .select("variant_id, quantity, product_variants(sku, name, price, is_active, products(name, slug), inventory(on_hand, reserved))")
+        .select("variant_id, quantity, product_variants(sku, name, price, is_active, products(name, slug, product_images(storage_path, position, variant_id)), inventory(on_hand, reserved))")
         .eq("user_id", uid);
       const server: CartItem[] = ((rows ?? []) as unknown as Row[]).flatMap((r) => {
         const v = r.product_variants;
@@ -75,6 +76,9 @@ export function CartSync() {
         const inv = Array.isArray(v.inventory) ? v.inventory[0] : v.inventory;
         const maxQty = Math.max(0, (inv?.on_hand ?? 0) - (inv?.reserved ?? 0));
         if (maxQty <= 0) return [];
+        // Thumbnail: the variant's own first image, else the product's first shared image.
+        const imgs = [...(v.products.product_images ?? [])].sort((a, b) => a.position - b.position);
+        const img = imgs.find((x) => x.variant_id === r.variant_id) ?? imgs.find((x) => !x.variant_id) ?? imgs[0];
         return [{
           variantId: r.variant_id,
           productName: v.products.name,
@@ -84,6 +88,7 @@ export function CartSync() {
           quantity: Math.min(r.quantity, maxQty),
           maxQty,
           url: `/products/${v.products.slug}`,
+          image: publicStorageUrl("product-images", img?.storage_path),
         }];
       });
       if (cancelled) return;
@@ -91,7 +96,7 @@ export function CartSync() {
       // Read the live cart: during hydration `items` is still the empty server snapshot.
       for (const local of owner && owner !== uid ? [] : readCart()) {
         const s = merged.get(local.variantId);
-        merged.set(local.variantId, s ? { ...s, quantity: Math.min(s.maxQty, Math.max(s.quantity, local.quantity)) } : local);
+        merged.set(local.variantId, s ? { ...s, image: s.image ?? local.image, quantity: Math.min(s.maxQty, Math.max(s.quantity, local.quantity)) } : local);
       }
       replaceCart([...merged.values()]);
       ready.current = true;

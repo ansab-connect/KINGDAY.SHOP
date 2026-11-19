@@ -14,9 +14,9 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Checkout", robots: { index: false } };
 
-async function Checkout() {
+async function Checkout({ buyNow }: { buyNow: boolean }) {
   if (!isSupabaseConfigured) return <p className="text-sm text-muted-foreground">Online ordering opens soon. Please order on WhatsApp from your cart.</p>;
-  const user = await requireUser("/checkout");
+  const user = await requireUser(buyNow ? "/checkout?buy=1" : "/checkout");
   const supabase = await createClient();
   const [addresses, settings, { data: profile }] = await Promise.all([
     getAddresses(),
@@ -42,17 +42,22 @@ async function Checkout() {
       customer={{ name: p?.full_name ?? user.fullName ?? "Customer", code: p?.customer_code ?? "" }}
       onlineEnabled={rzp !== null}
       testMode={rzp?.mode === "test"}
+      mode={buyNow ? "buynow" : "cart"}
     />
   );
 }
 
-export default function CheckoutPage() {
+async function CheckoutFromParams({ searchParams }: { searchParams: PageProps<"/checkout">["searchParams"] }) {
+  return <Checkout buyNow={(await searchParams).buy === "1"} />;
+}
+
+export default function CheckoutPage(props: PageProps<"/checkout">) {
   return (
     <>
       <PageHero title="Checkout" crumbs={[{ name: "Home", href: "/" }, { name: "Cart", href: "/cart" }, { name: "Checkout" }]} />
       <Container className="py-10 sm:py-12">
         <Suspense fallback={<Skeleton className="h-96 rounded-2xl" />}>
-          <Checkout />
+          <CheckoutFromParams searchParams={props.searchParams} />
         </Suspense>
       </Container>
     </>

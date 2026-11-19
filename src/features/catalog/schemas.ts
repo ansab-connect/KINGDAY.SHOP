@@ -111,6 +111,8 @@ const money = (label: string) =>
         .max(1_000_000_000, `${label} is too large.`),
     );
 
+const attributeSpec = z.object({ name: z.string().trim().max(60), value: z.string().trim().max(200) });
+
 export const variantInputSchema = z
   .object({
     id: optionalUuid,
@@ -121,9 +123,21 @@ export const variantInputSchema = z
       .regex(SKU_RE, "SKU: 3–40 capital letters, numbers or hyphens."),
     name: z.string().trim().max(120).default("Default"),
     colour: optionalText(40),
+    /** Main variant value, e.g. "12V" (when the product has a main variant type). */
+    option1: optionalText(60),
+    /** Sub variant value, e.g. "Volt Blue" (when the product has a sub variant type). */
+    option2: optionalText(60),
+    /** Specifications that apply only to this combination. */
+    specs: z
+      .array(attributeSpec)
+      .max(30)
+      .default([])
+      .transform((list) => list.filter((a) => a.name && a.value)),
     mrp: money("MRP"),
     price: money("selling price"),
     opening_stock: z.coerce.number().int().min(0, "Stock can't be negative.").max(100000).default(0),
+    /** Saved variants: the stock count the editor wants. The difference is recorded as an adjustment. */
+    stock_target: z.number().int("Whole numbers only.").min(0, "Stock can't be negative.").max(100000).optional(),
     weight_grams: z
       .union([z.coerce.number().int().positive().max(500000), z.literal(""), z.null()])
       .optional()
@@ -160,7 +174,11 @@ export const productInputSchema = z
     is_featured: z.boolean().default(false),
     seo_title: optionalText(70),
     seo_description: optionalText(170),
-    variants: z.array(variantInputSchema).min(1, "Add at least one variant.").max(50),
+    /** Main variant type, e.g. "Size". Empty = simple variants. */
+    option1_name: optionalText(30),
+    /** Sub variant type under each main value, e.g. "Colour". */
+    option2_name: optionalText(30),
+    variants: z.array(variantInputSchema).min(1, "Add at least one variant.").max(100),
     attributes: z
       .array(attributeInputSchema)
       .max(40)
@@ -176,6 +194,30 @@ export const productInputSchema = z
         ctx.addIssue({ code: "custom", path: ["variants", i, "sku"], message: `Same SKU as variant ${prev + 1}.` });
       }
       seen.set(variant.sku, i);
+    });
+    if (v.option2_name && !v.option1_name) {
+      ctx.addIssue({ code: "custom", path: ["option1_name"], message: "Choose the main variant type first." });
+    }
+    if (v.option1_name && v.option2_name && v.option1_name.toLowerCase() === v.option2_name.toLowerCase()) {
+      ctx.addIssue({ code: "custom", path: ["option2_name"], message: "Main and sub variant types must be different." });
+    }
+    const combos = new Map<string, number>();
+    v.variants.forEach((variant, i) => {
+      if (!variant.is_active) return;
+      if (v.option1_name && !variant.option1) {
+        ctx.addIssue({ code: "custom", path: ["variants", i, "option1"], message: `Enter the ${v.option1_name}.` });
+      }
+      if (v.option2_name && !variant.option2) {
+        ctx.addIssue({ code: "custom", path: ["variants", i, "option2"], message: `Enter the ${v.option2_name}.` });
+      }
+      if (v.option1_name) {
+        const key = `${(variant.option1 ?? "").toLowerCase()}|${v.option2_name ? (variant.option2 ?? "").toLowerCase() : ""}`;
+        const prev = combos.get(key);
+        if (prev !== undefined) {
+          ctx.addIssue({ code: "custom", path: ["variants", i, v.option2_name ? "option2" : "option1"], message: `Same combination as variant ${prev + 1}.` });
+        }
+        combos.set(key, i);
+      }
     });
     const names = new Set<string>();
     v.attributes.forEach((a, i) => {
@@ -198,8 +240,12 @@ export function toSaveProductPayload(p: ProductData) {
     variants: p.variants.map((v) => ({
       id: v.id,
       sku: v.sku,
-      name: v.name || "Default",
+      // Empty name → the database builds it from the option values ("12V · Volt Blue").
+      name: v.name && v.name !== "Default" ? v.name : p.option1_name ? "" : "Default",
       options: v.colour ? { colour: v.colour } : {},
+      option1: p.option1_name ? v.option1 : null,
+      option2: p.option2_name ? v.option2 : null,
+      specs: v.specs,
       mrp: v.mrp,
       price: v.price,
       weight_grams: v.weight_grams,
