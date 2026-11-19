@@ -1089,6 +1089,58 @@ await test("razorpay: unpaid online orders expire after 30 minutes and release s
   await expectError(`select * from public.payment_webhook_events`, [], /permission denied|row-level/);
 });
 
+console.log("Admin order editing (0029)");
+let editOrder;
+await test("order edit: admin changes customer and address; customers can't", async () => {
+  await asSuperuser();
+  await db.query(`update public.inventory set on_hand = 10, reserved = 0 where variant_id = $1`, [ckVar.id]);
+  await user(alice);
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: ckVar.id, quantity: 1 }], address_id: aliceAddr })]);
+  editOrder = o.order_id;
+  const details = (name) => JSON.stringify({
+    order_id: editOrder, customer_name: name, customer_phone: "+91 98470 22222", customer_email: "alice.new@example.com",
+    customer_note: "Gate code 12", address: { line1: "New Street 5", city: "Kochi", state: "Kerala", postal_code: "682001" },
+  });
+  await expectError(`select public.admin_update_order_details($1::jsonb)`, [details("Alice X")], /permission/);
+  await user(admin2);
+  await rows(`select public.admin_update_order_details($1::jsonb)`, [details("Alice Updated")]);
+  await asSuperuser();
+  const [row] = await rows(`select customer_name, customer_phone, customer_email, shipping_address ->> 'city' as city, shipping_address ->> 'line1' as line1 from public.orders where id = $1`, [editOrder]);
+  assert(row.customer_name === "Alice Updated" && row.city === "Kochi" && row.line1 === "New Street 5" && row.customer_email === "alice.new@example.com", `details ${JSON.stringify(row)}`);
+  assert((await rows(`select 1 from public.audit_logs where entity = 'orders' and entity_id = $1 and details ->> 'edit' = 'customer details'`, [editOrder])).length === 1, "details edit not audited");
+  await user(admin2);
+  await expectError(`select public.admin_update_order_details($1::jsonb)`, [JSON.stringify({ order_id: editOrder, customer_name: "A", customer_phone: "1", address: { line1: "x", city: "K", state: "K", postal_code: "12" } })], /PIN|house|check/i);
+});
+await test("order edit: items, prices, delivery and discount recompute totals and stock", async () => {
+  await user(admin2);
+  const [{ t }] = await rows(`select public.admin_update_order_items($1::jsonb) as t`, [JSON.stringify({
+    order_id: editOrder, items: [{ variant_id: ckVar.id, quantity: 3, unit_price: 150000 }], shipping_total: 20000, discount_total: 50000, reason: "Customer wants 3, special price",
+  })]);
+  assert(t === 150000 * 3 - 50000 + 20000, `total ${t}`);
+  await asSuperuser();
+  const [o] = await rows(`select subtotal, discount_total, shipping_total, grand_total from public.orders where id = $1`, [editOrder]);
+  assert(o.subtotal === 450000 && o.grand_total === t, `order ${JSON.stringify(o)}`);
+  assert((await rows(`select reserved from public.inventory where variant_id = $1`, [ckVar.id]))[0].reserved === 3, "reservation not moved to 3");
+  assert((await rows(`select amount from public.payments where order_id = $1 and provider = 'cod'`, [editOrder]))[0].amount === t, "COD amount not updated");
+  assert((await rows(`select 1 from public.order_status_history where order_id = $1 and note like 'Items edited%'`, [editOrder])).length === 1, "no history note");
+  await user(admin2);
+  await expectError(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: editOrder, items: [{ variant_id: ckVar.id, quantity: 20 }], reason: "too many" })], /in stock/);
+  await expectError(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: editOrder, items: [{ variant_id: ckVar.id, quantity: 1 }], discount_total: 99999999, reason: "x" })], /discount/);
+  await expectError(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: editOrder, items: [], reason: "x" })], /at least one item/);
+  await expectError(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: editOrder, items: [{ variant_id: ckVar.id, quantity: 1 }] })], /reason/);
+  // Staff still can't change totals by writing the table directly.
+  await expectError(`update public.orders set grand_total = 1, subtotal = 1, discount_total = 0, shipping_total = 0 where id = $1`, [editOrder], /cannot be changed/);
+  await user(alice);
+  await expectError(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: editOrder, items: [{ variant_id: ckVar.id, quantity: 1, unit_price: 100 }], reason: "cheap" })], /permission/);
+});
+await test("order edit: paid or shipped orders keep their items", async () => {
+  await user(admin2);
+  await expectError(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: rzp.order_id, items: [{ variant_id: ckVar.id, quantity: 1 }], reason: "x" })], /already paid/);
+  for (const s of ["confirmed", "packed", "shipped"]) await db.query(`update public.orders set status = $2 where id = $1`, [editOrder, s]);
+  await expectError(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: editOrder, items: [{ variant_id: ckVar.id, quantity: 1 }], reason: "x" })], /before the order ships/);
+  await expectError(`select public.admin_update_order_details($1::jsonb)`, [JSON.stringify({ order_id: editOrder, customer_name: "Alice", customer_phone: "+91 98470 22222", address: { line1: "New Street 5", city: "Kochi", state: "Kerala", postal_code: "682001" } })], /before they ship/);
+});
+
 console.log("Password resets (Update 01 phase 07)");
 const HASH = "$2b$12$" + "a".repeat(53);
 let prId;

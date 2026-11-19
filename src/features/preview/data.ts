@@ -135,6 +135,8 @@ export type PreviewCustomer = {
   totalSpent: number; // paise
   joinedAt: Date;
   lastOrderAt: Date | null;
+  /** Customer ID shown to staff and customers, e.g. KD-CUS-000011. */
+  code?: string | null;
 };
 
 export const previewCustomers: PreviewCustomer[] = Array.from({ length: 14 }, (_, i) => {
@@ -142,6 +144,7 @@ export const previewCustomers: PreviewCustomer[] = Array.from({ length: 14 }, (_
   const last = pick(lastNames);
   return {
     id: `u${i + 1}`,
+    code: `KD-CUS-${String(i + 1).padStart(6, "0")}`,
     name: `${first} ${last} (Preview)`,
     email: `${first.toLowerCase()}.${last.toLowerCase()}@example.com`,
     phone: `+91 90000 0${String(1000 + i).slice(-4)}`,

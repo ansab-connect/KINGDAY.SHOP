@@ -8,6 +8,7 @@ import { dbMessage, fail, fieldErrorsOf, ok, type FormState } from "@/features/f
 import { ORDER_STATUSES } from "@/features/orders/types";
 import { isSupabaseConfigured } from "@/lib/env";
 import { EDITABLE_SETTINGS, SYSTEM_SETTINGS } from "./settings-keys";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { queuePushDispatch } from "@/features/push/send";
 
@@ -273,4 +274,134 @@ export async function saveSystemSettingsAction(_: FormState, fd: FormData): Prom
   if (error) return fail(dbMessage(error, "Couldn't save system settings."));
   refresh();
   return ok("System settings saved.");
+}
+
+// ---------------------------------------------------------------- Order editing
+const detailsSchema = z.object({
+  orderId: z.uuid(),
+  customerName: z.string().trim().min(2, "Enter the customer's name.").max(120),
+  customerPhone: z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, "Enter a valid phone number."),
+  customerEmail: z.union([z.literal(""), z.email("Enter a valid email.")]),
+  customerNote: z.string().trim().max(500),
+  line1: z.string().trim().min(3, "Enter the house / street.").max(200),
+  line2: z.string().trim().max(200),
+  landmark: z.string().trim().max(120),
+  city: z.string().trim().min(2, "Enter the city.").max(80),
+  state: z.string().trim().min(2, "Enter the state.").max(80),
+  postalCode: z.string().trim().regex(/^[1-9][0-9]{5}$/, "Enter a 6-digit PIN code."),
+});
+
+/** Customer name, contact and delivery address (any payment state, before shipping). */
+export async function updateOrderDetailsAction(_: FormState, fd: FormData): Promise<FormState> {
+  const denied = await guard("orders", "edit");
+  if (denied) return denied;
+  const keys = ["orderId", "customerName", "customerPhone", "customerEmail", "customerNote", "line1", "line2", "landmark", "city", "state", "postalCode"] as const;
+  const parsed = detailsSchema.safeParse(Object.fromEntries(keys.map((k) => [k, str(fd, k)])));
+  if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsOf(parsed.error));
+  const v = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_update_order_details", {
+    p: {
+      order_id: v.orderId,
+      customer_name: v.customerName,
+      customer_phone: v.customerPhone,
+      customer_email: v.customerEmail,
+      customer_note: v.customerNote,
+      address: { full_name: v.customerName, phone: v.customerPhone, line1: v.line1, line2: v.line2, landmark: v.landmark, city: v.city, state: v.state, postal_code: v.postalCode },
+    },
+  });
+  if (error) return fail(["22023", "42501", "P0002"].includes(error.code ?? "") ? error.message : dbMessage(error, "Couldn't save the customer details."));
+  refresh();
+  return ok("Customer details saved.");
+}
+
+const rupees = (max: number) =>
+  z.coerce.number().min(0, "Can't be negative.").max(max, "Too large.").transform((r) => Math.round(r * 100));
+
+const itemsSchema = z.object({
+  orderId: z.uuid(),
+  items: z
+    .array(z.object({ variantId: z.uuid(), quantity: z.number().int().min(1, "At least 1.").max(50, "At most 50."), unitPrice: z.number().min(1, "Price must be at least ₹1.").max(1_000_000) }))
+    .min(1, "Keep at least one item, or cancel the order instead.")
+    .max(30),
+  shipping: rupees(100_000),
+  discount: rupees(1_000_000),
+  reason: z.string().trim().min(3, "Give a short reason for the change.").max(300),
+});
+
+/** Items, quantities, unit prices, delivery charge and discount (unpaid orders, before shipping). */
+export async function updateOrderItemsAction(_: FormState, fd: FormData): Promise<FormState> {
+  const denied = await guard("orders", "edit");
+  if (denied) return denied;
+  let items: unknown = [];
+  try {
+    items = JSON.parse(str(fd, "items") || "[]");
+  } catch {
+    return fail("The item list couldn't be read. Reload the page and try again.");
+  }
+  const parsed = itemsSchema.safeParse({ orderId: str(fd, "orderId"), items, shipping: str(fd, "shipping") || "0", discount: str(fd, "discount") || "0", reason: str(fd, "reason") });
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Please check the items.", fieldErrorsOf(parsed.error));
+  const v = parsed.data;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_update_order_items", {
+    p: {
+      order_id: v.orderId,
+      items: v.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity, unit_price: Math.round(i.unitPrice * 100) })),
+      shipping_total: v.shipping,
+      discount_total: v.discount,
+      reason: v.reason,
+    },
+  });
+  if (error) return fail(["22023", "23514", "42501", "P0002"].includes(error.code ?? "") ? error.message : dbMessage(error, "Couldn't save the items."));
+  refresh();
+  queuePushDispatch();
+  return ok(`Order updated. New total ₹${((data as number) / 100).toLocaleString("en-IN")}.`);
+}
+
+// ---------------------------------------------------------------- Customer deletion
+const OPEN_ORDER_STATUSES = ["new", "pending", "confirmed", "processing", "packed", "shipped"];
+
+/**
+ * Permanently deletes a customer's ACCOUNT (login, profile, addresses, cart, wishlist,
+ * notifications). Orders, service bookings and invoices are kept: their customer link
+ * becomes empty and the name/address snapshot on each record stays, so sales history
+ * and reports remain correct. Staff accounts are managed in Staff Management instead.
+ */
+export async function deleteCustomerAction(_: FormState, fd: FormData): Promise<FormState> {
+  const denied = await guard("customers", "delete");
+  if (denied) return denied;
+  const me = await assertCan("customers", "delete");
+  const userId = z.uuid().safeParse(str(fd, "userId"));
+  const typed = str(fd, "confirmCode").toUpperCase();
+  if (!userId.success) return fail("Customer not found.");
+  if (userId.data === me.id) return fail("You can't delete your own account here.");
+
+  const admin = createAdminClient();
+  const [{ data: profile }, { data: roles }, { count: openOrders }] = await Promise.all([
+    admin.from("profiles").select("full_name, customer_code").eq("id", userId.data).maybeSingle(),
+    admin.from("user_roles").select("role").eq("user_id", userId.data),
+    admin.from("orders").select("id", { count: "exact", head: true }).eq("user_id", userId.data).in("status", OPEN_ORDER_STATUSES),
+  ]);
+  const p = profile as { full_name: string | null; customer_code: string | null } | null;
+  if (!p) return fail("Customer not found. They may already be deleted.");
+  const expected = (p.customer_code ?? "DELETE").toUpperCase();
+  if (typed !== expected) return fail(`Type ${expected} exactly to confirm.`, { confirmCode: `Type ${expected} to confirm.` });
+  if (((roles ?? []) as { role: string }[]).some((r) => r.role !== "customer")) {
+    return fail("This is a staff account. Remove or deactivate it in Staff Management instead.");
+  }
+  if (openOrders) {
+    return fail(`This customer has ${openOrders} open order${openOrders === 1 ? "" : "s"}. Deliver or cancel ${openOrders === 1 ? "it" : "them"} first.`);
+  }
+
+  const { error } = await admin.auth.admin.deleteUser(userId.data);
+  if (error) return fail("Couldn't delete the customer. Please try again.");
+  await admin.from("audit_logs").insert({
+    actor_id: me.id,
+    action: "delete",
+    entity: "customers",
+    entity_id: userId.data,
+    details: { customer_code: p.customer_code, name: p.full_name, note: "Account deleted; orders and bookings kept" },
+  });
+  refresh();
+  return ok(p.customer_code ? `Customer ${p.customer_code} deleted.` : "Customer deleted.");
 }

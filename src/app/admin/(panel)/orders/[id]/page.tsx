@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mail, MessageCircle, Phone } from "lucide-react";
 import { MarkCodPaidForm, OrderNoteForm, OrderStatusForm, ShipmentForm } from "@/components/admin/order-actions";
+import { LockedNote, OrderDetailsEditor, OrderItemsEditor, type VariantOption } from "@/components/admin/order-edit-forms";
 import { PageHeader } from "@/components/admin/page-header";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/admin/status-badge";
@@ -12,6 +13,32 @@ import { NEXT_STATUSES, getOrderDetail } from "@/features/orders/queries";
 import { ORDER_STATUS_LABEL, type PaymentStatus } from "@/features/orders/types";
 import { isSupabaseConfigured } from "@/lib/env";
 import { formatDateTime, formatPaise } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
+
+const EDITABLE_STATUSES = ["new", "pending", "confirmed", "processing", "packed"];
+
+/** Active products staff can add to an order (prices in rupees for the form). */
+async function loadVariantOptions(): Promise<VariantOption[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("product_variants")
+    .select("id, sku, name, price, product:products!inner(name, status), inventory(on_hand, reserved)")
+    .eq("is_active", true)
+    .eq("product.status", "active")
+    .order("sku")
+    .limit(1000);
+  type Row = { id: string; sku: string; name: string; price: number; product: { name: string }; inventory: { on_hand: number; reserved: number } | { on_hand: number; reserved: number }[] | null };
+  return ((data ?? []) as unknown as Row[]).map((v) => {
+    const inv = Array.isArray(v.inventory) ? v.inventory[0] : v.inventory;
+    return {
+      id: v.id,
+      sku: v.sku,
+      label: v.name === "Default" ? v.product.name : `${v.product.name} · ${v.name}`,
+      price: v.price / 100,
+      available: Math.max((inv?.on_hand ?? 0) - (inv?.reserved ?? 0), 0),
+    };
+  });
+}
 
 export const metadata: Metadata = { title: "Order" };
 
@@ -20,6 +47,10 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
   if (!isSupabaseConfigured) notFound();
   const o = await getOrderDetail(id, { staff: true });
   if (!o) notFound();
+  const editable = EDITABLE_STATUSES.includes(o.status);
+  const itemsLocked = ["paid", "authorized", "refunded"].includes(o.payment_status);
+  const canEditItems = editable && !itemsLocked && o.order_items.every((i) => i.variant_id);
+  const options = canEditItems ? await loadVariantOptions() : [];
   const a = o.shipping_address ?? {};
   const shipment = o.shipments.at(-1) ?? null;
   const phoneDigits = o.customer_phone.replace(/\D/g, "");
@@ -50,26 +81,75 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
           <Card className="shadow-card">
             <CardHeader><CardTitle className="font-heading text-base">Items</CardTitle></CardHeader>
             <CardContent>
-              <ul className="divide-y">
-                {o.order_items.map((i) => (
-                  <li key={i.id} className="flex items-start justify-between gap-4 py-3 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-medium text-deep">{i.product_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {[i.variant_name, i.sku].filter(Boolean).join(" · ")} · {formatPaise(i.unit_price)} × {i.quantity}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-semibold tabular">{formatPaise(i.line_total)}</span>
-                  </li>
-                ))}
-              </ul>
-              <dl className="mt-4 grid gap-1.5 border-t pt-4 text-sm">
-                <Row label="Subtotal" value={formatPaise(o.subtotal)} />
-                {o.discount_total ? <Row label={`Discount${o.coupon_code ? ` (${o.coupon_code})` : ""}`} value={`− ${formatPaise(o.discount_total)}`} /> : null}
-                <Row label="Shipping" value={o.shipping_total ? formatPaise(o.shipping_total) : "Free"} />
-                {o.tax_total ? <Row label="Tax" value={formatPaise(o.tax_total)} /> : null}
-                <Row label="Total" value={formatPaise(o.grand_total)} strong />
-              </dl>
+              {canEditItems ? (
+                <OrderItemsEditor
+                  orderId={o.id}
+                  lines={o.order_items.map((i) => ({
+                    variantId: i.variant_id as string,
+                    name: [i.product_name, i.variant_name && i.variant_name !== "Default" ? i.variant_name : null].filter(Boolean).join(" · "),
+                    sku: i.sku,
+                    quantity: i.quantity,
+                    unitPrice: i.unit_price / 100,
+                  }))}
+                  shipping={o.shipping_total / 100}
+                  discount={o.discount_total / 100}
+                  tax={o.tax_total / 100}
+                  options={options}
+                >
+                  <ul className="divide-y">
+                    {o.order_items.map((i) => (
+                      <li key={i.id} className="flex items-start justify-between gap-4 py-3 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium text-deep">{i.product_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[i.variant_name, i.sku].filter(Boolean).join(" · ")} · {formatPaise(i.unit_price)} × {i.quantity}
+                          </p>
+                        </div>
+                        <span className="shrink-0 font-semibold tabular">{formatPaise(i.line_total)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <dl className="mt-4 grid gap-1.5 border-t pt-4 text-sm">
+                    <Row label="Subtotal" value={formatPaise(o.subtotal)} />
+                    {o.discount_total ? <Row label={`Discount${o.coupon_code ? ` (${o.coupon_code})` : ""}`} value={`− ${formatPaise(o.discount_total)}`} /> : null}
+                    <Row label="Shipping" value={o.shipping_total ? formatPaise(o.shipping_total) : "Free"} />
+                    {o.tax_total ? <Row label="Tax" value={formatPaise(o.tax_total)} /> : null}
+                    <Row label="Total" value={formatPaise(o.grand_total)} strong />
+                  </dl>
+                </OrderItemsEditor>
+              ) : (
+                <>
+                  <ul className="divide-y">
+                    {o.order_items.map((i) => (
+                      <li key={i.id} className="flex items-start justify-between gap-4 py-3 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium text-deep">{i.product_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[i.variant_name, i.sku].filter(Boolean).join(" · ")} · {formatPaise(i.unit_price)} × {i.quantity}
+                          </p>
+                        </div>
+                        <span className="shrink-0 font-semibold tabular">{formatPaise(i.line_total)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <dl className="mt-4 grid gap-1.5 border-t pt-4 text-sm">
+                    <Row label="Subtotal" value={formatPaise(o.subtotal)} />
+                    {o.discount_total ? <Row label={`Discount${o.coupon_code ? ` (${o.coupon_code})` : ""}`} value={`− ${formatPaise(o.discount_total)}`} /> : null}
+                    <Row label="Shipping" value={o.shipping_total ? formatPaise(o.shipping_total) : "Free"} />
+                    {o.tax_total ? <Row label="Tax" value={formatPaise(o.tax_total)} /> : null}
+                    <Row label="Total" value={formatPaise(o.grand_total)} strong />
+                  </dl>
+                  <div className="mt-4">
+                    <LockedNote>
+                      {!editable
+                        ? "Items can't be changed after the order ships."
+                        : itemsLocked
+                          ? "This order is already paid, so items and prices are locked. To change it, cancel and place a new order, or refund the difference in Razorpay."
+                          : "A product in this order was deleted from the catalogue, so its items can't be edited."}
+                    </LockedNote>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -109,12 +189,30 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
           <Card className="shadow-card">
             <CardHeader><CardTitle className="font-heading text-base">Customer</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
-              <p className="font-medium text-deep">{o.customer_name}</p>
-              <address className="text-muted-foreground not-italic">
-                {[a.line1, a.line2, a.landmark, [a.city, a.state].filter(Boolean).join(", "), a.postal_code]
-                  .filter(Boolean)
-                  .map((l, i) => <span key={i} className="block">{l}</span>)}
-              </address>
+              {editable ? (
+                <OrderDetailsEditor
+                  orderId={o.id}
+                  values={{
+                    customerName: o.customer_name,
+                    customerPhone: o.customer_phone,
+                    customerEmail: o.customer_email ?? "",
+                    customerNote: o.customer_note ?? "",
+                    line1: a.line1 ?? "",
+                    line2: a.line2 ?? "",
+                    landmark: a.landmark ?? "",
+                    city: a.city ?? "",
+                    state: a.state ?? "",
+                    postalCode: a.postal_code ?? "",
+                  }}
+                >
+                  <CustomerSummary name={o.customer_name} phone={o.customer_phone} email={o.customer_email} lines={[a.line1, a.line2, a.landmark, [a.city, a.state].filter(Boolean).join(", "), a.postal_code]} />
+                </OrderDetailsEditor>
+              ) : (
+                <>
+                  <CustomerSummary name={o.customer_name} phone={o.customer_phone} email={o.customer_email} lines={[a.line1, a.line2, a.landmark, [a.city, a.state].filter(Boolean).join(", "), a.postal_code]} />
+                  <LockedNote>Customer details can&apos;t be changed after the order ships.</LockedNote>
+                </>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" asChild><a href={`tel:${o.customer_phone}`}><Phone aria-hidden /> Call</a></Button>
                 {wa ? <Button variant="outline" size="sm" asChild><a href={wa} target="_blank" rel="noopener noreferrer"><MessageCircle aria-hidden /> WhatsApp</a></Button> : null}
@@ -135,6 +233,20 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
         </div>
       </div>
     </>
+  );
+}
+
+function CustomerSummary({ name, phone, email, lines }: { name: string; phone: string; email: string | null; lines: (string | undefined)[] }) {
+  return (
+    <div>
+      <p className="font-medium text-deep">{name}</p>
+      <p className="text-muted-foreground">{phone}{email ? ` · ${email}` : ""}</p>
+      <address className="mt-1 text-muted-foreground not-italic">
+        {lines.filter(Boolean).map((l, i) => (
+          <span key={i} className="block">{l}</span>
+        ))}
+      </address>
+    </div>
   );
 }
 

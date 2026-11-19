@@ -26,13 +26,13 @@ export type OrderDetail = {
   customer_note: string | null;
   internal_note: string | null;
   placed_at: string;
-  order_items: { id: string; product_name: string; variant_name: string | null; sku: string; unit_price: number; quantity: number; line_total: number }[];
+  order_items: { id: string; variant_id: string | null; product_name: string; variant_name: string | null; sku: string; unit_price: number; quantity: number; line_total: number }[];
   shipments: { id: string; carrier: string | null; tracking_number: string | null; tracking_url: string | null; status: string; shipped_at: string | null; delivered_at: string | null; created_at: string }[];
   order_status_history: { id: number; from_status: OrderStatus | null; to_status: OrderStatus; note: string | null; created_at: string }[];
 };
 
 const BASE =
-  "id, order_number, customer_name, customer_email, customer_phone, shipping_address, status, payment_method, payment_status, subtotal, discount_total, shipping_total, tax_total, grand_total, coupon_code, customer_note, placed_at, order_items(id, product_name, variant_name, sku, unit_price, quantity, line_total), shipments(id, carrier, tracking_number, tracking_url, status, shipped_at, delivered_at, created_at), order_status_history(id, from_status, to_status, note, created_at)";
+  "id, order_number, customer_name, customer_email, customer_phone, shipping_address, status, payment_method, payment_status, subtotal, discount_total, shipping_total, tax_total, grand_total, coupon_code, customer_note, placed_at, order_items(id, variant_id, product_name, variant_name, sku, unit_price, quantity, line_total), shipments(id, carrier, tracking_number, tracking_url, status, shipped_at, delivered_at, created_at), order_status_history(id, from_status, to_status, note, created_at)";
 
 export async function getOrderDetail(id: string, opts: { staff: boolean }): Promise<OrderDetail | null> {
   if (!z.uuid().safeParse(id).success) return null;

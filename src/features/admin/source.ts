@@ -86,7 +86,7 @@ export const getAdminData = cache(async function getAdminData(): Promise<AdminDa
       .select("id, order_number, user_id, customer_name, customer_email, customer_phone, shipping_address, status, payment_status, payment_method, grand_total, discount_total, placed_at, order_items(quantity, line_total, product_id, product_name)")
       .order("placed_at", { ascending: false })
       .limit(ORDER_LIMIT),
-    supabase.from("profiles").select("id, full_name, phone, created_at").order("created_at", { ascending: false }).limit(2000),
+    supabase.from("profiles").select("id, full_name, phone, created_at, customer_code").order("created_at", { ascending: false }).limit(2000),
     supabase
       .from("product_variants")
       .select("id, sku, name, price, mrp, product:products!inner(id, name, status, is_featured, category:categories(name), brand:brands(name)), inventory(on_hand, reorder_level)")
@@ -173,7 +173,7 @@ export const getAdminData = cache(async function getAdminData(): Promise<AdminDa
     })),
   );
 
-  type Profile = { id: string; full_name: string | null; phone: string | null; created_at: string };
+  type Profile = { id: string; full_name: string | null; phone: string | null; created_at: string; customer_code: string | null };
   const byUser = new Map<string, AdminOrder[]>();
   for (const o of orders) if (o.customerId) byUser.set(o.customerId, [...(byUser.get(o.customerId) ?? []), o]);
   const customers: PreviewCustomer[] = ((profilesRes.data ?? []) as Profile[]).map((p) => {
@@ -188,6 +188,7 @@ export const getAdminData = cache(async function getAdminData(): Promise<AdminDa
       orders: own.length,
       totalSpent: valid.reduce((s, o) => s + o.total, 0),
       joinedAt: new Date(p.created_at),
+      code: p.customer_code,
       lastOrderAt: own[0]?.placedAt ?? null,
     };
   });
