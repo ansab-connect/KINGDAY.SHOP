@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { AddressBook } from "@/components/store/account/account-forms";
 import { CheckoutView } from "@/components/store/checkout/checkout-view";
 import { PageHero } from "@/components/store/page-hero";
 import { Container } from "@/components/store/section";
@@ -25,15 +24,6 @@ async function Checkout({ buyNow }: { buyNow: boolean }) {
   ]);
   const p = profile as { full_name: string | null; customer_code: string | null } | null;
 
-  if (addresses.length === 0) {
-    return (
-      <div className="max-w-3xl">
-        <h2 className="mb-1 font-heading text-lg font-semibold text-deep">Where should we deliver?</h2>
-        <p className="mb-4 text-sm text-muted-foreground">Add a delivery address to continue. It is saved to your account for next time.</p>
-        <AddressBook addresses={[]} />
-      </div>
-    );
-  }
   const rzp = getRazorpayConfig();
   return (
     <CheckoutView

@@ -77,40 +77,47 @@ export function AddressBook({ addresses }: { addresses: Address[] }) {
       )}
 
       {editing ? (
-        <section className="rounded-2xl border p-5 sm:p-6">
-          <h2 className="font-heading text-lg font-semibold text-deep">{current ? "Edit address" : "Add an address"}</h2>
-          <ActionForm key={current?.id ?? "new"} action={saveAddressAction} submitLabel={current ? "Save address" : "Add address"} resetOnSuccess={!current} className="mt-4">
-            {(state) => (
-              <>
-                <input type="hidden" name="id" value={current?.id ?? ""} />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field name="full_name" label="Recipient name" state={state} defaultValue={current?.full_name} autoComplete="name" required />
-                  <Field name="phone" label="Mobile number" type="tel" state={state} defaultValue={current?.phone} autoComplete="tel" required />
-                  <div className="sm:col-span-2"><Field name="line1" label="House / building / street" state={state} defaultValue={current?.line1} autoComplete="address-line1" required /></div>
-                  <Field name="line2" label="Area / locality" state={state} defaultValue={current?.line2} autoComplete="address-line2" />
-                  <Field name="landmark" label="Landmark" state={state} defaultValue={current?.landmark} />
-                  <Field name="city" label="City" state={state} defaultValue={current?.city} autoComplete="address-level2" required />
-                  <Field name="state" label="State" state={state} defaultValue={current?.state} autoComplete="address-level1" required />
-                  <Field name="postal_code" label="PIN code" state={state} defaultValue={current?.postal_code} autoComplete="postal-code" required />
-                  <Field name="label" label="Label (e.g. Home)" state={state} defaultValue={current?.label} />
-                </div>
-                <label className="flex items-center gap-2.5 text-sm text-deep">
-                  <input type="checkbox" name="is_default" defaultChecked={current?.is_default ?? addresses.length === 0} className="size-4 accent-royal" />
-                  Use as my default delivery address
-                </label>
-              </>
-            )}
-          </ActionForm>
-          {current || addresses.length ? (
-            <button type="button" onClick={() => setEditing(null)} className="mt-3 text-sm text-muted-foreground hover:text-deep">Cancel</button>
-          ) : null}
-        </section>
+        <AddressForm current={current} firstAddress={addresses.length === 0} onCancel={current || addresses.length ? () => setEditing(null) : undefined} />
       ) : (
         <button type="button" onClick={() => setEditing("new")} className="inline-flex h-11 w-fit items-center gap-2 rounded-full bg-royal px-5 text-sm font-semibold text-white hover:bg-royal-800">
           <Plus aria-hidden className="size-4" /> Add an address
         </button>
       )}
     </div>
+  );
+}
+
+/** Add or edit one delivery address (account page and checkout). */
+export function AddressForm({ current, firstAddress, onSaved, onCancel }: { current: Address | null; firstAddress: boolean; onSaved?: () => void; onCancel?: () => void }) {
+  return (
+    <section className="rounded-2xl border p-5 sm:p-6">
+      <h2 className="font-heading text-lg font-semibold text-deep">{current ? "Edit address" : "Add a delivery address"}</h2>
+      <ActionForm key={current?.id ?? "new"} action={saveAddressAction} submitLabel="Save address" resetOnSuccess={!current} onSuccess={onSaved} className="mt-4">
+        {(state) => (
+          <>
+            <input type="hidden" name="id" value={current?.id ?? ""} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field name="full_name" label="Recipient name" state={state} defaultValue={current?.full_name} autoComplete="name" required />
+              <Field name="phone" label="Mobile number" type="tel" state={state} defaultValue={current?.phone} autoComplete="tel" required />
+              <div className="sm:col-span-2"><Field name="line1" label="House / building / street" state={state} defaultValue={current?.line1} autoComplete="address-line1" required /></div>
+              <Field name="line2" label="Area / locality" state={state} defaultValue={current?.line2} autoComplete="address-line2" />
+              <Field name="landmark" label="Landmark" state={state} defaultValue={current?.landmark} />
+              <Field name="city" label="City" state={state} defaultValue={current?.city} autoComplete="address-level2" required />
+              <Field name="state" label="State" state={state} defaultValue={current?.state ?? (current ? undefined : "Kerala")} autoComplete="address-level1" required />
+              <Field name="postal_code" label="PIN code" state={state} defaultValue={current?.postal_code} autoComplete="postal-code" required />
+              <Field name="label" label="Label (e.g. Home)" state={state} defaultValue={current?.label} />
+            </div>
+            <label className="flex items-center gap-2.5 text-sm text-deep">
+              <input type="checkbox" name="is_default" defaultChecked={current?.is_default ?? firstAddress} className="size-4 accent-royal" />
+              Use as my default delivery address
+            </label>
+          </>
+        )}
+      </ActionForm>
+      {onCancel ? (
+        <button type="button" onClick={onCancel} className="mt-3 text-sm text-muted-foreground hover:text-deep">Cancel</button>
+      ) : null}
+    </section>
   );
 }
 

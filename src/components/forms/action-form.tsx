@@ -19,6 +19,7 @@ export function ActionForm({
   resetOnSuccess = false,
   submitClassName,
   confirm,
+  onSuccess,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   children: React.ReactNode | ((state: FormState) => React.ReactNode);
@@ -29,12 +30,19 @@ export function ActionForm({
   submitClassName?: string;
   /** Ask before submitting (destructive actions). */
   confirm?: string;
+  /** Called once after each successful submit. */
+  onSuccess?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const ref = useRef<HTMLFormElement>(null);
 
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  });
   useEffect(() => {
     if (state.ok && resetOnSuccess) ref.current?.reset();
+    if (state.ok) onSuccessRef.current?.();
   }, [state, resetOnSuccess]);
 
   return (

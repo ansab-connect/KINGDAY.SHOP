@@ -3,7 +3,8 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Banknote, CreditCard, Loader2, Lock, MapPin, ShoppingBag, Zap } from "lucide-react";
+import { AlertCircle, Banknote, CreditCard, Loader2, Lock, MapPin, Pencil, Plus, ShoppingBag, Zap } from "lucide-react";
+import { AddressForm } from "@/components/store/account/account-forms";
 import { CartLine } from "@/components/store/cart-line";
 import { openRazorpayCheckout } from "@/components/store/checkout/razorpay-checkout";
 import { clearBuyNow, removeBuyNow, removeFromCart, setBuyNowQuantity, setCartQuantity, useBuyNow, useCart } from "@/features/cart/cart-store";
@@ -45,7 +46,11 @@ export function CheckoutView({
   const items = buying ? buyNowItems : cartItems;
   const setQuantity = buying ? setBuyNowQuantity : setCartQuantity;
   const removeItem = buying ? removeBuyNow : removeFromCart;
-  const [addressId, setAddressId] = useState(addresses.find((a) => a.is_default)?.id ?? addresses[0]?.id ?? "");
+  const [chosen, setChosen] = useState<string | null>(null);
+  // New customers start with the address form open; a saved address is picked automatically.
+  const [editing, setEditing] = useState<Address | "new" | null>(addresses.length ? null : "new");
+  const addressId = chosen && addresses.some((a) => a.id === chosen) ? chosen : (addresses.find((a) => a.is_default)?.id ?? addresses[0]?.id ?? "");
+  const setAddressId = setChosen;
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -121,29 +126,50 @@ export function CheckoutView({
           <h2 id="addr-h" className="flex items-center gap-2 font-heading text-lg font-semibold text-deep">
             <MapPin aria-hidden className="size-5 text-royal" /> Delivery address
           </h2>
-          <fieldset className="mt-4 grid gap-3 sm:grid-cols-2">
-            <legend className="sr-only">Choose a delivery address</legend>
-            {addresses.map((a) => (
-              <label
-                key={a.id}
-                className={cn("flex cursor-pointer gap-3 rounded-xl border p-4 text-sm", addressId === a.id ? "border-royal bg-royal-50/60 ring-1 ring-royal" : "hover:border-royal/40")}
-              >
-                <input type="radio" name="address" value={a.id} checked={addressId === a.id} onChange={() => setAddressId(a.id)} className="mt-1 size-4 accent-royal" />
-                <span className="min-w-0 break-words">
-                  <span className="block font-semibold text-deep">{a.label || a.full_name}</span>
-                  <span className="block text-muted-foreground">
-                    {a.full_name} · {a.phone}
-                    <br />
-                    {a.line1}
-                    {a.line2 ? `, ${a.line2}` : ""}, {a.city} {a.postal_code}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-          <Link href="/account/addresses" className="mt-3 inline-block text-sm font-semibold text-royal hover:underline">
-            Add or edit addresses
-          </Link>
+          {addresses.length ? (
+            <fieldset className="mt-4 grid gap-3 sm:grid-cols-2">
+              <legend className="sr-only">Choose a delivery address</legend>
+              {addresses.map((a) => (
+                <div
+                  key={a.id}
+                  className={cn("relative flex gap-3 rounded-xl border p-4 text-sm", addressId === a.id ? "border-royal bg-royal-50/60 ring-1 ring-royal" : "hover:border-royal/40")}
+                >
+                  <input id={`addr-${a.id}`} type="radio" name="address" value={a.id} checked={addressId === a.id} onChange={() => setAddressId(a.id)} className="mt-1 size-4 accent-royal" />
+                  <label htmlFor={`addr-${a.id}`} className="min-w-0 flex-1 cursor-pointer break-words pr-8">
+                    <span className="block font-semibold text-deep">{a.label || a.full_name}</span>
+                    <span className="block text-muted-foreground">
+                      {a.full_name} · {a.phone}
+                      <br />
+                      {a.line1}
+                      {a.line2 ? `, ${a.line2}` : ""}, {a.city} {a.postal_code}
+                    </span>
+                  </label>
+                  <button type="button" onClick={() => setEditing(a)} aria-label={`Edit address ${a.label || a.full_name}`} className="absolute top-2 right-2 grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-deep">
+                    <Pencil aria-hidden className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </fieldset>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">Add where we should deliver. It is saved to your account for next time.</p>
+          )}
+          {editing ? (
+            <div className="mt-4">
+              <AddressForm
+                current={editing === "new" ? null : editing}
+                firstAddress={addresses.length === 0}
+                onSaved={() => {
+                  setEditing(null);
+                  router.refresh();
+                }}
+                onCancel={addresses.length ? () => setEditing(null) : undefined}
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setEditing("new")} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-royal hover:underline">
+              <Plus aria-hidden className="size-4" /> Add a new address
+            </button>
+          )}
         </section>
 
         <section aria-labelledby="pay-h" className="rounded-2xl border p-4 sm:p-5">
@@ -218,6 +244,7 @@ export function CheckoutView({
           <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>{method === "razorpay" ? "Total to pay now" : "Total (pay on delivery)"}</dt><dd className="tabular">{formatPaise(subtotal + shipping)}</dd></div>
         </dl>
         <p className="mt-3 text-xs text-muted-foreground">Ordering as {customer.name}{customer.code ? ` · ${customer.code}` : ""}. Prices are confirmed when you place the order.</p>
+        {!addressId ? <p className="mt-3 text-xs text-warning">Add a delivery address to continue.</p> : null}
         {error ? (
           <p role="alert" className="mt-3 flex items-start gap-1.5 rounded-lg bg-danger-soft p-3 text-sm text-danger">
             <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" /> {error}
