@@ -1,6 +1,7 @@
 import "server-only";
 import { createPublicClient } from "@/lib/supabase/public";
 import { publicStorageUrl } from "@/lib/storage";
+import { valuesFromOptions } from "./variant-types";
 import type { CatalogSnapshot, ProductReview, StoreBrand, StoreCategory, StoreProduct, StoreVariant } from "./types";
 
 /**
@@ -27,6 +28,7 @@ type Raw = {
   brand: { slug: string; name: string } | null;
   option1_name: string | null;
   option2_name: string | null;
+  variant_types: string[] | null;
   product_variants: {
     id: string; sku: string; name: string; options: Record<string, string> | null; mrp: number; price: number;
     option1: string | null; option2: string | null; specs: { name: string; value: string }[] | null;
@@ -46,7 +48,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .from("products")
       .select(
         `id, name, slug, short_description, description, highlights, age_range, video_path, is_featured,
-         seo_title, seo_description, published_at, created_at, option1_name, option2_name,
+         seo_title, seo_description, published_at, created_at, option1_name, option2_name, variant_types,
          category:categories(slug, name, parent:parent_id(slug)),
          brand:brands(slug, name),
          product_variants(id, sku, name, options, option1, option2, specs, mrp, price, is_default, is_active, position, inventory(on_hand, reserved)),
@@ -103,6 +105,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
     .map((p, index) => {
       const toImage = (i: { storage_path: string; alt: string }) => ({ src: publicStorageUrl("product-images", i.storage_path)!, alt: i.alt || p.name });
       const sortedImages = [...p.product_images].sort((a, b) => a.position - b.position);
+      const types = p.variant_types?.length ? p.variant_types : [p.option1_name, p.option1_name ? p.option2_name : null].filter((t): t is string => Boolean(t));
       const imagesFor = (variantId: string | null) => sortedImages.filter((i) => (i.variant_id ?? null) === variantId).map(toImage).filter((i) => i.src);
       const variants: StoreVariant[] = [...p.product_variants]
         .filter((v) => v.is_active)
@@ -119,6 +122,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
           option2: p.option1_name && p.option2_name ? v.option2 : null,
           images: imagesFor(v.id),
           specs: (v.specs ?? []).map((sp) => ({ label: sp.name, value: sp.value })),
+          values: valuesFromOptions(types, v.options),
         }));
       const def = variants.find((v) => p.product_variants.find((x) => x.id === v.id)?.is_default) ?? variants[0];
       const agg = ratingBySlug.get(p.slug);
@@ -138,6 +142,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
         defaultVariantId: def.id,
         option1Name: p.option1_name,
         option2Name: p.option1_name ? p.option2_name : null,
+        variantTypes: types,
         sharedImages,
         rating: agg ? Math.round((agg.sum / agg.count) * 10) / 10 : 0,
         reviewCount: agg?.count ?? 0,

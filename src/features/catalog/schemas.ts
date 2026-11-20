@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { comboKey } from "./variant-types";
 
 /**
  * Validation for catalogue management. These schemas run on the SERVER for every
@@ -127,6 +128,8 @@ export const variantInputSchema = z
     option1: optionalText(60),
     /** Sub variant value, e.g. "Volt Blue" (when the product has a sub variant type). */
     option2: optionalText(60),
+    /** Values by variant type name, e.g. {"Wheel Size": "24″", "Colour": "Volt Blue"}. */
+    values: z.record(z.string(), z.string().trim().max(60, "Use at most 60 characters.")).optional(),
     /** Specifications that apply only to this combination. */
     specs: z
       .array(attributeSpec)
@@ -178,6 +181,11 @@ export const productInputSchema = z
     option1_name: optionalText(30),
     /** Sub variant type under each main value, e.g. "Colour". */
     option2_name: optionalText(30),
+    /** Ordered variant types (first = main). Replaces option1_name/option2_name when given. */
+    variant_types: z
+      .array(z.string().trim().min(1, "Name the variant type.").max(30, "Use at most 30 characters."))
+      .max(8, "Use at most 8 variant types.")
+      .optional(),
     variants: z.array(variantInputSchema).min(1, "Add at least one variant.").max(100),
     attributes: z
       .array(attributeInputSchema)
@@ -195,29 +203,37 @@ export const productInputSchema = z
       }
       seen.set(variant.sku, i);
     });
-    if (v.option2_name && !v.option1_name) {
+    if (!v.variant_types && v.option2_name && !v.option1_name) {
       ctx.addIssue({ code: "custom", path: ["option1_name"], message: "Choose the main variant type first." });
     }
-    if (v.option1_name && v.option2_name && v.option1_name.toLowerCase() === v.option2_name.toLowerCase()) {
-      ctx.addIssue({ code: "custom", path: ["option2_name"], message: "Main and sub variant types must be different." });
-    }
+    const types = variantTypesOf(v);
+    const typeKeys = new Set<string>();
+    types.forEach((t, i) => {
+      if (typeKeys.has(t.toLowerCase())) ctx.addIssue({ code: "custom", path: v.variant_types ? ["variant_types", i] : ["option2_name"], message: "Variant types must be different." });
+      typeKeys.add(t.toLowerCase());
+    });
     const combos = new Map<string, number>();
+    // Sub-variant types depend on the main value, but are the same for all its combinations.
+    const subTypesOf = new Map<string, { sig: string; index: number }>();
     v.variants.forEach((variant, i) => {
-      if (!variant.is_active) return;
-      if (v.option1_name && !variant.option1) {
-        ctx.addIssue({ code: "custom", path: ["variants", i, "option1"], message: `Enter the ${v.option1_name}.` });
+      if (!variant.is_active || !types.length) return;
+      const values = variantValuesOf(types, variant);
+      if (!values[types[0]]) {
+        ctx.addIssue({ code: "custom", path: ["variants", i, "values"], message: `Enter the ${types[0]}.` });
+        return;
       }
-      if (v.option2_name && !variant.option2) {
-        ctx.addIssue({ code: "custom", path: ["variants", i, "option2"], message: `Enter the ${v.option2_name}.` });
+      const mainKey = values[types[0]].toLowerCase();
+      const sig = types.slice(1).filter((t) => values[t]).join("|");
+      const first = subTypesOf.get(mainKey);
+      if (first && first.sig !== sig) {
+        ctx.addIssue({ code: "custom", path: ["variants", i, "values"], message: `All ${values[types[0]]} combinations need the same options (${first.sig.replace(/\|/g, ", ") || "none"}).` });
+        return;
       }
-      if (v.option1_name) {
-        const key = `${(variant.option1 ?? "").toLowerCase()}|${v.option2_name ? (variant.option2 ?? "").toLowerCase() : ""}`;
-        const prev = combos.get(key);
-        if (prev !== undefined) {
-          ctx.addIssue({ code: "custom", path: ["variants", i, v.option2_name ? "option2" : "option1"], message: `Same combination as variant ${prev + 1}.` });
-        }
-        combos.set(key, i);
-      }
+      if (!first) subTypesOf.set(mainKey, { sig, index: i });
+      const key = comboKey(types, values);
+      const prev = combos.get(key);
+      if (prev !== undefined) ctx.addIssue({ code: "custom", path: ["variants", i, "values"], message: `Same combination as variant ${prev + 1}.` });
+      combos.set(key, i);
     });
     const names = new Set<string>();
     v.attributes.forEach((a, i) => {
@@ -233,18 +249,39 @@ export const productInputSchema = z
 export type ProductInput = z.input<typeof productInputSchema>;
 export type ProductData = z.output<typeof productInputSchema>;
 
+type TypeSource = { variant_types?: string[]; option1_name?: string | null; option2_name?: string | null };
+type ValueSource = { values?: Record<string, string>; option1?: string | null; option2?: string | null };
+
+/** The product's ordered variant types (new list, or the older two-level fields). */
+export function variantTypesOf(p: TypeSource): string[] {
+  if (p.variant_types) return p.variant_types.map((t) => t.trim()).filter(Boolean);
+  return [p.option1_name, p.option1_name ? p.option2_name : null].filter((t): t is string => Boolean(t));
+}
+
+/** A variant's value for each type (from "values", else option1/option2). */
+export function variantValuesOf(types: string[], v: ValueSource): Record<string, string> {
+  const out: Record<string, string> = {};
+  types.forEach((t, i) => {
+    const fromValues = v.values ? Object.entries(v.values).find(([k]) => k.toLowerCase() === t.toLowerCase())?.[1] : undefined;
+    const value = (fromValues ?? (i === 0 ? v.option1 : i === 1 ? v.option2 : undefined) ?? "").trim();
+    if (value) out[t] = value;
+  });
+  return out;
+}
+
 /** Shape sent to the save_product() database function. */
 export function toSaveProductPayload(p: ProductData) {
+  const types = variantTypesOf(p);
   return {
     ...p,
+    variant_types: types,
     variants: p.variants.map((v) => ({
       id: v.id,
       sku: v.sku,
-      // Empty name → the database builds it from the option values ("12V · Volt Blue").
-      name: v.name && v.name !== "Default" ? v.name : p.option1_name ? "" : "Default",
+      // Empty name → the database builds it from the values ("24″ · Volt Blue · Single Speed").
+      name: v.name && v.name !== "Default" ? v.name : types.length ? "" : "Default",
       options: v.colour ? { colour: v.colour } : {},
-      option1: p.option1_name ? v.option1 : null,
-      option2: p.option2_name ? v.option2 : null,
+      values: types.length ? variantValuesOf(types, v) : {},
       specs: v.specs,
       mrp: v.mrp,
       price: v.price,

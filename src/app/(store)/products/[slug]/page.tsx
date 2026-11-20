@@ -122,8 +122,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 productId={product.id}
                 name={product.name}
                 shortDescription={product.shortDescription}
-                option1Name={product.option1Name}
-                option2Name={product.option2Name}
+                variantTypes={product.variantTypes}
                 fallbackImage={product.sharedImages[0]?.src ?? product.images[0]?.src ?? null}
                 whatsappNumber={waNumber}
                 productUrl={productUrl}

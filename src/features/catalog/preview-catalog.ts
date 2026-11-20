@@ -110,6 +110,7 @@ export const previewCatalog: StoreProduct[] = previewProducts
       option2: null,
       images: [],
       specs: [],
+      values: { Colour: c.name },
     }));
     return {
       id: p.id,
@@ -125,6 +126,7 @@ export const previewCatalog: StoreProduct[] = previewProducts
       defaultVariantId: variants[0].id,
       option1Name: "Colour",
       option2Name: null,
+      variantTypes: ["Colour"],
       rating: Math.min(rating, 4.9),
       reviewCount: 6 + ((i * 13) % 40),
       ageRange: tpl.age,

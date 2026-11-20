@@ -441,9 +441,10 @@ await test("multi-level variants: duplicates and missing values are refused", as
       { sku: "KD-VD-2", option1: "small", option2: "red", mrp: 100, price: 100 },
     ],
   }))], /combination|duplicate key/);
-  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(sizeColour({
+  // A main value may have no sub-variant values (sub types depend on the main value).
+  await rows(`select public.save_product($1::jsonb)`, [JSON.stringify(sizeColour({
     slug: "volt-missing", variants: [{ sku: "KD-VM-1", option1: "Small", mrp: 100, price: 100 }],
-  }))], /needs a Colour/);
+  }))]);
   await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify(sizeColour({
     slug: "volt-noparent", option1_name: "", variants: [{ sku: "KD-VN-1", mrp: 100, price: 100 }],
   }))], /main variant type/);
@@ -475,6 +476,54 @@ await test("multi-level variants: images belong to one combination", async () =>
   await db.query(`insert into public.product_images (product_id, variant_id, storage_path, alt) values ($1, $2, 'products/x/blue-1.webp', 'Blue'), ($1, null, 'products/x/shared.webp', 'Shared')`, [voltRider, v.id]);
   const imgs = await rows(`select variant_id from public.product_images where product_id = $1 order by storage_path`, [voltRider]);
   assert(imgs.length === 2 && imgs[0].variant_id === v.id && imgs[1].variant_id === null, "variant image link wrong");
+});
+await test("variant types of any depth: wheel size → colour → speed, each combination separate", async () => {
+  await user(staff);
+  const combo = (size, colour, speed, sku, price, extra = {}) => ({ sku, values: { "Wheel Size": size, Colour: colour, "Speed Type": speed }, mrp: 1500000, price, ...extra });
+  const id = (await rows(`select public.save_product($1::jsonb) as id`, [JSON.stringify({
+    name: "Kids Mountain Bicycle", slug: "kids-mountain-bicycle", category_id: scooterCat, status: "active",
+    variant_types: ["Wheel Size", "Colour", "Speed Type"],
+    variants: [
+      combo("24″", "Volt Blue", "Single Speed", "KD-24-VB-SS", 999900, { opening_stock: 15 }),
+      combo("24″", "Volt Blue", "Normal Speed", "KD-24-VB-NS", 1099900),
+      combo("26″", "Red", "Single Speed", "KD-26-RD-SS", 1199900),
+    ],
+  })]))[0].id;
+  const p = (await rows(`select variant_types, option1_name, option2_name from public.products where id = $1`, [id]))[0];
+  assert(p.variant_types.length === 3 && p.option1_name === "Wheel Size" && p.option2_name === "Colour", `types ${JSON.stringify(p)}`);
+  const v = await rows(`select sku, name, options, option1, option2 from public.product_variants where product_id = $1 order by position`, [id]);
+  assert(v[0].name === "24″ · Volt Blue · Single Speed" && v[0].options.speed_type === "Single Speed" && v[0].options.wheel_size === "24″", `combo ${JSON.stringify(v[0])}`);
+  assert(v[1].option1 === "24″" && v[1].option2 === "Volt Blue", "compat columns not filled");
+  // Same size + colour but different speed is a different combination; an exact repeat is refused.
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify({
+    name: "Dup Bike", slug: "dup-bike", category_id: scooterCat, variant_types: ["Wheel Size", "Colour", "Speed Type"],
+    variants: [combo("24″", "Red", "Single", "KD-DUP-1", 100), combo("24″", "red", "single", "KD-DUP-2", 100)],
+  })], /combination|duplicate key/);
+  // Sub-variant types depend on the main value: 24″ uses Colour + Speed, 29″ uses Colour + Brake.
+  const mixed = (await rows(`select public.save_product($1::jsonb) as id`, [JSON.stringify({
+    name: "Mixed Bike", slug: "mixed-bike", category_id: scooterCat, variant_types: ["Wheel Size", "Colour", "Speed Type", "Brake Type"],
+    variants: [
+      { sku: "KD-MX-24-1", values: { "Wheel Size": "24″", Colour: "Red", "Speed Type": "Single" }, mrp: 100, price: 100 },
+      { sku: "KD-MX-29-1", values: { "Wheel Size": "29″", Colour: "Red", "Brake Type": "Disc" }, mrp: 100, price: 100 },
+    ],
+  })]))[0].id;
+  const mx = await rows(`select name, options from public.product_variants where product_id = $1 order by position`, [mixed]);
+  assert(mx[0].name === "24″ · Red · Single" && mx[1].options.brake_type === "Disc" && !("speed_type" in mx[1].options), `mixed ${JSON.stringify(mx)}`);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify({
+    name: "Uneven Bike", slug: "uneven-bike", category_id: scooterCat, variant_types: ["Wheel Size", "Colour", "Speed Type"],
+    variants: [
+      { sku: "KD-UN-1", values: { "Wheel Size": "24″", Colour: "Red", "Speed Type": "Single" }, mrp: 100, price: 100 },
+      { sku: "KD-UN-2", values: { "Wheel Size": "24″", Colour: "Blue" }, mrp: 100, price: 100 },
+    ],
+  })], /same sub-variant types/);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify({
+    name: "No Main", slug: "no-main", category_id: scooterCat, variant_types: ["Wheel Size", "Colour"],
+    variants: [{ sku: "KD-NM-1", values: { Colour: "Red" }, mrp: 100, price: 100 }],
+  })], /needs a Wheel Size/);
+  await expectError(`select public.save_product($1::jsonb)`, [JSON.stringify({
+    name: "Same Types", slug: "same-types", category_id: scooterCat, variant_types: ["Colour", "colour"],
+    variants: [{ sku: "KD-SAME-1", values: { Colour: "Red" }, mrp: 100, price: 100 }],
+  })], /must be different/);
 });
 await test("customers and anonymous users cannot save products", async () => {
   await user(alice);

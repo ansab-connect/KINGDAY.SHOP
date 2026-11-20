@@ -20,6 +20,8 @@ export type StoreVariant = {
   images: ProductImage[];
   /** Specifications for this combination (override product specs with the same label). */
   specs: { label: string; value: string }[];
+  /** Value for each of the product's variant types, by type name. */
+  values: Record<string, string>;
 };
 
 export type StoreProduct = {
@@ -41,6 +43,8 @@ export type StoreProduct = {
   option1Name: string | null;
   /** Sub variant type under each main value, e.g. "Colour". */
   option2Name: string | null;
+  /** Ordered variant types (first = main), e.g. ["Wheel Size", "Colour", "Speed Type"]. Empty = simple list. */
+  variantTypes: string[];
   /** Images not tied to a variant (used when a variant has none of its own). */
   sharedImages: ProductImage[];
   rating: number;

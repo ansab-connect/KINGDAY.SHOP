@@ -70,6 +70,8 @@ export type AdminProduct = {
   seo_description: string | null;
   option1_name: string | null;
   option2_name: string | null;
+  /** Ordered variant types; the first is the main type. */
+  variant_types: string[];
   variants: AdminVariant[];
   attributes: { name: string; value: string }[];
   images: AdminProductImage[];
@@ -186,7 +188,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
     .from("products")
     .select(
       `id, name, slug, category_id, brand_id, short_description, description, highlights, age_range, video_path,
-       status, is_featured, seo_title, seo_description, option1_name, option2_name,
+       status, is_featured, seo_title, seo_description, option1_name, option2_name, variant_types,
        product_variants(id, sku, name, options, option1, option2, specs, mrp, price, weight_grams, is_default, is_active, position, inventory(on_hand, reserved)),
        product_attributes(name, value, position),
        product_images(id, storage_path, alt, position, variant_id)`,

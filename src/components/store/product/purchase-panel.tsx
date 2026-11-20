@@ -21,10 +21,8 @@ type Props = {
   productId: string;
   name: string;
   shortDescription: string;
-  /** Main variant type (e.g. "Size"), or null for a simple variant list. */
-  option1Name: string | null;
-  /** Sub variant type under each main value (e.g. "Colour"). */
-  option2Name: string | null;
+  /** Ordered variant types (e.g. ["Wheel Size", "Colour", "Speed Type"]). Empty = simple list. */
+  variantTypes: string[];
   /** Product image used for the cart thumbnail when the variant has none of its own. */
   fallbackImage?: string | null;
   /** Digits-only WhatsApp number, or null when not configured. */
@@ -37,7 +35,7 @@ type Props = {
  * a pre-filled order message; the cart is kept in the browser. Prices shown are
  * display-only: online checkout (Phase 8) re-reads them from the database.
  */
-export function PurchasePanel({ productId, name, shortDescription, option1Name, option2Name, fallbackImage = null, whatsappNumber, productUrl }: Props) {
+export function PurchasePanel({ productId, name, shortDescription, variantTypes, fallbackImage = null, whatsappNumber, productUrl }: Props) {
   const { variants, variant, select } = useVariantSelection();
   const [qty, setQty] = useState(1);
   const [notice, setNotice] = useState(false);
@@ -61,18 +59,21 @@ export function PurchasePanel({ productId, name, shortDescription, option1Name, 
     image: variant.images[0]?.src ?? fallbackImage,
   };
 
-  // Main values in display order, and the sub values available for the chosen main value.
-  const mainValues = option1Name
-    ? [...new Map(variants.filter((v) => v.option1).map((v) => [v.option1!.toLowerCase(), v.option1!])).values()]
-    : [];
-  const sameMain = (v: StoreVariant, value: string | null) => (v.option1 ?? "").toLowerCase() === (value ?? "").toLowerCase();
-  const subChoices = option2Name ? variants.filter((v) => sameMain(v, variant.option1) && v.option2) : [];
-  const pickMain = (value: string) => {
-    const group = variants.filter((v) => sameMain(v, value));
-    const next =
-      group.find((v) => v.option2 && variant.option2 && v.option2.toLowerCase() === variant.option2.toLowerCase() && v.stock > 0) ??
-      group.find((v) => v.stock > 0) ??
-      group[0];
+  // Cascading choice: each type only offers values that exist together with the values
+  // already chosen for the types before it (size → its colours → their speeds…).
+  const same = (x: string | undefined, y: string | undefined) => (x ?? "").toLowerCase() === (y ?? "").toLowerCase();
+  const matchesUpTo = (v: StoreVariant, level: number) => variantTypes.slice(0, level).every((t) => same(v.values[t], variant.values[t]));
+  const levels = variantTypes.map((t, level) => {
+    const pool = variants.filter((v) => matchesUpTo(v, level) && v.values[t]);
+    const values = [...new Map(pool.map((v) => [v.values[t].toLowerCase(), v.values[t]])).values()];
+    return { type: t, level, values, pool };
+  });
+  const pick = (level: number, value: string) => {
+    const t = variantTypes[level];
+    const pool = variants.filter((v) => matchesUpTo(v, level) && same(v.values[t], value));
+    // Keep the later choices when that combination exists; prefer something in stock.
+    const score = (v: StoreVariant) => variantTypes.slice(level + 1).filter((x) => same(v.values[x], variant.values[x])).length * 2 + (v.stock > 0 ? 1 : 0);
+    const next = [...pool].sort((a, b) => score(b) - score(a))[0];
     if (next) choose(next.id);
   };
 
@@ -103,54 +104,30 @@ export function PurchasePanel({ productId, name, shortDescription, option1Name, 
 
       {shortDescription ? <p className="text-base leading-relaxed text-muted-foreground">{shortDescription}</p> : null}
 
-      {option1Name && mainValues.length ? (
-        <fieldset>
-          <legend className="text-sm font-medium text-deep">
-            {option1Name}: <span className="font-normal text-muted-foreground">{variant.option1}</span>
-          </legend>
-          <div className="mt-3 flex flex-wrap gap-2.5">
-            {mainValues.map((value) => {
-              const group = variants.filter((v) => sameMain(v, value));
-              const soldOut = group.every((v) => v.stock <= 0);
-              const one = !option2Name ? group[0] : null;
-              return (
+      {levels.map(({ type, level, values, pool }) =>
+        values.length ? (
+          <fieldset key={type}>
+            <legend className="text-sm font-medium text-deep">
+              {type}: <span className="font-normal text-muted-foreground">{variant.values[type]}</span>
+            </legend>
+            <div className="mt-3 flex flex-wrap gap-2.5">
+              {values.map((value) => (
                 <Choice
                   key={value}
-                  name="option1"
+                  name={`option-${level}`}
                   label={value}
-                  checked={sameMain(variant, value)}
-                  soldOut={soldOut}
-                  swatch={/colou?r/i.test(option1Name) ? swatchFor(value) : null}
-                  onSelect={() => (one ? choose(one.id) : pickMain(value))}
+                  checked={same(variant.values[type], value)}
+                  soldOut={pool.filter((v) => same(v.values[type], value)).every((v) => v.stock <= 0)}
+                  swatch={/colou?r/i.test(type) ? swatchFor(value) : null}
+                  onSelect={() => pick(level, value)}
                 />
-              );
-            })}
-          </div>
-        </fieldset>
-      ) : null}
+              ))}
+            </div>
+          </fieldset>
+        ) : null,
+      )}
 
-      {option2Name && subChoices.length ? (
-        <fieldset>
-          <legend className="text-sm font-medium text-deep">
-            {option2Name}: <span className="font-normal text-muted-foreground">{variant.option2}</span>
-          </legend>
-          <div className="mt-3 flex flex-wrap gap-2.5">
-            {subChoices.map((v) => (
-              <Choice
-                key={v.id}
-                name="option2"
-                label={v.option2!}
-                checked={v.id === variant.id}
-                soldOut={v.stock <= 0}
-                swatch={/colou?r/i.test(option2Name) ? swatchFor(v.option2) : null}
-                onSelect={() => choose(v.id)}
-              />
-            ))}
-          </div>
-        </fieldset>
-      ) : null}
-
-      {!option1Name && variants.length > 1 ? (
+      {!variantTypes.length && variants.length > 1 ? (
         <fieldset>
           <legend className="text-sm font-medium text-deep">
             {variants.every((v) => v.colour) ? "Colour" : "Option"}: <span className="font-normal text-muted-foreground">{variant.colour ?? variant.name}</span>

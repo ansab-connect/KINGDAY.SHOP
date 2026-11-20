@@ -3,12 +3,13 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Film, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { Film, ImageIcon, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { AiFillPanel } from "@/components/admin/catalog/ai-fill-panel";
 import { AiWriteButtons } from "@/components/admin/catalog/ai-write-buttons";
 import { DeleteButton } from "@/components/admin/catalog/delete-button";
 import { ProductImages } from "@/components/admin/catalog/product-images";
-import { newVariantRow, nextKey, VariantEditor, type OptionNames, type VariantRow } from "@/components/admin/catalog/variant-editor";
+import { newVariantRow, nextKey, VariantEditor, type VariantRow } from "@/components/admin/catalog/variant-editor";
+import { valuesFromOptions } from "@/features/catalog/variant-types";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
 import { deleteProduct, saveProduct } from "@/features/catalog/admin-actions";
 import type { ProductFill } from "@/features/catalog/smart-fill";
@@ -62,22 +63,26 @@ export function ProductEditor({
     video_path: product?.video_path ?? null,
   });
   const [highlights, setHighlights] = useState<string[]>(product?.highlights.length ? product.highlights : [""]);
-  const [optionNames, setOptionNames] = useState<OptionNames>({
-    option1_name: product?.option1_name ?? "",
-    option2_name: product?.option2_name ?? "",
-  });
+  const initialTypes = product
+    ? product.variant_types?.length
+      ? product.variant_types
+      : [product.option1_name, product.option1_name ? product.option2_name : null].filter((t): t is string => Boolean(t))
+    : [];
+  const [variantTypes, setVariantTypes] = useState<string[]>(initialTypes);
+  const [variantsOn, setVariantsOn] = useState(initialTypes.length > 0);
   const [variants, setVariants] = useState<VariantRow[]>(() => {
     if (!product?.variants.length) return [newVariantRow({ is_default: true })];
-    const groupOf = new Map<string, string>();
     return product.variants.map((v) => {
-      const row = newVariantRow({
+      const values = valuesFromOptions(initialTypes, v.options);
+      if (initialTypes[0] && !values[initialTypes[0]] && v.option1) values[initialTypes[0]] = v.option1;
+      if (initialTypes[1] && !values[initialTypes[1]] && v.option2) values[initialTypes[1]] = v.option2;
+      return newVariantRow({
         id: v.id,
         sku: v.sku,
-        // Names the database built from the options stay "automatic".
-        name: v.name === "Default" || v.name === [v.option1, v.option2].filter(Boolean).join(" · ") ? "" : v.name,
+        // Names the database built from the values stay "automatic".
+        name: v.name === "Default" || v.name === initialTypes.map((t) => values[t]).filter(Boolean).join(" · ") ? "" : v.name,
         colour: v.options?.colour ?? "",
-        option1: v.option1 ?? "",
-        option2: v.option2 ?? "",
+        values,
         specs: (v.specs ?? []).map((sp) => ({ key: nextKey(), ...sp })),
         mrp: paiseToRupees(v.mrp),
         price: paiseToRupees(v.price),
@@ -86,21 +91,16 @@ export function ProductEditor({
         is_active: v.is_active,
         is_default: v.is_default,
       });
-      const g = (v.option1 ?? "").toLowerCase();
-      if (g) {
-        if (!groupOf.has(g)) groupOf.set(g, row.group);
-        row.group = groupOf.get(g)!;
-      }
-      return row;
     });
   });
+  const types = variantsOn ? variantTypes : [];
   const [attributes, setAttributes] = useState(
     product?.attributes.length ? product.attributes.map((a) => ({ key: nextKey(), ...a })) : [{ key: nextKey(), name: "", value: "" }],
   );
   const [videoBusy, setVideoBusy] = useState(false);
 
   // Unsaved changes: warn before leaving the page, and let the "new product" wrapper ask before clearing.
-  const snapshot = JSON.stringify({ basics, highlights, variants, attributes, optionNames });
+  const snapshot = JSON.stringify({ basics, highlights, variants, attributes, variantTypes, variantsOn });
   const [initialSnapshot] = useState(snapshot);
   const dirty = snapshot !== initialSnapshot;
   useEffect(() => {
@@ -124,7 +124,7 @@ export function ProductEditor({
     const cat = categories.find((c) => c.id === basics.category_id)?.name ?? "KD";
     const prefix = cat.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "GEN";
     const part = (t: string) => t.replace(/[^A-Za-z0-9]/g, "").slice(0, 3).toUpperCase();
-    const opts = optionNames.option1_name.trim() ? [part(row.option1), optionNames.option2_name.trim() ? part(row.option2) : ""] : [part(row.colour)];
+    const opts = types.length ? types.map((t) => part(row.values[t] ?? "")) : [part(row.colour)];
     const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
     return ["KD", prefix, rand, ...opts].filter(Boolean).join("-").slice(0, 40);
   }
@@ -150,16 +150,14 @@ export function ProductEditor({
         id: product?.id ?? null,
         video_path: basics.video_path ?? "",
         highlights,
-        option1_name: optionNames.option1_name.trim(),
-        option2_name: optionNames.option1_name.trim() ? optionNames.option2_name.trim() : "",
+        variant_types: types,
         attributes: attributes.map(({ name, value }) => ({ name, value })),
         variants: variants.map((v) => ({
           id: v.id,
           sku: v.sku,
-          name: optionNames.option1_name.trim() ? v.name : v.name || v.colour || "Default",
+          name: types.length ? v.name : v.name || v.colour || "Default",
           colour: v.colour,
-          option1: v.option1,
-          option2: v.option2,
+          values: types.length ? Object.fromEntries(types.map((t) => [t, v.values[t] ?? ""])) : undefined,
           specs: v.specs.map(({ name, value }) => ({ name, value })),
           mrp: v.mrp,
           price: v.price,
@@ -217,14 +215,17 @@ export function ProductEditor({
     if (d.variants.length) {
       if (variants.every((v) => !v.id)) {
         const colours = d.variants.some((v) => v.colour);
-        if (colours && !optionNames.option1_name) setOptionNames({ option1_name: "Colour", option2_name: "" });
+        if (colours && !types.length) {
+          setVariantTypes(["Colour"]);
+          setVariantsOn(true);
+        }
         setVariants(
           d.variants.map((v, i) =>
             newVariantRow({
               is_default: i === 0,
               name: colours ? "" : v.name.slice(0, 120),
               colour: v.colour.slice(0, 40),
-              option1: v.colour.slice(0, 60),
+              values: colours ? { Colour: v.colour.slice(0, 60) } : {},
               mrp: v.mrp ? String(v.mrp) : "",
               price: v.price ? String(v.price) : "",
             }),
@@ -245,6 +246,14 @@ export function ProductEditor({
   return (
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_20rem]" noValidate>
       <div className="flex min-w-0 flex-col gap-6">
+        <ProductHeaderCard
+          image={product?.images.find((i) => !i.variant_id)?.url ?? product?.images[0]?.url ?? null}
+          name={basics.name || "New product"}
+          status={basics.status}
+          description={basics.short_description}
+          pending={pending}
+          saveLabel={product ? "Save Changes" : "Create product"}
+        />
         <AiFillPanel categories={categories.map((c) => ({ id: c.id, name: c.name }))} brands={brands} onFill={applyAi} aiEnabled={aiEnabled} />
         <FormStatus status={status} />
 
@@ -282,8 +291,17 @@ export function ProductEditor({
 
         <FormSection title="Variants, pricing & SKUs" description="Each variant (or each combination, e.g. Size + Colour) has its own SKU, price, stock, specifications and images.">
           <VariantEditor
-            names={optionNames}
-            onNamesChange={setOptionNames}
+            enabled={variantsOn}
+            onEnabledChange={(on) => {
+              setVariantsOn(on);
+              if (!on) {
+                // Each combination stays as a simple variant, named after its values.
+                setVariants((rows) => rows.map((r) => ({ ...r, colour: r.colour || variantTypes.map((t) => r.values[t]).filter(Boolean).join(" · ") })));
+                setVariantTypes([]);
+              }
+            }}
+            types={variantTypes}
+            onTypesChange={setVariantTypes}
             rows={variants}
             onRowsChange={setVariants}
             optionTypes={optionTypes}
@@ -294,8 +312,8 @@ export function ProductEditor({
         </FormSection>
 
         <FormSection
-          title={optionNames.option1_name.trim() ? "Shared images" : "Images"}
-          description={optionNames.option1_name.trim() ? "Optional. Shown only for variants that have no images of their own. Add images per variant above." : undefined}
+          title={types.length ? "Shared images" : "Images"}
+          description={types.length ? "Optional. Shown only for variants that have no images of their own. Add images per variant above." : undefined}
         >
           {product ? (
             <ProductImages
@@ -402,5 +420,52 @@ export function ProductEditor({
         {product && canDelete ? <DeleteButton label="product" redirectTo="/admin/products" onDelete={() => deleteProduct(product.id)} /> : null}
       </aside>
     </form>
+  );
+}
+
+/** Summary at the top of the editor: photo, name, status and the main actions. */
+function ProductHeaderCard({
+  image,
+  name,
+  status,
+  description,
+  pending,
+  saveLabel,
+}: {
+  image: string | null;
+  name: string;
+  status: string;
+  description: string;
+  pending: boolean;
+  saveLabel: string;
+}) {
+  const tone = status === "active" ? "bg-success-soft text-success" : status === "draft" ? "bg-warning-soft text-warning" : "bg-muted text-muted-foreground";
+  return (
+    <div className="flex flex-col gap-4 rounded-2xl border bg-white p-4 shadow-card sm:flex-row sm:items-center">
+      <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border bg-muted">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element -- admin thumbnail
+          <img src={image} alt="" className="size-full object-contain" />
+        ) : (
+          <ImageIcon aria-hidden className="size-8 text-royal-300" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate font-heading text-lg font-bold text-deep">{name}</p>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${tone}`}>{status}</span>
+        </div>
+        {description ? <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{description}</p> : null}
+      </div>
+      <div className="flex shrink-0 gap-2">
+        <Link href="/admin/products" className="inline-flex h-11 items-center rounded-lg border px-4 text-sm font-semibold text-deep hover:bg-muted">
+          Cancel
+        </Link>
+        <button type="submit" disabled={pending} className="inline-flex h-11 items-center gap-2 rounded-lg bg-royal px-5 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-60">
+          {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Save aria-hidden className="size-4" />}
+          {saveLabel}
+        </button>
+      </div>
+    </div>
   );
 }
