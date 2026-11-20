@@ -264,3 +264,19 @@ html[data-lang="ml"] header nav a {
   .bf-bar { background: var(--color-royal); }
   .bf-step { border-color: var(--color-gold); color: var(--color-gold); }
 }
+
+/* ---------------------------------------------------------------- Hero characters & seasonal effects */
+.kd-bob { animation: kd-bob 3.2s ease-in-out infinite; }
+.kd-blink { animation: kd-blink 4.5s infinite; transform-box: view-box; }
+.kd-wave { animation: kd-wave 1.6s ease-in-out infinite; transform-box: view-box; }
+.kd-fall { animation: kd-fall 8s linear infinite; }
+.kd-twinkle { animation: kd-twinkle 2.6s ease-in-out infinite; }
+.kd-spin { animation: spin 40s linear infinite; }
+@keyframes kd-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes kd-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes kd-wave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-22deg); } }
+@keyframes kd-fall { 0% { transform: translateY(-10px) rotate(0deg); opacity: 0; } 10% { opacity: 1; } 100% { transform: translateY(420px) rotate(240deg); opacity: 0.2; } }
+@keyframes kd-twinkle { 0%, 100% { opacity: 0.2; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) {
+  .kd-bob, .kd-blink, .kd-wave, .kd-fall, .kd-twinkle, .kd-spin { animation: none; }
+}

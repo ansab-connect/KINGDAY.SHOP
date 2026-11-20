@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Bell, Heart, LayoutDashboard, MapPin, Package, Settings, ShoppingBag, ShoppingCart, Wrench } from "lucide-react";
+import { Bell, Heart, LayoutDashboard, MapPin,
+  Sparkles, Package, Settings, ShoppingBag, ShoppingCart, Wrench } from "lucide-react";
 import { Container } from "@/components/store/section";
 
 const links = [
@@ -8,6 +9,7 @@ const links = [
   { href: "/cart", label: "Product Cart", icon: ShoppingBag },
   { href: "/account/service", label: "My Services", icon: Wrench },
   { href: "/cart?tab=services", label: "Service Cart", icon: ShoppingCart },
+  { href: "/account/characters", label: "My Characters", icon: Sparkles },
   { href: "/account/addresses", label: "Saved Addresses", icon: MapPin },
   { href: "/account/notifications", label: "Notifications", icon: Bell },
   { href: "/wishlist", label: "Wishlist", icon: Heart },

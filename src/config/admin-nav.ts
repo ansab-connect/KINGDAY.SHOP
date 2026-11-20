@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   Tag,
   TicketPercent,
+  Sparkles,
   UserCog,
   Users,
   type LucideIcon,
@@ -74,6 +75,7 @@ export const adminNav: AdminNavGroup[] = [
       { title: "Coupons", href: "/admin/coupons", icon: TicketPercent, module: "coupons", phase: 8 },
       { title: "Promotions", href: "/admin/promotions", icon: Megaphone, module: "customers" },
       { title: "Royal Moments", href: "/admin/instagram", icon: Camera, module: "cms" },
+      { title: "Seasonal Themes", href: "/admin/themes", icon: Sparkles, module: "cms" },
     ],
   },
   {

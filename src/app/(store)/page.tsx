@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Camera, Check, Lock, MessageCircle, Quote, ShieldCheck, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
-import { HeroArt } from "@/components/store/hero-art";
+import { HeroStage } from "@/components/store/hero/hero-stage";
+import { getActiveHeroTheme } from "@/features/marketing/hero-themes";
 import { getInstagramPosts, INSTAGRAM_URL } from "@/features/marketing/instagram";
 import { publicStorageUrl } from "@/lib/storage";
 import { NewsletterForm } from "@/components/store/newsletter-form";
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
 const whyIcons = { shield: ShieldCheck, check: Check, lock: Lock, chat: MessageCircle } as const;
 
 export default async function HomePage() {
-  const [categories, bestsellers, newArrivals, allOffers, brands, reviews, source, instagram] = await Promise.all([
+  const [categories, bestsellers, newArrivals, allOffers, brands, reviews, source, instagram, heroTheme] = await Promise.all([
     getCategories(),
     getBestsellers(4),
     getNewArrivals(8),
@@ -41,6 +42,7 @@ export default async function HomePage() {
     getFeaturedReviews(3),
     getCatalogSource(),
     getInstagramPosts(),
+    getActiveHeroTheme(),
   ]);
   const offers = allOffers.slice(0, 3);
   const topDiscount = Math.max(...allOffers.map((p) => discountPercent(p.mrp, p.price)), 0);
@@ -89,9 +91,7 @@ export default async function HomePage() {
               ))}
             </ul>
           </div>
-          <div className="relative mx-auto hidden w-full max-w-md lg:block lg:max-w-none">
-            <HeroArt className="h-auto w-full" />
-          </div>
+          <HeroStage theme={heroTheme} className="h-60 w-full sm:h-80 lg:h-auto lg:aspect-[5/4]" />
         </Container>
       </section>
 
