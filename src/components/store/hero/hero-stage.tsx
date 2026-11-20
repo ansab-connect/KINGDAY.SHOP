@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useState } from "react";
 import { CharacterPopup } from "@/components/store/hero/character-popup";
+import { HeroActions } from "@/components/store/hero/hero-actions";
+import { Walkers } from "@/components/store/hero/walkers";
 import { Kid } from "@/components/store/hero/kid";
 import {
   characterSize,
@@ -24,9 +26,6 @@ type Props = {
 };
 
 const SCENE_MS = 3500;
-const WALK_EVERY_MS = 13000;
-const WALK_MS = 7000;
-const LINES = ["Hi Mamma! Hi Papa!", "I need a gift!"];
 /** Official mascots from the KING DAY reference sheet (saved once in /public, never regenerated). */
 const OFFICIAL: Record<string, { src: string; height: string }> = {
   [KING.id]: { src: "/characters/king.webp", height: "h-[86%]" },
@@ -42,7 +41,6 @@ export function HeroStage({ theme, characters, className }: Props) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
   const [mine, setMine] = useState<CustomerCharacter[] | null>(characters ?? null);
-  const [walk, setWalk] = useState<{ n: number } | null>(null);
   const count = theme.scenes.length;
 
   useEffect(() => {
@@ -66,24 +64,7 @@ export function HeroStage({ theme, characters, className }: Props) {
     };
   }, [characters]);
 
-  // Now and then a character walks across the front and says something.
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let n = 0;
-    let hide: number | undefined;
-    const t = window.setInterval(() => {
-      setWalk({ n: n++ });
-      hide = window.setTimeout(() => setWalk(null), WALK_MS);
-    }, WALK_EVERY_MS);
-    return () => {
-      window.clearInterval(t);
-      window.clearTimeout(hide);
-    };
-  }, []);
-
   const cast = [KING, MIA, ...(mine ?? [])];
-  const walker = walk ? cast[walk.n % cast.length] : null;
-  const line = walk ? LINES[walk.n % LINES.length] : "";
 
   return (
     <div className={cn("relative isolate overflow-hidden rounded-3xl ring-1 ring-white/15", className)}>
@@ -107,7 +88,7 @@ export function HeroStage({ theme, characters, className }: Props) {
           OFFICIAL[c.id] ? (
             <figure key={c.id} className={cn("kd-bob relative flex flex-col items-center", OFFICIAL[c.id].height, cast.length > 3 ? "max-w-[24%]" : "max-w-[34%]")} style={{ animationDelay: `${i * 0.6}s` }}>
               {/* eslint-disable-next-line @next/next/no-img-element -- small static cut-out */}
-              <img src={OFFICIAL[c.id].src} alt={c.name} className="h-full w-auto object-contain drop-shadow-[0_10px_12px_rgb(0_0_0/0.3)]" fetchPriority={i === 0 ? "high" : "auto"} />
+              <img src={OFFICIAL[c.id].src} alt={c.name} className={cn("h-full w-auto object-contain drop-shadow-[0_10px_12px_rgb(0_0_0/0.3)]", i === 0 && "kd-hop")} fetchPriority={i === 0 ? "high" : "auto"} />
               <figcaption className="-mt-1 rounded-full bg-white/90 px-2 py-0.5 text-[0.65rem] font-bold text-deep shadow-sm sm:text-xs">{c.name}</figcaption>
             </figure>
           ) : (
@@ -125,19 +106,11 @@ export function HeroStage({ theme, characters, className }: Props) {
         )}
       </div>
 
-      {walker ? (
-        <div key={walk!.n} aria-hidden className="kd-walk pointer-events-none absolute bottom-1 z-10 flex h-[46%] flex-col items-center">
-          <span className="relative mb-1 rounded-2xl bg-white px-2.5 py-1 text-[0.65rem] font-bold whitespace-nowrap text-royal shadow-md sm:text-xs">
-            {line}
-            <span className="absolute -bottom-1 left-1/2 size-2 -translate-x-1/2 rotate-45 bg-white" />
-          </span>
-          {OFFICIAL[walker.id] ? (
-            // eslint-disable-next-line @next/next/no-img-element -- small static cut-out
-            <img src={OFFICIAL[walker.id].src} alt="" className="kd-step h-full w-auto object-contain drop-shadow-[0_8px_8px_rgb(0_0_0/0.3)]" />
-          ) : (
-            <Kid look={walker.look} costume={theme.costume} size="adult" className="kd-step h-full" />
-          )}
-        </div>
+      {!characters ? (
+        <>
+          <HeroActions mine={mine ?? []} />
+          <Walkers mine={mine ?? []} costume={theme.costume} />
+        </>
       ) : null}
 
       {mine && mine.length === 0 && !characters ? <CharacterPopup /> : null}

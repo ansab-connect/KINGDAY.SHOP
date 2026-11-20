@@ -39,7 +39,7 @@ export function CharactersEditor({ initial }: { initial: CustomerCharacter[] }) 
     start(async () => {
       setMsg(null);
       const res = await saveMyCharactersAction(next);
-      setMsg(res.ok ? { ok: true, text: "Saved! Your characters now appear on the homepage." } : { ok: false, text: res.error ?? "Couldn't save." });
+      setMsg(res.ok ? { ok: true, text: "Saved! Welcome to King's family. Your characters now appear on the homepage." } : { ok: false, text: res.error ?? "Couldn't save." });
     });
 
   return (
@@ -49,7 +49,7 @@ export function CharactersEditor({ initial }: { initial: CustomerCharacter[] }) 
         No photos needed: you design the character yourself, so your child&apos;s picture is never uploaded or shared. Only you see your characters.
       </p>
 
-      {list.length === 0 ? <p className="text-sm text-muted-foreground">You have no characters yet. Create one to ride along with King and Mia on our homepage.</p> : null}
+      {list.length === 0 ? <p className="text-sm text-muted-foreground">You have no characters yet. Create one and they join King&apos;s family on our homepage: King and Mia will welcome them by name.</p> : null}
 
       {list.map((c) => (
         <div key={c.id} className="grid gap-4 rounded-2xl border p-4 sm:grid-cols-[10rem_1fr]">

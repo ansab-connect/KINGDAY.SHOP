@@ -69,7 +69,7 @@ export function CharacterPopup() {
           <p id="char-popup-title" className="flex items-center gap-1.5 font-heading text-base leading-tight font-bold">
             <Sparkles aria-hidden className="size-4 shrink-0 text-gold" /> Create Your Child&apos;s Character
           </p>
-          <p className="mt-1 text-xs leading-snug text-white/75">Join King &amp; Mia on our homepage. Free, no photo needed.</p>
+          <p className="mt-1 text-xs leading-snug text-white/75">Make them a new member of King &amp; Mia&apos;s family. Free, no photo needed.</p>
         </div>
       </div>
       <div className="flex gap-2 p-4 pt-3">
