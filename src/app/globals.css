@@ -280,3 +280,8 @@ html[data-lang="ml"] header nav a {
 @media (prefers-reduced-motion: reduce) {
   .kd-bob, .kd-blink, .kd-wave, .kd-fall, .kd-twinkle, .kd-spin { animation: none; }
 }
+.kd-walk { animation: kd-walk 7s linear forwards; }
+.kd-step { animation: kd-step 0.45s ease-in-out infinite alternate; }
+@keyframes kd-walk { from { left: -30%; } to { left: 110%; } }
+@keyframes kd-step { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-4px) rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .kd-walk, .kd-step { animation: none; } }

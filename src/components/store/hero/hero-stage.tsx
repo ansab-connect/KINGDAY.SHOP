@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import Link from "next/link";
-import { Sparkles, X } from "lucide-react";
+import { CharacterPopup } from "@/components/store/hero/character-popup";
 import { Kid } from "@/components/store/hero/kid";
 import {
   characterSize,
@@ -25,7 +24,9 @@ type Props = {
 };
 
 const SCENE_MS = 3500;
-const PROMO_KEY = "kingday.characterPromo.dismissed";
+const WALK_EVERY_MS = 13000;
+const WALK_MS = 7000;
+const LINES = ["Hi Mamma! Hi Papa!", "I need a gift!"];
 /** Official mascots from the KING DAY reference sheet (saved once in /public, never regenerated). */
 const OFFICIAL: Record<string, { src: string; height: string }> = {
   [KING.id]: { src: "/characters/king.webp", height: "h-[86%]" },
@@ -41,7 +42,7 @@ export function HeroStage({ theme, characters, className }: Props) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
   const [mine, setMine] = useState<CustomerCharacter[] | null>(characters ?? null);
-  const [promoHidden, setPromoHidden] = useState(true);
+  const [walk, setWalk] = useState<{ n: number } | null>(null);
   const count = theme.scenes.length;
 
   useEffect(() => {
@@ -54,13 +55,6 @@ export function HeroStage({ theme, characters, className }: Props) {
     if (characters) return;
     // Characters live in the account's metadata: read from the local session, no extra request.
     let alive = true;
-    try {
-      const dismissed = window.localStorage.getItem(PROMO_KEY) === "1";
-      Promise.resolve().then(() => alive && setPromoHidden(dismissed));
-    } catch {
-      // Storage blocked: the promotion still works, it just can't be remembered.
-      Promise.resolve().then(() => alive && setPromoHidden(false));
-    }
     createClient()
       .auth.getSession()
       .then(({ data }) => {
@@ -72,7 +66,24 @@ export function HeroStage({ theme, characters, className }: Props) {
     };
   }, [characters]);
 
+  // Now and then a character walks across the front and says something.
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let n = 0;
+    let hide: number | undefined;
+    const t = window.setInterval(() => {
+      setWalk({ n: n++ });
+      hide = window.setTimeout(() => setWalk(null), WALK_MS);
+    }, WALK_EVERY_MS);
+    return () => {
+      window.clearInterval(t);
+      window.clearTimeout(hide);
+    };
+  }, []);
+
   const cast = [KING, MIA, ...(mine ?? [])];
+  const walker = walk ? cast[walk.n % cast.length] : null;
+  const line = walk ? LINES[walk.n % LINES.length] : "";
 
   return (
     <div className={cn("relative isolate overflow-hidden rounded-3xl ring-1 ring-white/15", className)}>
@@ -114,31 +125,22 @@ export function HeroStage({ theme, characters, className }: Props) {
         )}
       </div>
 
-      {mine && mine.length === 0 && !characters && !promoHidden ? (
-        <div className="absolute top-3 right-3 flex max-w-[15rem] items-start gap-2 rounded-2xl bg-white/95 py-2 pr-1 pl-3 text-deep shadow-lg">
-          <Link href="/account/characters" className="min-w-0 py-0.5">
-            <span className="flex items-center gap-1.5 text-xs font-bold text-royal">
-              <Sparkles aria-hidden className="size-3.5 shrink-0 text-gold-600" /> Create Your Child&apos;s Character
-            </span>
-            <span className="mt-0.5 block text-[0.7rem] leading-snug text-muted-foreground">Ride along with King &amp; Mia. Free, no photo needed.</span>
-          </Link>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={() => {
-              setPromoHidden(true);
-              try {
-                window.localStorage.setItem(PROMO_KEY, "1");
-              } catch {
-                // Storage blocked: hidden for this visit only.
-              }
-            }}
-            className="-my-1 grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-deep"
-          >
-            <X aria-hidden className="size-4" />
-          </button>
+      {walker ? (
+        <div key={walk!.n} aria-hidden className="kd-walk pointer-events-none absolute bottom-1 z-10 flex h-[46%] flex-col items-center">
+          <span className="relative mb-1 rounded-2xl bg-white px-2.5 py-1 text-[0.65rem] font-bold whitespace-nowrap text-royal shadow-md sm:text-xs">
+            {line}
+            <span className="absolute -bottom-1 left-1/2 size-2 -translate-x-1/2 rotate-45 bg-white" />
+          </span>
+          {OFFICIAL[walker.id] ? (
+            // eslint-disable-next-line @next/next/no-img-element -- small static cut-out
+            <img src={OFFICIAL[walker.id].src} alt="" className="kd-step h-full w-auto object-contain drop-shadow-[0_8px_8px_rgb(0_0_0/0.3)]" />
+          ) : (
+            <Kid look={walker.look} costume={theme.costume} size="adult" className="kd-step h-full" />
+          )}
         </div>
       ) : null}
+
+      {mine && mine.length === 0 && !characters ? <CharacterPopup /> : null}
     </div>
   );
 }
