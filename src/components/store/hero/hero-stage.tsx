@@ -4,7 +4,6 @@ import { useEffect, useId, useState } from "react";
 import { CharacterPopup } from "@/components/store/hero/character-popup";
 import { HeroActions } from "@/components/store/hero/hero-actions";
 import { SpeechPopup } from "@/components/store/hero/speech-popup";
-import { Walkers } from "@/components/store/hero/walkers";
 import { Kid } from "@/components/store/hero/kid";
 import {
   characterSize,
@@ -114,7 +113,6 @@ export function HeroStage({ theme, characters, className, children }: Props) {
         <>
           <HeroActions mine={mine ?? []} />
           <SpeechPopup mine={mine ?? []} />
-          <Walkers mine={mine ?? []} costume={theme.costume} />
         </>
       ) : null}
 

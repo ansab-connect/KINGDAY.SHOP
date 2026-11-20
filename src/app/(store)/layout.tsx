@@ -21,8 +21,11 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
           Preview store: products, prices and reviews are sample data.
         </p>
       )}
-      <div className="bg-deep px-4 py-2 text-center text-[0.7rem] font-semibold tracking-[0.2em] text-gold uppercase">
-        <L en="Every child deserves a royal ride" ml="ഓരോ കുഞ്ഞിനും ഒരു രാജകീയ യാത്ര" />
+      <div className="bg-deep px-4 py-1.5 text-center text-[0.7rem] font-medium tracking-wide text-white/85 sm:text-xs">
+        <L
+          en={<>Free delivery on prepaid orders <span className="text-gold">·</span> Cash on delivery available <span className="hidden text-gold sm:inline">·</span> <span className="hidden sm:inline">Safety-checked rides</span></>}
+          ml={<>പ്രീപെയ്ഡ് ഓർഡറുകൾക്ക് സൗജന്യ ഡെലിവറി <span className="text-gold">·</span> ക്യാഷ് ഓൺ ഡെലിവറി</>}
+        />
       </div>
       <StoreHeader />
       <main id="main" className="flex-1">{children}</main>

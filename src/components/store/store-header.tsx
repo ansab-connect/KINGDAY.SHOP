@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Heart, Menu, Search, ShoppingBag, User } from "lucide-react";
+import { Heart, Menu, Search, ShoppingBag, User, Wrench } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { InstallAppButton } from "@/components/pwa/install-app";
 import { L } from "@/components/i18n/lang";
@@ -28,7 +28,7 @@ function SearchForm({ id, className }: { id: string; className?: string }) {
         name="q"
         type="search"
         placeholder={ml ? "ജീപ്പ്, ബൈക്ക്, സ്കൂട്ടർ തിരയുക…" : "Search jeeps, bikes, scooters…"}
-        className="h-11 w-full rounded-full border border-input bg-canvas pr-4 pl-10 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-royal-300 focus:bg-white focus:ring-3 focus:ring-royal-100"
+        className="h-10 w-full rounded-full border border-input bg-canvas pr-4 pl-10 text-base outline-none sm:text-sm lg:h-11 transition-colors placeholder:text-muted-foreground focus:border-royal-300 focus:bg-white focus:ring-3 focus:ring-royal-100"
       />
     </form>
   );
@@ -46,8 +46,8 @@ export function StoreHeader() {
   const ml = useLang() === "ml";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-white/90 backdrop-blur-md supports-[backdrop-filter]:bg-white/80">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 sm:px-6 lg:h-[4.5rem] lg:px-8">
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/85">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:px-6 lg:h-[4.25rem] lg:gap-6 lg:px-8">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="-ml-2 lg:hidden" aria-label={ml ? "മെനു തുറക്കുക" : "Open menu"}>
@@ -61,7 +61,6 @@ export function StoreHeader() {
               <Logo showTagline />
             </SheetHeader>
             <div className="flex flex-col gap-6 p-5">
-              <SearchForm id="mobile-search" />
               <nav aria-label="Main">
                 <ul className="flex flex-col">
                   {[...storeNav, ...actions.map((a) => ({ title: a.en, ml: a.ml, href: a.href }))].map((item) => (
@@ -71,7 +70,7 @@ export function StoreHeader() {
                         onClick={() => setOpen(false)}
                         aria-current={isActive(pathname, item.href) ? "page" : undefined}
                         className={cn(
-                          "flex items-center justify-between border-b border-border/60 py-3.5 font-heading text-lg font-semibold",
+                          "flex items-center justify-between border-b border-border/60 py-3.5 text-base font-semibold",
                           isActive(pathname, item.href) ? "text-royal" : "text-deep",
                         )}
                       >
@@ -95,46 +94,67 @@ export function StoreHeader() {
           <Logo />
         </Link>
 
-        <nav aria-label="Main" className="ml-6 hidden lg:block">
-          <ul className="flex items-center gap-0.5">
-            {storeNav.map((item) => {
-              const active = isActive(pathname, item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "relative rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors",
-                      active ? "text-royal" : "text-deep/75 hover:text-royal",
-                    )}
-                  >
-                    <L en={item.title} ml={item.ml} />
-                    {active ? <span aria-hidden className="absolute inset-x-3 -bottom-0.5 h-0.5 rounded-full bg-gold" /> : null}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+        <SearchForm id="header-search" className="hidden flex-1 lg:block lg:max-w-xl" />
 
-        <SearchForm id="header-search" className="ml-auto hidden w-full max-w-60 xl:block" />
-
-        <div className="ml-auto flex items-center gap-0.5 xl:ml-2">
+        <div className="ml-auto flex items-center gap-0.5 lg:gap-1">
           <LanguageSwitcher className="mr-1 hidden sm:inline-flex" />
-          <Button variant="ghost" size="icon" className="xl:hidden" asChild>
-            <Link href="/shop" aria-label={ml ? "തിരയുക" : "Search products"}><Search /></Link>
-          </Button>
           {actions.map((a) => (
-            <Button key={a.href} variant="ghost" size="icon" className={a.href === "/cart" ? "" : "hidden sm:inline-flex"} asChild>
-              <Link href={a.href} aria-label={ml ? a.ml : a.en} aria-current={isActive(pathname, a.href) ? "page" : undefined} className="relative">
-                <a.icon />
+            <Link
+              key={a.href}
+              href={a.href}
+              aria-label={ml ? a.ml : a.en}
+              aria-current={isActive(pathname, a.href) ? "page" : undefined}
+              className={cn(
+                "relative inline-flex h-10 items-center gap-2 rounded-full px-2.5 text-sm font-medium text-deep transition-colors hover:bg-royal-50 hover:text-royal",
+                a.href === "/cart" ? "" : "hidden sm:inline-flex",
+                isActive(pathname, a.href) && "text-royal",
+              )}
+            >
+              <span className="relative">
+                <a.icon aria-hidden className="size-5" />
                 {a.href === "/cart" ? <CartCount /> : null}
-              </Link>
-            </Button>
+              </span>
+              <span className="hidden xl:inline">
+                <L en={a.en} ml={a.ml} />
+              </span>
+            </Link>
           ))}
         </div>
       </div>
+
+      {/* Mobile: search always at hand. Desktop: the main navigation. */}
+      {pathname.startsWith("/checkout") ? null : (
+        <div className="px-4 pb-2.5 sm:px-6 lg:hidden">
+          <SearchForm id="mobile-search" />
+        </div>
+      )}
+      <nav aria-label="Main" className="hidden border-t border-border/60 lg:block">
+        <ul className="mx-auto flex h-11 max-w-7xl items-center gap-1 px-6 lg:px-8">
+          {storeNav.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative flex h-11 items-center px-3 text-sm font-medium whitespace-nowrap transition-colors",
+                    active ? "text-royal" : "text-deep/70 hover:text-royal",
+                  )}
+                >
+                  <L en={item.title} ml={item.ml} />
+                  {active ? <span aria-hidden className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-gold" /> : null}
+                </Link>
+              </li>
+            );
+          })}
+          <li className="ml-auto">
+            <Link href="/book-service" className="flex h-11 items-center gap-1.5 px-3 text-sm font-semibold text-royal hover:underline">
+              <Wrench aria-hidden className="size-4 text-gold-600" /> <L en="Book Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
+            </Link>
+          </li>
+        </ul>
+      </nav>
     </header>
   );
 }

@@ -29,13 +29,12 @@ export function MobileTabBar() {
               <Link
                 href={t.href}
                 aria-current={active ? "page" : undefined}
-                className={cn("relative flex flex-col items-center gap-0.5 py-2 text-[0.68rem] font-semibold", active ? "text-royal" : "text-muted-foreground")}
+                className={cn("relative flex flex-col items-center gap-0.5 py-1.5 text-[0.68rem] font-semibold", active ? "text-royal" : "text-muted-foreground")}
               >
-                {active ? <span aria-hidden className="absolute top-0 h-0.5 w-8 rounded-full bg-gold" /> : null}
-                <span className="relative">
-                  <t.icon aria-hidden className="size-6" strokeWidth={active ? 2.2 : 1.8} />
+                <span className={cn("relative grid h-7 w-12 place-items-center rounded-full transition-colors", active && "bg-royal-50")}>
+                  <t.icon aria-hidden className="size-5" strokeWidth={active ? 2.2 : 1.8} />
                   {t.href === "/cart" && count > 0 ? (
-                    <span className="absolute -top-1.5 -right-2.5 grid h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[0.6rem] font-bold text-deep tabular" aria-label={`${count} in cart`}>
+                    <span className="absolute -top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[0.6rem] font-bold text-deep tabular" aria-label={`${count} in cart`}>
                       {count > 9 ? "9+" : count}
                     </span>
                   ) : null}

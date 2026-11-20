@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Camera, Check, Lock, MessageCircle, Quote, ShieldCheck, Wrench } from "lucide-react";
+import { ArrowRight, Banknote, Camera, Check, Lock, MessageCircle, Quote, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { HeroStage } from "@/components/store/hero/hero-stage";
 import { getActiveHeroTheme } from "@/features/marketing/hero-themes";
@@ -74,51 +74,57 @@ export default async function HomePage() {
             <L en="Book Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
           </Link>
         </Container>
+        <div className="border-t border-white/10 bg-white/[0.03]">
+          <Container>
+            <ul className="flex snap-x gap-5 overflow-x-auto py-3 text-xs text-white/80 [scrollbar-width:none] sm:justify-center sm:gap-10 sm:text-sm [&::-webkit-scrollbar]:hidden">
+              {[
+                { icon: Truck, en: "Free delivery on prepaid orders", ml: "പ്രീപെയ്ഡിന് സൗജന്യ ഡെലിവറി" },
+                { icon: ShieldCheck, en: "Safety-checked rides", ml: "സുരക്ഷ ഉറപ്പാക്കിയവ" },
+                { icon: Banknote, en: "Cash on delivery", ml: "ക്യാഷ് ഓൺ ഡെലിവറി" },
+                { icon: Wrench, en: "BEST FIT after-sales service", ml: "BEST FIT സർവീസ്" },
+              ].map((t) => (
+                <li key={t.en} className="flex shrink-0 snap-start items-center gap-2 whitespace-nowrap">
+                  <t.icon aria-hidden className="size-4 text-gold" /> <L en={t.en} ml={t.ml} />
+                </li>
+              ))}
+            </ul>
+          </Container>
+        </div>
       </section>
 
       {/* 2. Featured categories */}
-      <section className="py-6 sm:py-12 lg:py-16">
+      <section className="py-8 sm:py-12">
         <Container>
           <SectionHeading eyebrow={<L en="Shop by category" ml="വിഭാഗം അനുസരിച്ച്" />} title={<L en="Find the perfect ride" ml="മികച്ച റൈഡ് കണ്ടെത്തൂ" />} href="/categories" linkLabel={<L en="All categories" ml="എല്ലാ വിഭാഗങ്ങളും" />} />
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
-            {categories.map((c, i) => {
-              const feature = i === 0;
-              return (
-                <li key={c.slug} className={feature ? "lg:col-span-2 lg:row-span-2" : ""}>
-                  <Link
-                    href={`/categories/${c.slug}`}
-                    className={`group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl p-3.5 ring-1 sm:p-5 transition-all duration-500 ease-royal hover:-translate-y-1 hover:shadow-lift focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
-                      feature ? "min-h-28 bg-royal text-white ring-royal sm:min-h-36 lg:min-h-full" : "min-h-28 bg-royal-50/60 text-deep ring-border/60 hover:bg-white sm:min-h-36"
-                    }`}
-                  >
+          <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-4 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-7 [&::-webkit-scrollbar]:hidden">
+            {categories.map((c, i) => (
+              <li key={c.slug} className="w-28 shrink-0 snap-start sm:w-auto">
+                <Link
+                  href={`/categories/${c.slug}`}
+                  className="group flex h-full flex-col items-center rounded-2xl border border-border/70 bg-white p-3 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-royal-100 hover:shadow-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:p-4"
+                >
+                  <span className="grid size-16 place-items-center overflow-hidden rounded-2xl bg-royal-50 sm:size-20">
                     {c.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- category photos from our own storage
-                      <img src={c.imageUrl} alt="" loading={i < 4 ? "eager" : "lazy"} className="size-12 rounded-xl object-cover sm:size-16" />
+                      <img src={c.imageUrl} alt="" loading={i < 6 ? "eager" : "lazy"} className="size-full object-cover transition-transform duration-500 group-hover:scale-105" />
                     ) : (
-                      <CategoryIcon
-                        slug={c.slug}
-                        strokeWidth={1.25}
-                        className={`transition-transform duration-500 ease-royal group-hover:scale-110 ${feature ? "size-10 text-gold sm:size-14 lg:size-20" : "size-9 text-royal sm:size-10"}`}
-                      />
+                      <CategoryIcon slug={c.slug} strokeWidth={1.4} className="size-8 text-royal transition-transform duration-500 group-hover:scale-110 sm:size-9" />
                     )}
-                    <div className="mt-3 sm:mt-6">
-                      <p className={`font-heading text-sm leading-tight font-bold sm:text-base ${feature ? "lg:text-2xl" : ""}`}>{c.name}</p>
-                      <p className={`mt-1 text-xs ${feature ? "text-white/70" : "text-muted-foreground"}`}>
-                        <L en={`${c.productCount} products`} ml={`${c.productCount} ഉൽപ്പന്നങ്ങൾ`} />
-                      </p>
-                    </div>
-                    <ArrowRight aria-hidden className={`absolute top-5 right-5 size-4 transition-transform group-hover:translate-x-0.5 ${feature ? "text-gold" : "text-royal-300"}`} />
-                  </Link>
-                </li>
-              );
-            })}
+                  </span>
+                  <p className="mt-2.5 line-clamp-2 text-xs leading-tight font-semibold text-deep sm:text-sm">{c.name}</p>
+                  <p className="mt-0.5 text-[0.68rem] text-muted-foreground">
+                    <L en={`${c.productCount} items`} ml={`${c.productCount} എണ്ണം`} />
+                  </p>
+                </Link>
+              </li>
+            ))}
           </ul>
         </Container>
       </section>
 
       {/* 3. Bestsellers */}
       {bestsellers.length ? (
-      <section className="bg-muted/50 py-16 sm:py-20">
+      <section className="bg-white py-10 sm:py-14">
         <Container>
           <SectionHeading eyebrow={<L en="Most loved" ml="ഏറ്റവും ഇഷ്ടപ്പെട്ടവ" />} title={<L en="Bestsellers" ml="ബെസ്റ്റ് സെല്ലറുകൾ" />} description={<L en="The rides families choose again and again." ml="കുടുംബങ്ങൾ വീണ്ടും വീണ്ടും തിരഞ്ഞെടുക്കുന്നവ." />} href="/shop?sort=rating" />
           <ProductGrid products={bestsellers} />
@@ -128,7 +134,7 @@ export default async function HomePage() {
 
       {/* 4. New arrivals */}
       {newArrivals.length ? (
-      <section className="py-16 sm:py-20">
+      <section className="py-10 sm:py-14">
         <Container>
           <SectionHeading eyebrow={<L en="Just landed" ml="പുതിയതായി എത്തിയവ" />} title={<L en="New arrivals" ml="പുതിയ ഉൽപ്പന്നങ്ങൾ" />} href="/shop?sort=newest" />
         </Container>
@@ -172,18 +178,17 @@ export default async function HomePage() {
 
       {/* 6. Featured brands */}
       {brands.length ? (
-      <section className="py-16 sm:py-20">
+      <section className="py-10 sm:py-14">
         <Container>
           <SectionHeading eyebrow={<L en="Trusted makers" ml="വിശ്വസ്ത നിർമ്മാതാക്കൾ" />} title={<L en="Featured brands" ml="പ്രധാന ബ്രാൻഡുകൾ" />} align="center" />
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          <ul className="flex flex-wrap justify-center gap-2 sm:gap-3">
             {brands.map((b) => (
               <li key={b.slug}>
                 <Link
                   href={`/shop?brand=${b.slug}`}
-                  className="group flex h-full flex-col items-center justify-center rounded-2xl border bg-white px-4 py-8 text-center transition-all duration-300 hover:border-royal-200 hover:shadow-card"
+                  className="inline-flex h-11 items-center gap-2 rounded-full border border-border/70 bg-white px-5 text-sm font-semibold text-deep transition-colors hover:border-royal-200 hover:text-royal"
                 >
-                  <span className="font-heading text-lg font-bold tracking-wide text-deep group-hover:text-royal">{b.name}</span>
-                  <span className="mt-1 text-xs text-muted-foreground"><L en={`${b.productCount} products`} ml={`${b.productCount} ഉൽപ്പന്നങ്ങൾ`} /></span>
+                  {b.name} <span className="text-xs font-normal text-muted-foreground">{b.productCount}</span>
                 </Link>
               </li>
             ))}
@@ -193,19 +198,21 @@ export default async function HomePage() {
       ) : null}
 
       {/* 7. Why choose KING DAY */}
-      <section className="bg-royal-50/60 py-16 sm:py-20">
+      <section className="bg-white py-10 sm:py-14">
         <Container>
           <SectionHeading eyebrow={<L en="The KING DAY promise" ml="KING DAY ഉറപ്പ്" />} title={<L en="Why families choose us" ml="കുടുംബങ്ങൾ ഞങ്ങളെ തിരഞ്ഞെടുക്കുന്നതെന്തുകൊണ്ട്" />} align="center" />
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {whyChoose.map((w) => {
               const Icon = whyIcons[w.icon];
               return (
-                <li key={w.title} className="rounded-2xl bg-white p-6 shadow-card">
-                  <span className="grid size-12 place-items-center rounded-xl bg-royal text-gold">
+                <li key={w.title} className="flex gap-4 rounded-2xl border border-border/70 bg-canvas/60 p-5">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-royal text-gold">
                     <Icon aria-hidden className="size-5" />
                   </span>
-                  <h3 className="mt-5 text-lg font-bold text-deep">{w.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{w.body}</p>
+                  <div>
+                    <h3 className="text-base font-bold text-deep">{w.title}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{w.body}</p>
+                  </div>
                 </li>
               );
             })}
@@ -215,7 +222,7 @@ export default async function HomePage() {
 
       {/* 8. Customer reviews */}
       {reviews.length ? (
-      <section className="py-16 sm:py-20">
+      <section className="py-10 sm:py-14">
         <Container>
           <SectionHeading eyebrow={<L en="Happy little royals" ml="സന്തുഷ്ട കുഞ്ഞുങ്ങൾ" />} title={<L en="What parents say" ml="മാതാപിതാക്കൾ പറയുന്നത്" />} description={source === "preview" ? "Sample reviews shown in preview mode." : undefined} align="center" />
           <ul className="grid gap-4 md:grid-cols-3">
@@ -236,7 +243,7 @@ export default async function HomePage() {
       ) : null}
 
       {/* 9. Promotional banners */}
-      <section className="pb-16 sm:pb-20">
+      <section className="pb-10 sm:pb-14">
         <Container className="grid gap-4 md:grid-cols-2">
           <PromoBanner
             href="/categories/electric-jeeps-cars"
@@ -258,7 +265,7 @@ export default async function HomePage() {
       </section>
 
       {/* 10. Instagram */}
-      <section className="pb-16 sm:pb-20">
+      <section className="pb-10 sm:pb-14">
         <Container>
           <SectionHeading eyebrow="@kingday.official" title="Royal Moments" description="Real rides, real smiles, from our Instagram." align="center" />
           {instagram.length ? (
@@ -295,7 +302,7 @@ export default async function HomePage() {
       </section>
 
       {/* 11. Newsletter */}
-      <section className="pb-16 sm:pb-20">
+      <section className="pb-10 sm:pb-14">
         <Container>
           <div className="relative overflow-hidden rounded-3xl bg-royal px-6 py-12 text-center sm:px-12 sm:py-16">
             <div aria-hidden className="absolute -right-20 -bottom-28 size-80 rounded-full border border-gold/30" />

@@ -25,21 +25,21 @@ export function SectionHeading({
   tone?: "light" | "dark";
 }) {
   return (
-    <div className={cn("mb-8 flex flex-col gap-4 sm:mb-10", align === "center" ? "items-center text-center" : "sm:flex-row sm:items-end sm:justify-between")}>
+    <div className={cn("mb-5 flex flex-col gap-3 sm:mb-7", align === "center" ? "items-center text-center" : "flex-row items-end justify-between")}>
       <div className={cn(align === "center" && "max-w-2xl")}>
         {eyebrow ? (
-          <p className={cn("text-xs font-semibold tracking-[0.2em] uppercase", tone === "dark" ? "text-gold" : "text-gold-600")}>{eyebrow}</p>
+          <p className={cn("text-[0.7rem] font-semibold tracking-[0.18em] uppercase", tone === "dark" ? "text-gold" : "text-gold-600")}>{eyebrow}</p>
         ) : null}
-        <h2 className={cn("mt-2 text-2xl font-bold sm:text-[2rem] sm:leading-tight", tone === "dark" ? "text-white" : "text-deep")}>{title}</h2>
+        <h2 className={cn("mt-1 text-xl font-bold tracking-tight sm:text-[1.75rem] sm:leading-tight", tone === "dark" ? "text-white" : "text-deep")}>{title}</h2>
         {description ? (
-          <p className={cn("mt-2 text-sm sm:text-base", tone === "dark" ? "text-white/70" : "text-muted-foreground")}>{description}</p>
+          <p className={cn("mt-1.5 hidden text-sm sm:block", tone === "dark" ? "text-white/70" : "text-muted-foreground")}>{description}</p>
         ) : null}
       </div>
       {href ? (
         <Link
           href={href}
           className={cn(
-            "group inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline",
+            "group inline-flex shrink-0 items-center gap-1 pb-1 text-sm font-semibold underline-offset-4 hover:underline",
             tone === "dark" ? "text-gold" : "text-royal",
           )}
         >
