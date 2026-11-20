@@ -127,6 +127,8 @@ export const previewCatalog: StoreProduct[] = previewProducts
       option1Name: "Colour",
       option2Name: null,
       variantTypes: ["Colour"],
+      prepaidDiscountPct: 3,
+      codDiscountPct: 0,
       rating: Math.min(rating, 4.9),
       reviewCount: 6 + ((i * 13) % 40),
       ageRange: tpl.age,

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProductSkeleton } from "@/components/store/product/product-skeleton";
 import Link from "next/link";
-import { Banknote, RotateCcw, ShieldCheck, Truck, Wrench } from "lucide-react";
+import { Banknote, Check, ChevronDown, FileText, ListChecks, Package, RotateCcw, ShieldCheck, Sparkles, Star, Truck, Wrench } from "lucide-react";
 import { RecentlyViewed } from "@/components/store/product/recently-viewed";
 import { L } from "@/components/i18n/lang";
 import { Breadcrumbs } from "@/components/store/page-hero";
@@ -21,6 +21,7 @@ import {
   getRelatedProducts,
   getReviewsForProduct,
 } from "@/features/catalog/queries";
+import { getPublicPriceSettings } from "@/features/orders/checkout";
 import { formatDate } from "@/lib/format";
 
 export async function generateStaticParams() {
@@ -54,12 +55,15 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
-  const [reviews, related, source] = await Promise.all([
+  const [reviews, related, source, priceSettings] = await Promise.all([
     getReviewsForProduct(product.slug),
     getRelatedProducts(product, 4),
     getCatalogSource(),
+    getPublicPriceSettings(),
   ]);
   const isPreview = source === "preview";
+  const boxSpec = product.specs.find((s) => /in the box|box content|package content|included/i.test(s.label));
+  const warrantySpec = product.specs.find((s) => /warranty/i.test(s.label));
   const productUrl = `${siteConfig.url}/products/${product.slug}`;
   const waNumber = storeContact.whatsapp.replace(/\D/g, "") || null;
 
@@ -126,7 +130,63 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 fallbackImage={product.sharedImages[0]?.src ?? product.images[0]?.src ?? null}
                 whatsappNumber={waNumber}
                 productUrl={productUrl}
+                prepaidPct={product.prepaidDiscountPct}
+                codPct={product.codDiscountPct}
+                settings={priceSettings}
               />
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3">
+              <InfoSection title={<L en="Product Description" ml="ഉൽപ്പന്ന വിവരണം" />} icon={FileText} open>
+                <div className="flex flex-col gap-3 leading-relaxed">
+                  {product.description.length ? product.description.map((p) => <p key={p}>{p}</p>) : <p>{product.shortDescription || "Details coming soon."}</p>}
+                </div>
+              </InfoSection>
+              {product.highlights.length ? (
+                <InfoSection title={<L en="Key Features" ml="പ്രധാന സവിശേഷതകൾ" />} icon={Sparkles}>
+                  <ul className="flex flex-col gap-2">
+                    {product.highlights.map((h) => (
+                      <li key={h} className="flex gap-2">
+                        <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-gold-600" /> {h}
+                      </li>
+                    ))}
+                  </ul>
+                </InfoSection>
+              ) : null}
+              <InfoSection title={<L en="Specifications" ml="സ്പെസിഫിക്കേഷനുകൾ" />} icon={ListChecks}>
+                <VariantSpecs specs={product.specs} categoryName={product.category.name} />
+              </InfoSection>
+              <InfoSection title={<L en="What's in the Box?" ml="ബോക്സിൽ എന്തൊക്കെ?" />} icon={Package}>
+                {boxSpec ? <p>{boxSpec.value}</p> : <p>1 × {product.name} with the standard accessories supplied by the brand. Message us on WhatsApp for the exact box contents.</p>}
+              </InfoSection>
+              <InfoSection title={<L en="Warranty & Service" ml="വാറന്റിയും സർവീസും" />} icon={ShieldCheck}>
+                <p>{warrantySpec ? warrantySpec.value : "Brand warranty as per the manufacturer's terms."}</p>
+                <p className="mt-2">
+                  After you buy, our BEST FIT team handles fitting, repairs and service.{" "}
+                  <Link href="/policies/warranty" className="font-semibold text-royal hover:underline">Warranty policy</Link> ·{" "}
+                  <Link href="/book-service" className="font-semibold text-royal hover:underline">Book a service</Link>
+                </p>
+              </InfoSection>
+              <InfoSection id="reviews" title={<L en="Customer Reviews" ml="ഉപഭോക്തൃ അഭിപ്രായങ്ങൾ" />} icon={Star} badge={product.reviewCount > 0 ? `${product.rating.toFixed(1)} ★ · ${product.reviewCount}` : undefined}>
+                {isPreview ? <p className="mb-2 text-xs">Sample reviews shown in preview mode.</p> : null}
+                {reviews.length ? (
+                  <ul className="flex flex-col gap-3">
+                    {reviews.map((r) => (
+                      <li key={r.id} className="rounded-xl border bg-white p-4">
+                        <Stars value={r.rating} />
+                        <p className="mt-2 font-heading font-semibold text-deep">{r.title}</p>
+                        <p className="mt-1 text-sm leading-relaxed">{r.body}</p>
+                        <p className="mt-2 text-xs">
+                          <span className="font-medium text-deep">{r.author}</span>
+                          {r.city ? ` · ${r.city}` : ""} · {formatDate(r.date)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p><L en="No reviews yet. Bought this? We'd love to hear from you." ml="ഇതുവരെ അഭിപ്രായങ്ങൾ ഇല്ല." /></p>
+                )}
+              </InfoSection>
             </div>
 
             <ul className="mt-8 grid gap-px overflow-hidden rounded-2xl border bg-border text-sm sm:grid-cols-2">
@@ -160,54 +220,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
           </div>
         </div>
 
-        {/* Details */}
-        <div className="mt-16 grid gap-12 lg:grid-cols-[1.4fr_1fr]">
-          <section aria-labelledby="desc-heading">
-            <h2 id="desc-heading" className="text-2xl font-bold text-deep"><L en="Product description" ml="ഉൽപ്പന്ന വിവരണം" /></h2>
-            <div className="mt-4 flex flex-col gap-4 text-base leading-relaxed text-muted-foreground">
-              {product.description.length ? product.description.map((p) => <p key={p}>{p}</p>) : <p>{product.shortDescription || "Details coming soon."}</p>}
-            </div>
-          </section>
-
-          <section aria-labelledby="spec-heading">
-            <h2 id="spec-heading" className="text-2xl font-bold text-deep"><L en="Specifications" ml="സവിശേഷതകൾ" /></h2>
-            <VariantSpecs specs={product.specs} categoryName={product.category.name} />
-          </section>
-        </div>
         </VariantSelectionProvider>
-
-        {/* Reviews */}
-        <section id="reviews" aria-labelledby="reviews-heading" className="mt-16 scroll-mt-28">
-          <div className="flex flex-col gap-6 rounded-3xl bg-royal-50/60 p-6 sm:flex-row sm:items-center sm:p-8">
-            <div>
-              <h2 id="reviews-heading" className="text-2xl font-bold text-deep"><L en="Customer reviews" ml="ഉപഭോക്തൃ അഭിപ്രായങ്ങൾ" /></h2>
-              {isPreview ? <p className="mt-1 text-xs text-muted-foreground">Sample reviews shown in preview mode.</p> : null}
-            </div>
-            {product.reviewCount > 0 ? (
-              <div className="flex items-center gap-4 sm:ml-auto">
-                <p className="font-heading text-5xl font-extrabold text-deep tabular">{product.rating.toFixed(1)}</p>
-                <div>
-                  <Stars value={product.rating} />
-                  <p className="mt-1 text-sm text-muted-foreground">{product.reviewCount} review{product.reviewCount === 1 ? "" : "s"}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground sm:ml-auto"><L en="No reviews yet." ml="ഇതുവരെ അഭിപ്രായങ്ങൾ ഇല്ല." /></p>
-            )}
-          </div>
-          <ul className="mt-6 grid gap-4 md:grid-cols-3">
-            {reviews.map((r) => (
-              <li key={r.id} className="rounded-2xl border p-6">
-                <Stars value={r.rating} />
-                <p className="mt-3 font-heading font-semibold text-deep">{r.title}</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{r.body}</p>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  <span className="font-medium text-deep">{r.author}</span>{r.city ? ` · ${r.city}` : ""} · {formatDate(r.date)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
 
         {/* Related */}
         {related.length ? (
@@ -227,5 +240,36 @@ export default function ProductPage(props: PageProps<"/products/[slug]">) {
     <Suspense fallback={<ProductSkeleton />}>
       <ProductContent params={props.params} />
     </Suspense>
+  );
+}
+
+/** An expandable product-information card (native <details>: works without JavaScript). */
+function InfoSection({
+  id,
+  title,
+  icon: Icon,
+  badge,
+  open = false,
+  children,
+}: {
+  id?: string;
+  title: React.ReactNode;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  badge?: string;
+  open?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details id={id} open={open} className="group scroll-mt-28 rounded-2xl border bg-white open:shadow-card">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 font-heading text-base font-semibold text-deep">
+        <span className="grid size-8 place-items-center rounded-lg bg-royal-50 text-royal">
+          <Icon aria-hidden className="size-4" />
+        </span>
+        {title}
+        {badge ? <span className="ml-1 rounded-full bg-gold-50 px-2 py-0.5 text-xs font-semibold text-gold-700">{badge}</span> : null}
+        <ChevronDown aria-hidden className="ml-auto size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t px-4 py-4 text-sm text-muted-foreground">{children}</div>
+    </details>
   );
 }

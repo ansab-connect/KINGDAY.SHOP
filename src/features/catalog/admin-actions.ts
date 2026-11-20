@@ -161,6 +161,11 @@ export async function saveProduct(input: unknown): Promise<ActionResult<{ id: st
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("save_product", { p: toSaveProductPayload(parsed.data) });
   if (error) return dbError(error, "product");
+  const { error: discountError } = await supabase
+    .from("products")
+    .update({ prepaid_discount_pct: parsed.data.prepaid_discount_pct, cod_discount_pct: parsed.data.cod_discount_pct })
+    .eq("id", data as string);
+  if (discountError) return dbError(discountError, "product");
 
   // Stock typed into the editor for saved variants: record the difference in the stock
   // ledger (same as an Inventory adjustment), measured against the live count.

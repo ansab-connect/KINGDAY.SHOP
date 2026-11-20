@@ -60,6 +60,8 @@ export function ProductEditor({
     description: product?.description ?? "",
     status: product?.status ?? "draft",
     is_featured: product?.is_featured ?? false,
+    prepaid_discount_pct: String(product?.prepaid_discount_pct ?? 0),
+    cod_discount_pct: String(product?.cod_discount_pct ?? 0),
     seo_title: product?.seo_title ?? "",
     seo_description: product?.seo_description ?? "",
     video_path: product?.video_path ?? null,
@@ -417,6 +419,12 @@ export function ProductEditor({
             onChange={(v) => setB("status", v as typeof basics.status)}
           />
           <SwitchField id="p-featured" label="Featured" description="Show on the homepage." checked={basics.is_featured} onChange={(v) => setB("is_featured", v)} />
+        </FormSection>
+        <FormSection title="Payment discounts" description="Taken off this product's price at checkout, by payment method. 0 = no discount.">
+          <div className="grid grid-cols-2 gap-3">
+            <TextField id="p-prepaid" label="Prepaid Discount (%)" placeholder="e.g. 3" maxLength={5} value={basics.prepaid_discount_pct} error={errors.prepaid_discount_pct} onChange={(v) => setB("prepaid_discount_pct", v.replace(/[^\d.]/g, ""))} />
+            <TextField id="p-cod" label="COD Discount (%)" placeholder="0" maxLength={5} value={basics.cod_discount_pct} error={errors.cod_discount_pct} onChange={(v) => setB("cod_discount_pct", v.replace(/[^\d.]/g, ""))} />
+          </div>
         </FormSection>
         <div className="flex gap-2">
           <button type="submit" disabled={pending} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-royal px-5 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-60">

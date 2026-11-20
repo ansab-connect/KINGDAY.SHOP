@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Banknote, CreditCard, Loader2, Lock, MapPin, Pencil, Plus, ShoppingBag, Zap } from "lucide-react";
@@ -8,12 +8,12 @@ import { AddressForm } from "@/components/store/account/account-forms";
 import { CartLine } from "@/components/store/cart-line";
 import { openRazorpayCheckout } from "@/components/store/checkout/razorpay-checkout";
 import { clearBuyNow, removeBuyNow, removeFromCart, setBuyNowQuantity, setCartQuantity, useBuyNow, useCart } from "@/features/cart/cart-store";
-import { placeOrderAction } from "@/features/orders/checkout-actions";
+import { placeOrderAction, quoteOrderAction, type OrderQuote } from "@/features/orders/checkout-actions";
 import type { Address } from "@/features/account/queries";
 import { formatPaise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Settings = { flatShipping: number; freeShippingAbove: number | null; codEnabled: boolean };
+type Settings = { flatShipping: number; freeShippingAbove: number | null; codEnabled: boolean; freeShippingPrepaid?: boolean };
 type Method = "razorpay" | "cod";
 
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined);
@@ -31,6 +31,7 @@ export function CheckoutView({
   onlineEnabled,
   testMode,
   mode = "cart",
+  initialMethod,
 }: {
   addresses: Address[];
   settings: Settings;
@@ -38,6 +39,8 @@ export function CheckoutView({
   onlineEnabled: boolean;
   testMode: boolean;
   mode?: "cart" | "buynow";
+  /** From the product page: Buy now (online) or Cash on delivery. */
+  initialMethod?: Method;
 }) {
   const router = useRouter();
   const cartItems = useCart();
@@ -54,13 +57,38 @@ export function CheckoutView({
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [method, setMethod] = useState<Method>(onlineEnabled ? "razorpay" : "cod");
+  const [method, setMethod] = useState<Method>(
+    initialMethod === "cod" && settings.codEnabled ? "cod" : onlineEnabled ? "razorpay" : "cod",
+  );
+  // Exact totals (discount by payment method, delivery) from the same database function as the order.
+  const [quote, setQuote] = useState<(OrderQuote & { sig: string }) | null>(null);
+  const quoteSig = `${method}|${items.map((i) => `${i.variantId}:${i.quantity}`).join(",")}`;
+  useEffect(() => {
+    if (!items.length) return;
+    let alive = true;
+    const t = window.setTimeout(() => {
+      quoteOrderAction({ items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), method })
+        .then((q) => {
+          if (alive && q) setQuote({ ...q, sig: quoteSig });
+        })
+        .catch(() => {});
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+    // quoteSig captures items and method.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteSig]);
   // One key per checkout attempt: a double click or network retry returns the same order.
   // A changed cart, address, method or note starts a new attempt.
   const attempt = useRef<{ sig: string; key: string | undefined } | null>(null);
 
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const shipping = settings.freeShippingAbove !== null && subtotal >= settings.freeShippingAbove ? 0 : settings.flatShipping;
+  const fresh = quote?.sig === quoteSig ? quote : null;
+  const shipping = fresh?.shipping ?? (method === "razorpay" && settings.freeShippingPrepaid ? 0 : settings.freeShippingAbove !== null && subtotal >= settings.freeShippingAbove ? 0 : settings.flatShipping);
+  const discount = fresh?.discount ?? 0;
+  const total = fresh?.total ?? subtotal - discount + shipping;
 
   if (items.length === 0) {
     return (
@@ -240,8 +268,11 @@ export function CheckoutView({
         </ul>
         <dl className="mt-2 flex flex-col gap-2 border-t pt-3 text-sm" aria-live="polite">
           <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal ({items.reduce((n, i) => n + i.quantity, 0)} item{items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"})</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
+          {discount ? (
+            <div className="flex justify-between text-success"><dt>{method === "razorpay" ? "Prepaid discount" : "COD discount"}</dt><dd className="tabular">−{formatPaise(discount)}</dd></div>
+          ) : null}
           <div className="flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular">{shipping ? formatPaise(shipping) : "Free"}</dd></div>
-          <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>{method === "razorpay" ? "Total to pay now" : "Total (pay on delivery)"}</dt><dd className="tabular">{formatPaise(subtotal + shipping)}</dd></div>
+          <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>{method === "razorpay" ? "Total to pay now" : "Total (pay on delivery)"}</dt><dd className="tabular">{formatPaise(total)}</dd></div>
         </dl>
         <p className="mt-3 text-xs text-muted-foreground">Ordering as {customer.name}{customer.code ? ` · ${customer.code}` : ""}. Prices are confirmed when you place the order.</p>
         {!addressId ? <p className="mt-3 text-xs text-warning">Add a delivery address to continue.</p> : null}
@@ -257,7 +288,7 @@ export function CheckoutView({
           className="mt-4 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3.5 text-sm font-bold tracking-wide text-deep uppercase hover:bg-gold-300 disabled:opacity-60"
         >
           {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
-          {pending ? (method === "razorpay" ? "Opening secure payment…" : "Placing order…") : method === "razorpay" ? <><Lock aria-hidden className="size-4" /> Pay {formatPaise(subtotal + shipping)}</> : "Place order"}
+          {pending ? (method === "razorpay" ? "Opening secure payment…" : "Placing order…") : method === "razorpay" ? <><Lock aria-hidden className="size-4" /> Pay {formatPaise(total)}</> : "Place order"}
         </button>
         {!settings.codEnabled && !onlineEnabled ? <p className="mt-2 text-xs text-danger">Cash on delivery is paused. Please order on WhatsApp from your cart.</p> : null}
       </aside>

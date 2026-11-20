@@ -29,6 +29,8 @@ type Raw = {
   option1_name: string | null;
   option2_name: string | null;
   variant_types: string[] | null;
+  prepaid_discount_pct: number | string | null;
+  cod_discount_pct: number | string | null;
   product_variants: {
     id: string; sku: string; name: string; options: Record<string, string> | null; mrp: number; price: number;
     option1: string | null; option2: string | null; specs: { name: string; value: string }[] | null;
@@ -48,7 +50,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .from("products")
       .select(
         `id, name, slug, short_description, description, highlights, age_range, video_path, is_featured,
-         seo_title, seo_description, published_at, created_at, option1_name, option2_name, variant_types,
+         seo_title, seo_description, published_at, created_at, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct,
          category:categories(slug, name, parent:parent_id(slug)),
          brand:brands(slug, name),
          product_variants(id, sku, name, options, option1, option2, specs, mrp, price, is_default, is_active, position, inventory(on_hand, reserved)),
@@ -143,6 +145,8 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
         option1Name: p.option1_name,
         option2Name: p.option1_name ? p.option2_name : null,
         variantTypes: types,
+        prepaidDiscountPct: Number(p.prepaid_discount_pct) || 0,
+        codDiscountPct: Number(p.cod_discount_pct) || 0,
         sharedImages,
         rating: agg ? Math.round((agg.sum / agg.count) * 10) / 10 : 0,
         reviewCount: agg?.count ?? 0,

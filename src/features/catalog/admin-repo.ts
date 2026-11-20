@@ -72,6 +72,8 @@ export type AdminProduct = {
   option2_name: string | null;
   /** Ordered variant types; the first is the main type. */
   variant_types: string[];
+  prepaid_discount_pct: number;
+  cod_discount_pct: number;
   variants: AdminVariant[];
   attributes: { name: string; value: string }[];
   images: AdminProductImage[];
@@ -188,7 +190,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
     .from("products")
     .select(
       `id, name, slug, category_id, brand_id, short_description, description, highlights, age_range, video_path,
-       status, is_featured, seo_title, seo_description, option1_name, option2_name, variant_types,
+       status, is_featured, seo_title, seo_description, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct,
        product_variants(id, sku, name, options, option1, option2, specs, mrp, price, weight_grams, is_default, is_active, position, inventory(on_hand, reserved)),
        product_attributes(name, value, position),
        product_images(id, storage_path, alt, position, variant_id)`,
@@ -207,6 +209,8 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
 
   return {
     ...d,
+    prepaid_discount_pct: Number(d.prepaid_discount_pct) || 0,
+    cod_discount_pct: Number(d.cod_discount_pct) || 0,
     video_url: publicStorageUrl("product-videos", d.video_path),
     variants: [...d.product_variants]
       .sort((a, b) => a.position - b.position)

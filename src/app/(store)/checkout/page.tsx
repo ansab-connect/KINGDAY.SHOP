@@ -13,9 +13,9 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Checkout", robots: { index: false } };
 
-async function Checkout({ buyNow }: { buyNow: boolean }) {
+async function Checkout({ buyNow, pay }: { buyNow: boolean; pay?: "razorpay" | "cod" }) {
   if (!isSupabaseConfigured) return <p className="text-sm text-muted-foreground">Online ordering opens soon. Please order on WhatsApp from your cart.</p>;
-  const user = await requireUser(buyNow ? "/checkout?buy=1" : "/checkout");
+  const user = await requireUser(buyNow ? `/checkout?buy=1${pay ? `&pay=${pay === "cod" ? "cod" : "online"}` : ""}` : "/checkout");
   const supabase = await createClient();
   const [addresses, settings, { data: profile }] = await Promise.all([
     getAddresses(),
@@ -33,12 +33,14 @@ async function Checkout({ buyNow }: { buyNow: boolean }) {
       onlineEnabled={rzp !== null}
       testMode={rzp?.mode === "test"}
       mode={buyNow ? "buynow" : "cart"}
+      initialMethod={pay}
     />
   );
 }
 
 async function CheckoutFromParams({ searchParams }: { searchParams: PageProps<"/checkout">["searchParams"] }) {
-  return <Checkout buyNow={(await searchParams).buy === "1"} />;
+  const q = await searchParams;
+  return <Checkout buyNow={q.buy === "1"} pay={q.pay === "cod" ? "cod" : q.pay === "online" ? "razorpay" : undefined} />;
 }
 
 export default function CheckoutPage(props: PageProps<"/checkout">) {

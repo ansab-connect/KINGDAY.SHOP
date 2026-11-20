@@ -181,3 +181,21 @@ export async function reportRazorpayFailureAction(raw: unknown): Promise<{ order
   }
   return { orderNumber: order.order_number };
 }
+
+export type OrderQuote = { subtotal: number; discount: number; shipping: number; total: number };
+
+/** Exact totals from the database (same function place_order uses), for checkout to show. */
+export async function quoteOrderAction(raw: unknown): Promise<OrderQuote | null> {
+  if (!isSupabaseConfigured) return null;
+  const parsed = z
+    .object({ items: z.array(z.object({ variantId: z.string().uuid(), quantity: z.number().int().min(1).max(50) })).min(1).max(30), method: z.enum(["razorpay", "cod"]) })
+    .safeParse(raw);
+  if (!parsed.success) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("price_order", {
+    p: { items: parsed.data.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity })), payment_method: parsed.data.method },
+  });
+  const row = (data as { subtotal: number; discount_total: number; shipping_total: number; grand_total: number }[] | null)?.[0];
+  if (error || !row) return null;
+  return { subtotal: row.subtotal, discount: row.discount_total, shipping: row.shipping_total, total: row.grand_total };
+}

@@ -1453,5 +1453,33 @@ await test("billing: technician drafts, customer sees it only after approval, pa
   await expectError(`select public.service_dashboard_stats()`, [], /not authorized/i);
 });
 
+console.log("Prepaid / COD discounts (0032)");
+await test("discounts: prepaid % off and free delivery online, COD % separate, totals stored", async () => {
+  await asSuperuser();
+  const [v] = await rows(
+    `select v.id, v.price, v.product_id from public.product_variants v join public.products p on p.id = v.product_id
+      where v.is_active and p.status = 'active' order by v.sku desc limit 1`,
+  );
+  await db.query(`update public.products set prepaid_discount_pct = 3, cod_discount_pct = 1.5 where id = $1`, [v.product_id]);
+  await db.query(`update public.inventory set on_hand = 20, reserved = 0 where variant_id = $1`, [v.id]);
+  await db.query(`update public.store_settings set value = '9900' where key = 'shipping.flat_rate'`);
+  await db.query(`update public.store_settings set value = 'null' where key = 'shipping.free_shipping_threshold'`);
+  const items = [{ variant_id: v.id, quantity: 3 }];
+  await anon();
+  const [on] = await rows(`select * from public.price_order($1::jsonb)`, [JSON.stringify({ items, payment_method: "razorpay" })]);
+  const [cod] = await rows(`select * from public.price_order($1::jsonb)`, [JSON.stringify({ items, payment_method: "cod" })]);
+  const sub = v.price * 3;
+  assert(on.subtotal === sub && on.discount_total === Math.round(sub * 0.03) && on.shipping_total === 0, JSON.stringify(on));
+  assert(on.grand_total === sub - on.discount_total, "online total");
+  assert(cod.discount_total === Math.round(sub * 0.015) && cod.shipping_total === 9900 && cod.grand_total === sub - cod.discount_total + 9900, JSON.stringify(cod));
+  await user(alice);
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [JSON.stringify({ items, address_id: aliceAddr, payment_method: "razorpay", checkout_key: "00000000-0000-4000-8000-000000000321" })]);
+  assert(o.grand_total === on.grand_total, `order ${o.grand_total} != quote ${on.grand_total}`);
+  await asSuperuser();
+  const [row] = await rows(`select subtotal, discount_total, shipping_total, grand_total from public.orders where id = $1`, [o.order_id]);
+  assert(row.discount_total === on.discount_total && row.shipping_total === 0 && row.grand_total === on.grand_total, JSON.stringify(row));
+  await db.query(`update public.store_settings set value = '0' where key = 'shipping.flat_rate'`);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

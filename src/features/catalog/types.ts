@@ -45,6 +45,9 @@ export type StoreProduct = {
   option2Name: string | null;
   /** Ordered variant types (first = main), e.g. ["Wheel Size", "Colour", "Speed Type"]. Empty = simple list. */
   variantTypes: string[];
+  /** % off when paid online (Razorpay) and for cash on delivery. Applied by the database at checkout. */
+  prepaidDiscountPct: number;
+  codDiscountPct: number;
   /** Images not tied to a variant (used when a variant has none of its own). */
   sharedImages: ProductImage[];
   rating: number;

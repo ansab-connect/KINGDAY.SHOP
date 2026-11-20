@@ -8,6 +8,8 @@ export type WhatsAppOrder = {
   variant: string | null;
   quantity: number;
   url: string;
+  /** Amount payable for this order in paise (incl. delivery), when known. */
+  total?: number;
 };
 
 /** Pre-filled BUY NOW message for a product order on WhatsApp. */
@@ -20,6 +22,7 @@ export function buildWhatsAppOrderMessage(o: WhatsAppOrder): string {
     `Price: ${formatPaise(o.price)}`,
     ...(o.variant ? [`Variant: ${o.variant}`] : []),
     `Quantity: ${o.quantity}`,
+    ...(o.total !== undefined ? [`Amount payable: ${formatPaise(o.total)} (incl. delivery)`] : []),
     `Link: ${o.url}`,
   ].join("\n");
 }

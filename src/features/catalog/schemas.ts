@@ -175,6 +175,9 @@ export const productInputSchema = z
     video_path: optionalText(300),
     status: z.enum(PRODUCT_STATUSES).default("draft"),
     is_featured: z.boolean().default(false),
+    /** % off when paid online / cash on delivery (0–50). Applied by the database at checkout. */
+    prepaid_discount_pct: z.coerce.number().min(0, "Use 0–50%.").max(50, "Use 0–50%.").multipleOf(0.01).default(0),
+    cod_discount_pct: z.coerce.number().min(0, "Use 0–50%.").max(50, "Use 0–50%.").multipleOf(0.01).default(0),
     seo_title: optionalText(70),
     seo_description: optionalText(170),
     /** Main variant type, e.g. "Size". Empty = simple variants. */

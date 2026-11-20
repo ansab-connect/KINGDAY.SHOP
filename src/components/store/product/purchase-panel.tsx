@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Mail, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
+import { Banknote, CheckCircle2, Mail, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { Price } from "@/components/store/price";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
@@ -11,6 +11,7 @@ import { WishlistButton } from "@/components/store/wishlist-button";
 import { useVariantSelection } from "@/components/store/product/variant-selection";
 import { OFFICIAL_WHATSAPP, supportMailto, whatsappLink } from "@/config/storefront";
 import { addToCart, startBuyNow } from "@/features/cart/cart-store";
+import { estimateTotals, type PriceSettings } from "@/features/orders/pricing";
 import { whatsappOrderUrl } from "@/lib/whatsapp";
 import { formatPaise } from "@/lib/format";
 import type { StoreVariant } from "@/features/catalog/types";
@@ -28,6 +29,10 @@ type Props = {
   /** Digits-only WhatsApp number, or null when not configured. */
   whatsappNumber: string | null;
   productUrl: string;
+  /** % off when paid online / cash on delivery (set per product in admin). */
+  prepaidPct: number;
+  codPct: number;
+  settings: PriceSettings & { codEnabled: boolean };
 };
 
 /**
@@ -35,11 +40,21 @@ type Props = {
  * a pre-filled order message; the cart is kept in the browser. Prices shown are
  * display-only: online checkout (Phase 8) re-reads them from the database.
  */
-export function PurchasePanel({ productId, name, shortDescription, variantTypes, fallbackImage = null, whatsappNumber, productUrl }: Props) {
+export function PurchasePanel({ productId, name, shortDescription, variantTypes, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings }: Props) {
   const { variants, variant, select } = useVariantSelection();
   const [qty, setQty] = useState(1);
   const [notice, setNotice] = useState(false);
   const router = useRouter();
+  const buyRef = useRef<HTMLButtonElement>(null);
+  const [buyVisible, setBuyVisible] = useState(true);
+  useEffect(() => {
+    const el = buyRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    // Hidden only once the main button has scrolled up out of view.
+    const io = new IntersectionObserver(([e]) => setBuyVisible(e.isIntersecting || e.boundingClientRect.top > 0));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   const out = variant.stock <= 0;
   const maxQty = Math.max(1, Math.min(variant.stock, 5));
   const choose = (id: string) => {
@@ -77,6 +92,13 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
     if (next) choose(next.id);
   };
 
+  const prepaid = estimateTotals(variant.price, qty, prepaidPct, true, settings);
+  const cod = estimateTotals(variant.price, qty, codPct, false, settings);
+  // Both go to checkout with only this product; the payment method is pre-selected there.
+  const buy = (pay: "online" | "cod") => {
+    startBuyNow(lineItem, qty);
+    router.push(`/checkout?buy=1&pay=${pay}`);
+  };
   const waOrder = {
     name,
     sku: variant.sku,
@@ -84,6 +106,7 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
     variant: variantLabel,
     quantity: qty,
     url: productUrl,
+    total: cod.total,
   };
   const buyHref = whatsappOrderUrl(whatsappNumber ?? OFFICIAL_WHATSAPP, waOrder);
   const enquireHref = whatsappLink(`Hi KING DAY, I have a question about ${name} ${productUrl}`);
@@ -149,7 +172,7 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
       ) : null}
 
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex h-12 items-center rounded-full border">
+        <div className="flex h-12 items-center rounded-full border bg-white">
           <button type="button" aria-label="Decrease quantity" disabled={qty <= 1 || out} onClick={() => setQty((q) => q - 1)} className="grid size-12 place-items-center rounded-full text-deep hover:bg-muted disabled:opacity-40">
             <Minus className="size-4" />
           </button>
@@ -163,18 +186,62 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
         </p>
       </div>
 
-      <button
-        type="button"
-        disabled={out}
-        onClick={() => {
-          // Checkout shows exactly this product at this quantity; the cart is not touched.
-          startBuyNow(lineItem, qty);
-          router.push("/checkout?buy=1");
-        }}
-        className="inline-flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full bg-gold px-6 py-4 text-base font-bold tracking-wide text-deep uppercase shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] transition-colors hover:bg-gold-300 focus-visible:ring-2 focus-visible:ring-royal focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Zap aria-hidden className="size-5" /> <L en="Buy now" ml="ഇപ്പോൾ വാങ്ങൂ" />
-      </button>
+      {!out ? (
+        <dl className="rounded-2xl border border-royal-100 bg-royal-50/40 p-4 text-sm" aria-live="polite" aria-label="Price if you pay online">
+          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal ({qty} item{qty === 1 ? "" : "s"})</dt><dd className="tabular">{formatPaise(prepaid.subtotal)}</dd></div>
+          {prepaid.discount ? (
+            <div className="mt-1.5 flex justify-between text-success"><dt>Prepaid discount ({prepaidPct}%)</dt><dd className="tabular">−{formatPaise(prepaid.discount)}</dd></div>
+          ) : null}
+          <div className="mt-1.5 flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular">{prepaid.shipping ? formatPaise(prepaid.shipping) : <span className="font-semibold text-success">Free</span>}</dd></div>
+          <div className="mt-2 flex justify-between border-t border-royal-100 pt-2 text-base font-bold text-deep"><dt>You pay online</dt><dd className="tabular">{formatPaise(prepaid.total)}</dd></div>
+        </dl>
+      ) : null}
+
+      <div className="flex flex-col gap-3">
+        <button
+          ref={buyRef}
+          type="button"
+          disabled={out}
+          onClick={() => buy("online")}
+          className="flex min-h-16 w-full flex-col items-center justify-center rounded-2xl bg-royal px-6 py-3 text-white shadow-[0_14px_34px_-14px_rgb(75_0_130/0.8)] ring-2 ring-gold/70 transition-colors hover:bg-royal-800 focus-visible:ring-4 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span className="flex items-center gap-2 text-base font-extrabold tracking-wide uppercase">
+            <Zap aria-hidden className="size-5 text-gold" /> <L en="Buy now" ml="ഇപ്പോൾ വാങ്ങൂ" /> · <span className="text-gold tabular">{formatPaise(prepaid.total)}</span>
+          </span>
+          <span className="mt-0.5 text-xs text-white/80">
+            {[prepaid.discount ? `Save ${formatPaise(prepaid.discount)}` : null, prepaid.shipping ? null : "Free delivery", "UPI · Cards · Net banking"].filter(Boolean).join(" · ")}
+          </span>
+        </button>
+
+        {settings.codEnabled ? (
+          <button
+            type="button"
+            disabled={out}
+            onClick={() => buy("cod")}
+            className="flex min-h-14 w-full flex-col items-center justify-center rounded-2xl border-2 border-royal bg-white px-6 py-2.5 text-royal transition-colors hover:bg-royal-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="flex items-center gap-2 text-sm font-bold tracking-wide uppercase">
+              <Banknote aria-hidden className="size-4" /> <L en="Cash on delivery" ml="ക്യാഷ് ഓൺ ഡെലിവറി" /> · <span className="tabular">{formatPaise(cod.total)}</span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {cod.shipping ? `Incl. ${formatPaise(cod.shipping)} delivery` : "Free delivery"}
+              {cod.discount ? ` · Save ${formatPaise(cod.discount)}` : ""}
+            </span>
+          </button>
+        ) : null}
+
+        {!out ? (
+          <a
+            href={buyHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="whatsapp-buy-now"
+            className="inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-6 text-sm font-bold text-white hover:bg-[#1fb857]"
+          >
+            <WhatsAppIcon className="size-5" /> <L en="Order on WhatsApp" ml="WhatsApp-ൽ ഓർഡർ" />
+          </a>
+        ) : null}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <button
@@ -184,7 +251,7 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
             addToCart(lineItem, qty);
             setNotice(true);
           }}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-royal px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgb(75_0_130/0.6)] transition-colors hover:bg-royal-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-full border px-6 text-sm font-semibold text-deep transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ShoppingBag aria-hidden className="size-4" /> <L en="Add to cart" ml="കാർട്ടിൽ ചേർക്കുക" />
         </button>
@@ -200,26 +267,25 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        {!out ? (
-          <a
-            href={buyHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="whatsapp-buy-now"
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#25D366] px-5 text-sm font-semibold text-white hover:bg-[#1fb857]"
-          >
-            <WhatsAppIcon className="size-4" /> <L en="Order on WhatsApp" ml="WhatsApp-ൽ ഓർഡർ" />
-          </a>
-        ) : null}
         {enquireHref ? (
-          <a href={enquireHref} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-5 text-sm font-semibold text-[#128C7E] hover:bg-[#25D366]/15">
+          <a href={enquireHref} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-2 rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-4 text-sm font-semibold text-[#128C7E] hover:bg-[#25D366]/15">
             <MessageCircle aria-hidden className="size-4" /> <L en="Ask a question" ml="ചോദ്യം ചോദിക്കുക" />
           </a>
         ) : null}
-        <a href={supportMailto(`Enquiry: ${name}`)} className="inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
+        <a href={supportMailto(`Enquiry: ${name}`)} className="inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold text-deep hover:bg-muted">
           <Mail aria-hidden className="size-4" /> <L en="Email support" ml="ഇമെയിൽ സഹായം" />
         </a>
       </div>
+
+      {/* Sticky mobile Buy Now (above the bottom menu) once the main button scrolls away. */}
+      {!out && !buyVisible ? (
+        <div className="fixed inset-x-0 bottom-[4.25rem] z-40 border-t bg-white/95 px-4 py-2.5 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.25)] backdrop-blur lg:hidden">
+          <button type="button" onClick={() => buy("online")} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-royal text-sm font-extrabold tracking-wide text-white uppercase ring-2 ring-gold/70">
+            <Zap aria-hidden className="size-4 text-gold" /> Buy now · <span className="text-gold tabular">{formatPaise(prepaid.total)}</span>
+            {prepaid.discount ? <span className="rounded-full bg-gold px-2 py-0.5 text-[0.65rem] text-deep normal-case">Save {formatPaise(prepaid.discount)}</span> : null}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
