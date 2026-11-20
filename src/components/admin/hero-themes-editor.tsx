@@ -71,7 +71,7 @@ export function HeroThemesEditor({ initial }: { initial: HeroThemesValue }) {
 
             {preview === t.id ? (
               <div className="px-3 pb-3">
-                <HeroStage theme={{ ...t, sceneUrls: t.scenes.map((s) => publicStorageUrl("category-images", s.image_path)) }} characters={[]} className="h-64 w-full max-w-xl bg-deep sm:h-80" />
+                <HeroStage theme={{ ...t, sceneUrls: t.scenes.map((s) => publicStorageUrl("category-images", s.image_path)) }} characters={[]} className="h-64 w-full max-w-xl rounded-2xl bg-deep sm:h-80" />
               </div>
             ) : null}
 

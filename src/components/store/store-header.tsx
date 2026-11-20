@@ -9,6 +9,7 @@ import { InstallAppButton } from "@/components/pwa/install-app";
 import { L } from "@/components/i18n/lang";
 import { LanguageSwitcher, useLang } from "@/components/i18n/language-switcher";
 import { Button } from "@/components/ui/button";
+import { CartCount } from "@/components/store/cart-toast";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { storeNav } from "@/config/storefront";
 import { cn } from "@/lib/utils";
@@ -126,8 +127,9 @@ export function StoreHeader() {
           </Button>
           {actions.map((a) => (
             <Button key={a.href} variant="ghost" size="icon" className={a.href === "/cart" ? "" : "hidden sm:inline-flex"} asChild>
-              <Link href={a.href} aria-label={ml ? a.ml : a.en} aria-current={isActive(pathname, a.href) ? "page" : undefined}>
+              <Link href={a.href} aria-label={ml ? a.ml : a.en} aria-current={isActive(pathname, a.href) ? "page" : undefined} className="relative">
                 <a.icon />
+                {a.href === "/cart" ? <CartCount /> : null}
               </Link>
             </Button>
           ))}

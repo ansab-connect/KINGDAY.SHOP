@@ -82,12 +82,16 @@ export function useCart(): CartItem[] {
   return cart.use();
 }
 
+/** Fired after Add to cart; the mini-cart (CartToast) listens for it. */
+export const CART_ADDED_EVENT = "kingday:cart-added";
+
 export function addToCart(item: Omit<CartItem, "quantity">, quantity: number) {
   const items = [...cart.read()];
   const i = items.findIndex((x) => x.variantId === item.variantId);
   if (i >= 0) items[i] = { ...items[i], ...item, image: item.image ?? items[i].image, quantity: clampQty(items[i].quantity + quantity, item.maxQty) };
   else items.push({ ...item, quantity: clampQty(quantity, item.maxQty) });
   cart.write(items);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CART_ADDED_EVENT, { detail: { variantId: item.variantId } }));
 }
 
 export const setCartQuantity = cart.setQuantity;

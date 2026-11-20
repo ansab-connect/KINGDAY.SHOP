@@ -1,6 +1,7 @@
 import { L } from "@/components/i18n/lang";
 import { InstallBanner } from "@/components/pwa/install-app";
 import { CartSync } from "@/components/store/cart-sync";
+import { CartToast } from "@/components/store/cart-toast";
 import { MobileTabBar } from "@/components/store/mobile-tab-bar";
 import { StoreFooter } from "@/components/store/store-footer";
 import { StoreHeader } from "@/components/store/store-header";
@@ -28,6 +29,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       <StoreFooter />
       {isSupabaseConfigured ? <CartSync /> : null}
       <MobileTabBar />
+      <CartToast />
       {isGeminiConfigured() ? <AiChat /> : null}
       <InstallBanner />
     </div>

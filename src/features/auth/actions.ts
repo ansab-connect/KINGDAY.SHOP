@@ -119,6 +119,9 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   };
   const parsed = signUpSchema.safeParse({ ...values, email: values.email.trim(), password: formData.get("password") });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values };
+  if (formData.get("confirm") !== null && formData.get("confirm") !== formData.get("password")) {
+    return { fieldErrors: { confirm: "Passwords don't match." }, values };
+  }
   const mobile = normalizeMobile(parsed.data.mobile);
   if (!mobile) return { fieldErrors: { mobile: "Enter a valid mobile number." }, values };
 

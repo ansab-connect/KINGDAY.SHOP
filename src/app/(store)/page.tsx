@@ -49,54 +49,35 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* 1. Hero */}
-      <section className="relative overflow-hidden bg-deep text-white">
-        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(60%_80%_at_85%_30%,rgb(109_38_168/0.45),transparent_70%)]" />
-        <Container className="relative grid items-center gap-10 py-7 sm:py-16 lg:grid-cols-[1.1fr_1fr] lg:py-24">
-          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
-            <p className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-semibold tracking-[0.16em] text-gold uppercase">
-              <L en="Premium kids' rides" ml="കുട്ടികൾക്കുള്ള പ്രീമിയം റൈഡുകൾ" />
-            </p>
-            <h1 className="mt-3 text-[1.85rem] leading-[1.1] font-extrabold sm:mt-6 sm:text-5xl lg:text-6xl">
-              <L en={<>Every child deserves a <span className="text-gold">royal ride.</span></>} ml={<span className="block text-[0.72em] leading-tight">ഓരോ കുഞ്ഞിനും ഒരു <span className="text-gold">രാജകീയ യാത്ര.</span></span>} />
+      {/* 1. Hero: animated scenes with King, Mia and the customer's characters */}
+      <section className="bg-deep text-white">
+        <HeroStage theme={heroTheme} className="h-[21rem] w-full sm:h-[27rem] lg:h-[32rem]">
+          <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-deep/80 via-deep/40 to-transparent px-4 pt-5 pb-10 text-center sm:pt-8">
+            <h1 className="text-[1.7rem] leading-[1.1] font-extrabold drop-shadow-[0_2px_6px_rgb(0_0_0/0.5)] sm:text-5xl lg:text-6xl">
+              <L en={<>Every Child Deserves a <span className="text-gold">Royal Ride.</span></>} ml={<span className="block text-[0.72em] leading-tight">ഓരോ കുഞ്ഞിനും ഒരു <span className="text-gold">രാജകീയ യാത്ര.</span></span>} />
             </h1>
-            <p className="mt-3 hidden max-w-lg text-base leading-relaxed text-white/70 sm:mt-5 sm:block sm:text-lg">
-              <L en="Electric jeeps, bikes, scooters and more, chosen for safety, built to last and finished like royalty." ml="ഇലക്ട്രിക് ജീപ്പുകൾ, ബൈക്കുകൾ, സ്കൂട്ടറുകൾ എന്നിവയും മറ്റും. സുരക്ഷയ്ക്കായി തിരഞ്ഞെടുത്തത്, ദീർഘകാലം നിലനിൽക്കുന്നത്." />
-            </p>
-            <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-8 sm:flex sm:flex-wrap sm:gap-3">
-              <Link
-                href="/shop"
-                className="group inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gold px-4 text-sm font-semibold sm:h-12 sm:px-7 text-deep shadow-[0_10px_30px_-10px_rgb(212_175_55/0.7)] transition-all hover:bg-gold-300 focus-visible:ring-3 focus-visible:ring-gold/40 focus-visible:outline-none"
-              >
-                <L en="Shop the collection" ml="കളക്ഷൻ കാണുക" />
-                <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/book-service"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/25 px-4 text-sm font-semibold text-white sm:h-12 sm:px-7 transition-colors hover:border-white hover:bg-white/5"
-              >
-                <Wrench aria-hidden className="size-4 text-gold" />
-                <L en="Book Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
-              </Link>
-            </div>
-            <ul className="mt-10 hidden flex-wrap gap-x-6 gap-y-3 text-sm text-white/70 sm:flex">
-              {[
-                ["Safety-checked rides", "സുരക്ഷ ഉറപ്പാക്കിയ റൈഡുകൾ"],
-                ["Cash on delivery", "ക്യാഷ് ഓൺ ഡെലിവറി"],
-                ["WhatsApp support", "WhatsApp സഹായം"],
-              ].map(([en, ml]) => (
-                <li key={en} className="flex items-center gap-2">
-                  <Check aria-hidden className="size-4 text-gold" /> <L en={en} ml={ml} />
-                </li>
-              ))}
-            </ul>
           </div>
-          <HeroStage theme={heroTheme} className="h-60 w-full sm:h-80 lg:h-auto lg:aspect-[5/4]" />
+        </HeroStage>
+        <Container className="grid grid-cols-2 gap-2 py-4 sm:flex sm:justify-center sm:gap-3 sm:py-5">
+          <Link
+            href="/shop"
+            className="group inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gold px-4 text-sm font-semibold text-deep shadow-[0_10px_30px_-10px_rgb(212_175_55/0.7)] transition-all hover:bg-gold-300 focus-visible:ring-3 focus-visible:ring-gold/40 focus-visible:outline-none sm:h-12 sm:px-7"
+          >
+            <L en="Shop the collection" ml="കളക്ഷൻ കാണുക" />
+            <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+          <Link
+            href="/book-service"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/25 px-4 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/5 sm:h-12 sm:px-7"
+          >
+            <Wrench aria-hidden className="size-4 text-gold" />
+            <L en="Book Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
+          </Link>
         </Container>
       </section>
 
       {/* 2. Featured categories */}
-      <section className="py-6 sm:py-16 lg:py-20">
+      <section className="py-6 sm:py-12 lg:py-16">
         <Container>
           <SectionHeading eyebrow={<L en="Shop by category" ml="വിഭാഗം അനുസരിച്ച്" />} title={<L en="Find the perfect ride" ml="മികച്ച റൈഡ് കണ്ടെത്തൂ" />} href="/categories" linkLabel={<L en="All categories" ml="എല്ലാ വിഭാഗങ്ങളും" />} />
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">

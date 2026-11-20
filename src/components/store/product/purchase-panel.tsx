@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Banknote, CheckCircle2, Mail, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
+import { Banknote, Mail, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { Price } from "@/components/store/price";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
@@ -43,7 +42,6 @@ type Props = {
 export function PurchasePanel({ productId, name, shortDescription, variantTypes, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings }: Props) {
   const { variants, variant, select } = useVariantSelection();
   const [qty, setQty] = useState(1);
-  const [notice, setNotice] = useState(false);
   const router = useRouter();
   const buyRef = useRef<HTMLButtonElement>(null);
   const [buyVisible, setBuyVisible] = useState(true);
@@ -60,7 +58,6 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
   const choose = (id: string) => {
     select(id);
     setQty(1);
-    setNotice(false);
   };
   const variantLabel = variants.length > 1 && variant.name !== "Default" ? variant.name : null;
   const lineItem = {
@@ -249,7 +246,6 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
           disabled={out}
           onClick={() => {
             addToCart(lineItem, qty);
-            setNotice(true);
           }}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-full border px-6 text-sm font-semibold text-deep transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -258,13 +254,6 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
         <WishlistButton productId={productId} />
       </div>
 
-      {notice ? (
-        <p role="status" className="flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-4 py-3 text-sm text-success">
-          <CheckCircle2 aria-hidden className="size-4 shrink-0" />
-          <L en="Added to your cart." ml="കാർട്ടിൽ ചേർത്തു." />
-          <Link href="/cart" className="font-semibold underline underline-offset-2"><L en="View cart" ml="കാർട്ട് കാണുക" /></Link>
-        </p>
-      ) : null}
 
       <div className="flex flex-wrap gap-3">
         {enquireHref ? (

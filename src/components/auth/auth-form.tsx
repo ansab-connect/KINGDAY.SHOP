@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { useActionState, useState } from "react";
+import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import type { AuthFormState } from "@/features/auth/actions";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,7 @@ export function AuthForm({
   tone?: "light" | "dark";
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  const [shown, setShown] = useState<Record<string, boolean>>({});
 
   if (state.message) {
     return (
@@ -62,10 +63,11 @@ export function AuthForm({
             <label htmlFor={id} className={cn("text-sm font-medium", tone === "dark" ? "text-white" : "text-deep")}>
               {f.label}
             </label>
+            <div className="relative">
             <input
               id={id}
               name={f.name}
-              type={f.type}
+              type={f.type === "password" && shown[f.name] ? "text" : f.type}
               autoComplete={f.autoComplete}
               required={!f.optional}
               inputMode={f.inputMode}
@@ -73,10 +75,23 @@ export function AuthForm({
               aria-invalid={Boolean(err)}
               aria-describedby={err ? `${id}-error` : f.hint ? `${id}-hint` : undefined}
               className={cn(
-                "h-12 rounded-xl border bg-white px-4 text-sm text-deep outline-none transition-colors focus:border-royal-300 focus:ring-3 focus:ring-royal-100",
+                "h-12 w-full rounded-xl border bg-white px-4 text-base text-deep outline-none transition-colors focus:border-royal-300 focus:ring-3 focus:ring-royal-100 sm:text-sm",
+                f.type === "password" && "pr-12",
                 err ? "border-danger" : "border-input",
               )}
             />
+            {f.type === "password" ? (
+              <button
+                type="button"
+                onClick={() => setShown((s) => ({ ...s, [f.name]: !s[f.name] }))}
+                aria-label={shown[f.name] ? "Hide password" : "Show password"}
+                aria-pressed={Boolean(shown[f.name])}
+                className="absolute inset-y-0 right-1 grid w-11 place-items-center rounded-lg text-muted-foreground hover:text-deep"
+              >
+                {shown[f.name] ? <EyeOff aria-hidden className="size-4" /> : <Eye aria-hidden className="size-4" />}
+              </button>
+            ) : null}
+            </div>
             {err ? (
               <p id={`${id}-error`} className="text-xs text-danger">{err}</p>
             ) : f.hint ? (

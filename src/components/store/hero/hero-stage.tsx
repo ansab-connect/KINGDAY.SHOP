@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { CharacterPopup } from "@/components/store/hero/character-popup";
 import { HeroActions } from "@/components/store/hero/hero-actions";
+import { SpeechPopup } from "@/components/store/hero/speech-popup";
 import { Walkers } from "@/components/store/hero/walkers";
 import { Kid } from "@/components/store/hero/kid";
 import {
@@ -23,6 +24,8 @@ type Props = {
   /** Preview: show these instead of the signed-in customer's characters. */
   characters?: CustomerCharacter[];
   className?: string;
+  /** Overlay (e.g. the headline) drawn above the scene. */
+  children?: React.ReactNode;
 };
 
 const SCENE_MS = 3500;
@@ -37,7 +40,7 @@ const OFFICIAL: Record<string, { src: string; height: string }> = {
  * King, Mia and the customer's own characters. Pure CSS/SVG; uploaded banners load as images,
  * and fall back to the drawn scene if they fail.
  */
-export function HeroStage({ theme, characters, className }: Props) {
+export function HeroStage({ theme, characters, className, children }: Props) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
   const [mine, setMine] = useState<CustomerCharacter[] | null>(characters ?? null);
@@ -67,7 +70,7 @@ export function HeroStage({ theme, characters, className }: Props) {
   const cast = [KING, MIA, ...(mine ?? [])];
 
   return (
-    <div className={cn("relative isolate overflow-hidden rounded-3xl ring-1 ring-white/15", className)}>
+    <div className={cn("relative isolate overflow-hidden", className)}>
       {theme.scenes.map((scene, i) => {
         const url = theme.sceneUrls[i];
         return (
@@ -83,7 +86,8 @@ export function HeroStage({ theme, characters, className }: Props) {
       })}
       <Effects effect={theme.effect} accent={theme.accent} />
 
-      <div className="absolute inset-x-0 bottom-0 flex h-[78%] items-end justify-center gap-1 px-3 pb-3 sm:gap-3">
+      {children}
+      <div className="absolute inset-x-0 bottom-0 flex h-[60%] items-end justify-center gap-1 px-3 pb-3 sm:gap-3">
         {cast.map((c, i) =>
           OFFICIAL[c.id] ? (
             <figure key={c.id} className={cn("kd-bob relative flex flex-col items-center", OFFICIAL[c.id].height, cast.length > 3 ? "max-w-[24%]" : "max-w-[34%]")} style={{ animationDelay: `${i * 0.6}s` }}>
@@ -109,6 +113,7 @@ export function HeroStage({ theme, characters, className }: Props) {
       {!characters ? (
         <>
           <HeroActions mine={mine ?? []} />
+          <SpeechPopup mine={mine ?? []} />
           <Walkers mine={mine ?? []} costume={theme.costume} />
         </>
       ) : null}

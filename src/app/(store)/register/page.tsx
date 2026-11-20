@@ -21,6 +21,7 @@ async function RegisterForm({ searchParams }: { searchParams: PageProps<"/regist
         { name: "mobile", label: "Mobile number", type: "tel", autoComplete: "tel", inputMode: "tel", hint: "Used to sign in and to contact you about orders and service." },
         { name: "email", label: "Email (optional)", type: "email", autoComplete: "email", optional: true },
         { name: "password", label: "Password", type: "password", autoComplete: "new-password", hint: "At least 8 characters." },
+        { name: "confirm", label: "Confirm password", type: "password", autoComplete: "new-password" },
       ]}
     />
   );

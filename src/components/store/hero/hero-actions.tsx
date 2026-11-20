@@ -22,7 +22,7 @@ export function HeroActions({ mine }: { mine: CustomerCharacter[] }) {
   const chip = "inline-flex h-8 items-center gap-1.5 rounded-full bg-white/90 px-3 text-[0.7rem] font-bold text-royal shadow-md hover:bg-white sm:text-xs";
   return (
     <>
-      <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
+      <div className="absolute inset-x-0 top-[27%] z-10 flex flex-wrap justify-center gap-2 px-3 sm:top-[25%]">
         <Link href="/book-service" className={chip}>
           <Wrench aria-hidden className="size-3.5 text-gold-600" /> My Vehicle Needs Help!
         </Link>
