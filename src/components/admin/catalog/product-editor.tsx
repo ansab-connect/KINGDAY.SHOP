@@ -48,6 +48,8 @@ export function ProductEditor({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [slugTouched, setSlugTouched] = useState(Boolean(product));
 
+  // Medium description: about 3000 characters; longer text saved earlier is kept as it is.
+  const mediumMax = Math.max(3000, product?.description?.length ?? 0);
   const [basics, setBasics] = useState({
     name: product?.name ?? "",
     slug: product?.slug ?? "",
@@ -285,8 +287,17 @@ export function ProductEditor({
           <TextField id="p-age" label="Recommended age" placeholder="e.g. 3–8 years" maxLength={40} value={basics.age_range} error={errors.age_range} onChange={(v) => setB("age_range", v)} />
           <TextAreaField id="p-short" label="Short description" rows={2} maxLength={300} hint="Shown near the price and in search results." value={basics.short_description} error={errors.short_description} onChange={(v) => setB("short_description", v)} />
           {aiEnabled ? <AiWriteButtons value={basics.short_description} onChange={(v) => setB("short_description", v.slice(0, 300))} productName={basics.name} only={["improve", "shorten", "malayalam"]} /> : null}
-          <TextAreaField id="p-desc" label="Full description" rows={8} maxLength={10000} value={basics.description} error={errors.description} onChange={(v) => setB("description", v)} />
-          {aiEnabled ? <AiWriteButtons value={basics.description} onChange={(v) => setB("description", v.slice(0, 10000))} productName={basics.name} /> : null}
+          <TextAreaField
+            id="p-desc"
+            label="Medium description"
+            rows={5}
+            maxLength={mediumMax}
+            hint="2–4 short paragraphs (about 100–250 words). Shown in the Description section of the product page."
+            value={basics.description}
+            error={errors.description}
+            onChange={(v) => setB("description", v)}
+          />
+          {aiEnabled ? <AiWriteButtons value={basics.description} onChange={(v) => setB("description", v.slice(0, mediumMax))} productName={basics.name} /> : null}
         </FormSection>
 
         <FormSection title="Variants, pricing & SKUs" description="Each variant (or each combination, e.g. Size + Colour) has its own SKU, price, stock, specifications and images.">

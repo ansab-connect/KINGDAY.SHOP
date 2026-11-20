@@ -2,11 +2,9 @@
 
 import { Fragment, useMemo, useState } from "react";
 import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
+  AlertTriangle,
   Crown,
+  GripVertical,
   ImagePlus,
   Info,
   Layers,
@@ -21,6 +19,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
+import { moveItem, sortableClass, useDragSort } from "@/components/admin/catalog/drag-sort";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { inputClass } from "@/components/admin/form/fields";
 import type { AdminProductImage } from "@/features/catalog/admin-repo";
@@ -129,6 +128,8 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
   const [extraMains, setExtraMains] = useState<string[]>([]);
   const [extraTypes, setExtraTypes] = useState<Record<string, string[]>>({});
   const [extraValues, setExtraValues] = useState<Record<string, Record<string, string[]>>>({});
+  // Main values whose "Enable Multiple Sub-Variants" switch is on before any sub type is added.
+  const [subOn, setSubOn] = useState<Record<string, boolean>>({});
   const mainValues = uniq([...rows.map((r) => r.values[main] ?? ""), ...extraMains]);
   const [selected, setSelected] = useState<string>(mainValues[0] ?? "");
   const current = mainValues.find((m) => same(m, selected)) ?? mainValues[0] ?? "";
@@ -194,13 +195,14 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
   }
 
   // ------------------------------------------------------------ Main values
-  function addMainValue(value: string) {
-    if (mainValues.some((m) => same(m, value))) return setSelected(value);
+  function addMainValues(list: string[]) {
+    const fresh = uniq(list).filter((v) => !mainValues.some((m) => same(m, v)));
+    if (!fresh.length) return setSelected(list[0] ?? current);
     // A main value starts as one combination; add sub-variants and generate to split it.
     const template = rows[rows.length - 1];
-    commit([...rows, newVariantRow({ values: { [main]: value }, mrp: template?.mrp ?? "", price: template?.price ?? "" })]);
-    setExtraMains((l) => l.filter((x) => !same(x, value)));
-    setSelected(value);
+    commit([...rows, ...fresh.map((value) => newVariantRow({ values: { [main]: value }, mrp: template?.mrp ?? "", price: template?.price ?? "" }))]);
+    setExtraMains((l) => l.filter((x) => !fresh.some((v) => same(x, v))));
+    setSelected(fresh[0]);
   }
 
   function renameValue(t: string, from: string, to: string) {
@@ -221,12 +223,8 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
   }
 
   /** Reorder a value: rows are re-sorted so the product page lists values in this order. */
-  function moveValue(t: string, value: string, dir: -1 | 1) {
-    const list = t === main ? [...mainValues] : valuesFor(current, t);
-    const i = list.findIndex((x) => same(x, value));
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= list.length) return;
-    [list[i], list[j]] = [list[j], list[i]];
+  function reorderValue(t: string, from: number, to: number) {
+    const list = moveItem(t === main ? mainValues : valuesFor(current, t), from, to);
     const rank = (r: VariantRow) => list.findIndex((x) => same(x, r.values[t]));
     if (t === main) {
       const order = new Map(rows.map((r, n) => [r.key, n]));
@@ -255,9 +253,25 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
     commit(rows.filter((r) => !doomed.includes(r)));
   }
 
-  function addValue(t: string, value: string) {
-    if (valuesFor(current, t).some((v) => same(v, value))) return;
-    setExtraValues((e) => ({ ...e, [mk(current)]: { ...(e[mk(current)] ?? {}), [t]: [...(e[mk(current)]?.[t] ?? []), value] } }));
+  function addValues(t: string, list: string[]) {
+    const fresh = uniq(list).filter((v) => !valuesFor(current, t).some((x) => same(x, v)));
+    if (!fresh.length) return;
+    setExtraValues((e) => ({ ...e, [mk(current)]: { ...(e[mk(current)] ?? {}), [t]: [...(e[mk(current)]?.[t] ?? []), ...fresh] } }));
+  }
+
+  /** "Enable Multiple Sub-Variants" for the selected main value. Off = it is sold as one variant. */
+  function toggleSubVariants(on: boolean) {
+    if (on) return setSubOn((s) => ({ ...s, [mk(current)]: true }));
+    if (subTypes.length) {
+      const stripped = rows.map((r) => (inMain(r, current) ? { ...r, values: { [main]: r.values[main] } } : r));
+      const { kept, dropped } = dedupe(stripped, types);
+      if (!window.confirm(`Turn off sub-variants for ${current}? ${current} becomes a single variant${dropped.length ? ` and ${dropped.length} combination(s) are removed` : ""}.`)) return;
+      if (dropped.some((r) => r.id) && !confirmRemoval(dropped, `${dropped.length} combination(s)`)) return;
+      commit(kept);
+    }
+    setExtraTypes((e) => ({ ...e, [mk(current)]: [] }));
+    setExtraValues((e) => ({ ...e, [mk(current)]: {} }));
+    setSubOn((s) => ({ ...s, [mk(current)]: false }));
   }
 
   // ------------------------------------------------------------ Types
@@ -329,16 +343,38 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
     setExtraValues((e) => Object.fromEntries(Object.entries(e).map(([m, byType]) => [m, renameKey(byType, from, t)])));
   }
 
-  function moveType(index: number, dir: -1 | 1) {
-    const next = [...types];
-    const [moved] = next.splice(index, 1);
-    next.splice(index + dir, 0, moved);
-    onTypesChange(next);
-    if (index + dir === 0 || index === 0) setSelected("");
+  function reorderTypes(from: number, to: number) {
+    if ((from === 0 || to === 0) && !window.confirm(`Make "${types[from === 0 ? 1 : from]}" the main variant type? Customers choose it first.`)) return;
+    onTypesChange(moveItem(types, from, to));
+    if (from === 0 || to === 0) setSelected("");
+  }
+
+  /** Reorder the selected main value's sub-variant types (the product's type order changes to match). */
+  function reorderSubTypes(from: number, to: number) {
+    const order = moveItem(subTypes, from, to);
+    const moved = order[to];
+    const rest = types.filter((x) => x !== moved);
+    const after = order[to + 1];
+    rest.splice(after ? rest.indexOf(after) : rest.indexOf(order[to - 1]) + 1, 0, moved);
+    onTypesChange(rest);
   }
 
   const tableTypes = main ? [main, ...subTypes] : [];
   const tableRows = main ? rows.filter((r) => inMain(r, current)) : rows;
+
+  /** Reorder combinations (the display order on the product page). */
+  function reorderCombos(from: number, to: number) {
+    const sorted = moveItem(tableRows, from, to);
+    let k = 0;
+    onRowsChange(rows.map((r) => (tableRows.includes(r) ? sorted[k++] : r)));
+  }
+
+  const subEnabled = subTypes.length > 0 || Boolean(subOn[mk(current)]);
+  // Several sub types with a single value each usually means values were added as types.
+  const lonelyTypes = subTypes.filter((t) => valuesFor(current, t).length === 1);
+  const typeSort = useDragSort(types.length, reorderTypes);
+  const mainSort = useDragSort(mainValues.length, (from, to) => reorderValue(main, from, to));
+  const subSort = useDragSort(subTypes.length, reorderSubTypes);
 
   return (
     <div className="flex flex-col gap-4">
@@ -371,7 +407,7 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
             <h3 id="vt-h" className="mb-1 flex items-center gap-1.5 font-heading text-sm font-bold text-deep">
               Variant Types <span className="font-normal text-muted-foreground">(Attributes)</span>
             </h3>
-            <p className="mb-3 text-xs text-muted-foreground">The first is the main choice. Each main value picks which of the others it uses.</p>
+            <p className="mb-3 text-xs text-muted-foreground">A type is what customers choose (Size, Colour, Speed Type). The first is the main choice. Drag to reorder.</p>
             {types.length ? (
               <ul className="flex flex-col gap-1.5">
                 {types.map((t, i) => (
@@ -379,11 +415,9 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
                     key={t}
                     type={t}
                     isMain={i === 0}
-                    canUp={i > 0}
-                    canDown={i < types.length - 1}
+                    item={typeSort.item(i)}
+                    handle={typeSort.handle(i, t)}
                     error={errors[`variant_types.${i}`]}
-                    onUp={() => moveType(i, -1)}
-                    onDown={() => moveType(i, 1)}
                     onRename={(to) => renameType(t, to)}
                     onRemove={() => removeType(t)}
                   />
@@ -408,77 +442,91 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label={main}>
-                  {mainValues.map((m) => {
+                  {mainValues.map((m, i) => {
                     const count = rows.filter((r) => inMain(r, m)).length;
                     const bad = rows.some((r) => inMain(r, m) && rowError(r));
+                    const on = same(m, current);
                     return (
-                      <button
+                      <span
                         key={m}
-                        type="button"
-                        role="tab"
-                        aria-selected={same(m, current)}
-                        onClick={() => setSelected(m)}
+                        {...mainSort.item(i)}
                         className={cn(
-                          "inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-bold transition-colors",
-                          same(m, current) ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-200",
-                          bad && !same(m, current) && "border-danger",
+                          "inline-flex h-10 items-center rounded-lg border text-sm font-bold transition-colors",
+                          on ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-200",
+                          bad && !on && "border-danger",
+                          sortableClass,
                         )}
                       >
-                        {m} <span className={cn("text-xs font-medium", same(m, current) ? "text-white/80" : "text-muted-foreground")}>({count})</span>
-                      </button>
+                        <button {...mainSort.handle(i, `${main} ${m}`)} className={cn("grid h-full w-6 place-items-center rounded-l-lg", on ? "text-white/70" : "text-muted-foreground")}>
+                          <GripVertical aria-hidden className="size-3.5" />
+                        </button>
+                        <button type="button" role="tab" aria-selected={on} onClick={() => setSelected(m)} className="inline-flex h-full items-center gap-2 pr-4">
+                          {m} <span className={cn("text-xs font-medium", on ? "text-white/80" : "text-muted-foreground")}>({count})</span>
+                        </button>
+                      </span>
                     );
                   })}
-                  <AddValueButton label={`Add ${main}`} onAdd={addMainValue} />
+                  <AddValueButton label={`Add ${main}`} onAdd={addMainValues} />
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {main} values. Add several at once with commas (e.g. 24&quot;, 26&quot;, 27.5&quot;). Drag <GripVertical aria-hidden className="inline size-3" /> to reorder.
+                </p>
 
                 {current ? (
                   <div className="mt-4 rounded-xl border bg-muted/20 p-3">
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <p className="font-heading text-sm font-semibold text-deep">{current} – Variant Options</p>
                       <span className="ml-auto flex items-center gap-1">
-                        <ValueTools
-                          label={`${main} ${current}`}
-                          onRename={(to) => renameValue(main, current, to)}
-                          onLeft={() => moveValue(main, current, -1)}
-                          onRight={() => moveValue(main, current, 1)}
-                          onRemove={() => removeValue(main, current)}
-                          value={current}
-                        />
+                        <ValueTools label={`${main} ${current}`} value={current} onRename={(to) => renameValue(main, current, to)} onRemove={() => removeValue(main, current)} />
                       </span>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      {subTypes.map((t) => (
-                        <div key={t} className="grid gap-2 rounded-lg bg-white p-2 sm:grid-cols-[10rem_1fr] sm:items-start">
-                          <span className="flex items-center gap-2 pt-2 text-sm font-medium text-deep">
-                            <TypeIcon type={t} main={false} className="size-4 shrink-0 text-royal" />
-                            <span className="min-w-0 flex-1 truncate">{t}</span>
-                            <button type="button" onClick={() => removeSubType(t)} aria-label={`Remove ${t} from ${current}`} className="grid size-6 place-items-center rounded-md text-danger hover:bg-danger-soft">
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          </span>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {valuesFor(current, t).map((v) => (
-                              <ValueChip
-                                key={v}
-                                value={v}
-                                swatch={isColourType(t) ? swatchFor(v) : null}
-                                onRename={(to) => renameValue(t, v, to)}
-                                onLeft={() => moveValue(t, v, -1)}
-                                onRight={() => moveValue(t, v, 1)}
-                                onRemove={() => removeValue(t, v)}
-                              />
-                            ))}
-                            <AddValueButton label="Add Value" onAdd={(v) => addValue(t, v)} small />
-                          </div>
-                        </div>
-                      ))}
-                      <AddTypeButton
-                        label="Add Sub Variant"
-                        compact
-                        options={uniq([...types.slice(1), ...optionTypes]).filter((o) => !same(o, main) && !subTypes.some((t) => same(t, o)))}
-                        onAdd={(n) => addType(n, current)}
-                      />
-                    </div>
+
+                    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2.5">
+                      <span>
+                        <span className="block text-sm font-semibold text-deep">Enable Multiple Sub-Variants</span>
+                        <span className="block text-xs text-muted-foreground">Extra choices for {current} only, e.g. Colour, Speed Type, Brake Type.</span>
+                      </span>
+                      <input type="checkbox" role="switch" checked={subEnabled} onChange={(e) => toggleSubVariants(e.target.checked)} className="peer sr-only" />
+                      <span aria-hidden className="relative h-6 w-11 shrink-0 rounded-full bg-muted-foreground/30 transition-colors peer-checked:bg-royal after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-ring" />
+                    </label>
+
+                    {subEnabled ? (
+                      <div className="mt-3 flex flex-col gap-2">
+                        {subTypes.map((t, i) => (
+                          <SubTypeCard
+                            key={t}
+                            type={t}
+                            main={current}
+                            values={valuesFor(current, t)}
+                            item={subSort.item(i)}
+                            handle={subSort.handle(i, t)}
+                            onRenameType={(to) => renameType(t, to)}
+                            onRemoveType={() => removeSubType(t)}
+                            onAddValues={(list) => addValues(t, list)}
+                            onRenameValue={(v, to) => renameValue(t, v, to)}
+                            onRemoveValue={(v) => removeValue(t, v)}
+                            onReorderValues={(from, to) => reorderValue(t, from, to)}
+                          />
+                        ))}
+                        {lonelyTypes.length >= 2 ? (
+                          <p className="flex items-start gap-2 rounded-lg border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-gold-700">
+                            <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+                            <span>
+                              {lonelyTypes.map((t) => `"${t}"`).join(", ")} each have only one value. If they are choices of the same thing (e.g. Single Speed and Multi Speed), delete them and add <strong>one</strong> type (e.g. Speed Type) with those as its values.
+                            </span>
+                          </p>
+                        ) : null}
+                        <AddTypeButton
+                          label="Add Sub-Variant Type"
+                          compact
+                          placeholder="Type name, e.g. Speed Type"
+                          options={uniq([...types.slice(1), ...optionTypes]).filter((o) => !same(o, main) && !subTypes.some((t) => same(t, o)))}
+                          onAdd={(n) => addType(n, current)}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">{current} is sold as one variant. Turn the switch on to add sub-variant types and values.</p>
+                    )}
 
                     {subTypes.length ? (
                       <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-royal-100 bg-royal-50/50 px-3 py-2">
@@ -497,6 +545,21 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
                               ? `${missingCombos.length} new combination${missingCombos.length === 1 ? "" : "s"} will be added${incomplete ? `, ${incomplete} existing one${incomplete === 1 ? "" : "s"} completed` : ""}.`
                               : `All ${plannedCombos.length} combinations exist. Disable the ones you don't sell.`}
                         </span>
+                        {!blockedBy ? (
+                          <span className="ml-auto text-xs font-semibold text-royal">
+                            {current}: {plannedCombos.length} combination{plannedCombos.length === 1 ? "" : "s"} · Product total: {rows.length + missingCombos.length}
+                          </span>
+                        ) : null}
+                        {missingCombos.length ? (
+                          <div className="flex w-full flex-wrap gap-1.5" aria-label="Combinations to be added">
+                            {missingCombos.slice(0, 12).map((c) => (
+                              <span key={c.join("|")} className="rounded-md border border-royal-100 bg-white px-2 py-0.5 text-xs text-deep">
+                                {[current, ...c].join(" • ")}
+                              </span>
+                            ))}
+                            {missingCombos.length > 12 ? <span className="px-1 text-xs text-muted-foreground">+{missingCombos.length - 12} more</span> : null}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -520,6 +583,7 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
                 product={product}
                 onSuggestSku={onSuggestSku}
                 valuesFor={valuesFor}
+                onReorder={reorderCombos}
               />
             ) : null}
           </section>
@@ -540,6 +604,7 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
           product={product}
           onSuggestSku={onSuggestSku}
           valuesFor={valuesFor}
+          onReorder={reorderCombos}
         />
       )}
 
@@ -558,59 +623,151 @@ function renameKey<T>(obj: Record<string, T>, from: string, to: string): Record<
   return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k === from ? to : k, v]));
 }
 
-/** A value chip: click to edit (rename, move, remove). */
+type SortItem = ReturnType<ReturnType<typeof useDragSort>["item"]>;
+type SortHandle = ReturnType<ReturnType<typeof useDragSort>["handle"]>;
+
+/** Splits "Red, Blue, Green" into values (commas or new lines). */
+const splitValues = (text: string) =>
+  text
+    .split(/[,\n]+/)
+    .map((v) => v.trim().slice(0, 60))
+    .filter(Boolean);
+
+/** One sub-variant type of a main value: its name, its values and the tools for both. */
+function SubTypeCard({
+  type,
+  main,
+  values,
+  item,
+  handle,
+  onRenameType,
+  onRemoveType,
+  onAddValues,
+  onRenameValue,
+  onRemoveValue,
+  onReorderValues,
+}: {
+  type: string;
+  main: string;
+  values: string[];
+  item: SortItem;
+  handle: SortHandle;
+  onRenameType: (to: string) => void;
+  onRemoveType: () => void;
+  onAddValues: (list: string[]) => void;
+  onRenameValue: (value: string, to: string) => void;
+  onRemoveValue: (value: string) => void;
+  onReorderValues: (from: number, to: number) => void;
+}) {
+  const valueSort = useDragSort(values.length, onReorderValues);
+  const colour = isColourType(type);
+  return (
+    <div {...item} className={cn("rounded-lg border bg-white p-2.5", sortableClass)}>
+      <div className="flex items-center gap-1.5">
+        <button {...handle} className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+          <GripVertical aria-hidden className="size-4" />
+        </button>
+        <TypeIcon type={type} main={false} className="size-4 shrink-0 text-royal" />
+        <span className="text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">Type</span>
+        <InlineName value={type} maxLength={30} label={`Rename the type ${type}`} onSave={onRenameType} />
+        <button type="button" onClick={onRemoveType} aria-label={`Remove ${type} from ${main}`} className="ml-auto grid size-7 shrink-0 place-items-center rounded-md text-danger hover:bg-danger-soft">
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 pl-1 sm:pl-9">
+        <span className="text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">Values</span>
+        {values.map((v, i) => (
+          <ValueChip
+            key={v}
+            value={v}
+            swatch={colour ? swatchFor(v) : null}
+            item={valueSort.item(i)}
+            handle={valueSort.handle(i, v)}
+            onRename={(to) => onRenameValue(v, to)}
+            onRemove={() => onRemoveValue(v)}
+          />
+        ))}
+        {!values.length ? <span className="text-xs text-danger">Add at least one value.</span> : null}
+        <AddValueButton label="Add Value" placeholder={colour ? "e.g. Red, Blue" : "e.g. Single Speed, Multi Speed"} onAdd={onAddValues} small />
+      </div>
+    </div>
+  );
+}
+
+/** Text that turns into an input when clicked; Enter or leaving the field saves. */
+function InlineName({ value, maxLength, label, onSave }: { value: string; maxLength: number; label: string; onSave: (to: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const save = () => {
+    setEditing(false);
+    if (draft.trim() && draft.trim() !== value) onSave(draft);
+  };
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        aria-label={label}
+        value={draft}
+        maxLength={maxLength}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            save();
+          } else if (e.key === "Escape") setEditing(false);
+        }}
+        className="h-8 min-w-0 flex-1 rounded-md border px-2 text-base font-semibold outline-none focus:border-royal sm:text-sm"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
+      aria-label={label}
+      className="group inline-flex min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-sm font-semibold text-deep hover:bg-muted"
+    >
+      <span className="truncate">{value}</span>
+      <Pencil aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+    </button>
+  );
+}
+
+/** A value chip: drag handle, value, rename and remove. */
 function ValueChip({
   value,
   swatch,
+  item,
+  handle,
   onRename,
-  onLeft,
-  onRight,
   onRemove,
 }: {
   value: string;
   swatch: string | null;
+  item: SortItem;
+  handle: SortHandle;
   onRename: (to: string) => void;
-  onLeft: () => void;
-  onRight: () => void;
   onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border bg-white pl-3 text-sm font-medium text-deep">
+    <span {...item} className={cn("inline-flex h-9 items-center gap-1 rounded-lg border bg-white pr-1 text-sm font-medium text-deep", sortableClass)}>
+      <button {...handle} className="grid h-full w-6 place-items-center rounded-l-lg text-muted-foreground hover:bg-muted">
+        <GripVertical aria-hidden className="size-3.5" />
+      </button>
       {swatch ? <span aria-hidden className="size-3.5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: swatch }} /> : null}
-      {value}
-      {open ? (
-        <span className="flex items-center gap-0.5 pr-1">
-          <ValueTools label={value} value={value} onRename={onRename} onLeft={onLeft} onRight={onRight} onRemove={onRemove} />
-          <button type="button" onClick={() => setOpen(false)} aria-label="Done" className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-muted">
-            <X className="size-3" />
-          </button>
-        </span>
-      ) : (
-        <button type="button" onClick={() => setOpen(true)} aria-label={`Edit ${value}`} className="mr-1 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-deep">
-          <Pencil className="size-3" />
-        </button>
-      )}
+      <span className="px-0.5">{value}</span>
+      <ValueTools label={value} value={value} onRename={onRename} onRemove={onRemove} small />
     </span>
   );
 }
 
-/** Rename / move left / move right / remove buttons for a value. */
-function ValueTools({
-  label,
-  value,
-  onRename,
-  onLeft,
-  onRight,
-  onRemove,
-}: {
-  label: string;
-  value: string;
-  onRename: (to: string) => void;
-  onLeft: () => void;
-  onRight: () => void;
-  onRemove: () => void;
-}) {
+/** Rename / remove buttons for a value. */
+function ValueTools({ label, value, onRename, onRemove, small = false }: { label: string; value: string; onRename: (to: string) => void; onRemove: () => void; small?: boolean }) {
+  const btn = cn("grid place-items-center rounded-md", small ? "size-6" : "size-7 border bg-white");
   return (
     <>
       <button
@@ -620,18 +777,12 @@ function ValueTools({
           if (to !== null) onRename(to);
         }}
         aria-label={`Rename ${label}`}
-        className="grid size-7 place-items-center rounded-md border bg-white text-muted-foreground hover:text-deep"
+        className={cn(btn, "text-muted-foreground hover:bg-muted hover:text-deep")}
       >
         <Pencil className="size-3" />
       </button>
-      <button type="button" onClick={onLeft} aria-label={`Move ${label} earlier`} className="grid size-7 place-items-center rounded-md border bg-white text-muted-foreground hover:text-deep">
-        <ArrowLeft className="size-3" />
-      </button>
-      <button type="button" onClick={onRight} aria-label={`Move ${label} later`} className="grid size-7 place-items-center rounded-md border bg-white text-muted-foreground hover:text-deep">
-        <ArrowRight className="size-3" />
-      </button>
-      <button type="button" onClick={onRemove} aria-label={`Remove ${label}`} className="grid size-7 place-items-center rounded-md border bg-white text-danger hover:bg-danger-soft">
-        <Trash2 className="size-3" />
+      <button type="button" onClick={onRemove} aria-label={`Remove ${label}`} className={cn(btn, "text-danger hover:bg-danger-soft")}>
+        {small ? <X className="size-3" /> : <Trash2 className="size-3" />}
       </button>
     </>
   );
@@ -640,73 +791,29 @@ function ValueTools({
 function TypeRow({
   type,
   isMain,
-  canUp,
-  canDown,
+  item,
+  handle,
   error,
-  onUp,
-  onDown,
   onRename,
   onRemove,
 }: {
   type: string;
   isMain: boolean;
-  canUp: boolean;
-  canDown: boolean;
+  item: SortItem;
+  handle: SortHandle;
   error?: string;
-  onUp: () => void;
-  onDown: () => void;
   onRename: (to: string) => void;
   onRemove: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(type);
   return (
-    <li className={cn("flex items-center gap-1.5 rounded-lg border bg-white px-2 py-2", isMain && "border-royal-200 bg-royal-50/60")}>
-      <span className="flex flex-col">
-        <button type="button" onClick={onUp} disabled={!canUp} aria-label={`Move ${type} up`} className="grid size-4 place-items-center text-muted-foreground disabled:opacity-20">
-          <ArrowUp className="size-3" />
-        </button>
-        <button type="button" onClick={onDown} disabled={!canDown} aria-label={`Move ${type} down`} className="grid size-4 place-items-center text-muted-foreground disabled:opacity-20">
-          <ArrowDown className="size-3" />
-        </button>
-      </span>
-      <TypeIcon type={type} main={isMain} className={cn("size-4 shrink-0", isMain ? "text-gold-600" : "text-royal")} />
-      {editing ? (
-        <input
-          autoFocus
-          value={draft}
-          maxLength={30}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            onRename(draft);
-            setEditing(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              onRename(draft);
-              setEditing(false);
-            }
-          }}
-          className="h-8 min-w-0 flex-1 rounded-md border px-2 text-base outline-none focus:border-royal sm:text-sm"
-        />
-      ) : (
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-deep">
-          {type} {isMain ? <span className="ml-1 rounded bg-gold-50 px-1 text-[0.65rem] font-semibold text-gold-700">Main</span> : null}
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={() => {
-          setDraft(type);
-          setEditing(true);
-        }}
-        aria-label={`Rename ${type}`}
-        className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-deep"
-      >
-        <Pencil className="size-3.5" />
+    <li {...item} className={cn("flex items-center gap-1.5 rounded-lg border bg-white px-1.5 py-1.5", isMain && "border-royal-200 bg-royal-50/60", sortableClass)}>
+      <button {...handle} className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+        <GripVertical aria-hidden className="size-4" />
       </button>
-      <button type="button" onClick={onRemove} aria-label={`Remove ${type}`} className="grid size-7 place-items-center rounded-md text-danger hover:bg-danger-soft">
+      <TypeIcon type={type} main={isMain} className={cn("size-4 shrink-0", isMain ? "text-gold-600" : "text-royal")} />
+      <InlineName value={type} maxLength={30} label={`Rename ${type}`} onSave={onRename} />
+      {isMain ? <span className="rounded bg-gold-50 px-1 text-[0.65rem] font-semibold text-gold-700">Main</span> : null}
+      <button type="button" onClick={onRemove} aria-label={`Remove ${type}`} className="ml-auto grid size-7 shrink-0 place-items-center rounded-md text-danger hover:bg-danger-soft">
         <Trash2 className="size-3.5" />
       </button>
       {error ? <span className="sr-only">{error}</span> : null}
@@ -714,7 +821,19 @@ function TypeRow({
   );
 }
 
-function AddTypeButton({ options, onAdd, label = "Add Variant Type", compact = false }: { options: string[]; onAdd: (name: string) => void; label?: string; compact?: boolean }) {
+function AddTypeButton({
+  options,
+  onAdd,
+  label = "Add Variant Type",
+  placeholder = "Type name, e.g. Battery",
+  compact = false,
+}: {
+  options: string[];
+  onAdd: (name: string) => void;
+  label?: string;
+  placeholder?: string;
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
   if (!open) {
@@ -738,6 +857,9 @@ function AddTypeButton({ options, onAdd, label = "Add Variant Type", compact = f
   };
   return (
     <div className="mt-3 flex flex-col gap-2 rounded-lg border bg-white p-2">
+      <p className="text-xs text-muted-foreground">
+        A <strong>type</strong> is the question customers answer (Colour, Speed Type). Its choices (Red, Single Speed) are <strong>values</strong>, added next.
+      </p>
       {options.length ? (
         <div className="flex flex-wrap gap-1.5">
           {options.map((o) => (
@@ -752,7 +874,8 @@ function AddTypeButton({ options, onAdd, label = "Add Variant Type", compact = f
           autoFocus
           value={custom}
           maxLength={30}
-          placeholder="Or type a new one (e.g. Battery)"
+          aria-label="Type name"
+          placeholder={placeholder}
           onChange={(e) => setCustom(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -773,12 +896,13 @@ function AddTypeButton({ options, onAdd, label = "Add Variant Type", compact = f
   );
 }
 
-/** "+ Add …" that turns into a small input: Enter adds the value. */
-function AddValueButton({ label, onAdd, small = false }: { label: string; onAdd: (value: string) => void; small?: boolean }) {
+/** "+ Add …" that turns into a small input: Enter adds the value(s); commas add several. */
+function AddValueButton({ label, onAdd, placeholder = "Type, then Enter", small = false }: { label: string; onAdd: (values: string[]) => void; placeholder?: string; small?: boolean }) {
   const [typing, setTyping] = useState(false);
   const [value, setValue] = useState("");
   const done = () => {
-    if (value.trim()) onAdd(value.trim().slice(0, 60));
+    const list = splitValues(value);
+    if (list.length) onAdd(list);
     setValue("");
     setTyping(false);
   };
@@ -787,8 +911,9 @@ function AddValueButton({ label, onAdd, small = false }: { label: string; onAdd:
       <input
         autoFocus
         value={value}
-        maxLength={60}
-        placeholder="Type, then Enter"
+        maxLength={400}
+        aria-label={label}
+        placeholder={placeholder}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -797,7 +922,7 @@ function AddValueButton({ label, onAdd, small = false }: { label: string; onAdd:
           } else if (e.key === "Escape") setTyping(false);
         }}
         onBlur={done}
-        className={cn("w-36 rounded-lg border border-royal px-3 text-base outline-none sm:text-sm", small ? "h-9" : "h-10")}
+        className={cn("w-56 max-w-full rounded-lg border border-royal px-3 text-base outline-none sm:text-sm", small ? "h-9" : "h-10")}
       />
     );
   }
@@ -811,6 +936,7 @@ function AddValueButton({ label, onAdd, small = false }: { label: string; onAdd:
     </button>
   );
 }
+
 
 function CombinationsTable({
   title,
@@ -827,6 +953,7 @@ function CombinationsTable({
   product,
   onSuggestSku,
   valuesFor,
+  onReorder,
 }: {
   title: string;
   rows: VariantRow[];
@@ -842,7 +969,9 @@ function CombinationsTable({
   product: ProductInfo;
   onSuggestSku: (row: VariantRow) => string;
   valuesFor: (m: string, t: string) => string[];
+  onReorder: (from: number, to: number) => void;
 }) {
+  const sort = useDragSort(rows.length, onReorder);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -914,7 +1043,7 @@ function CombinationsTable({
         <table className="w-full min-w-[46rem] text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="w-10 px-3 py-2">
+              <th className="w-16 py-2 pr-2 pl-9">
                 <input
                   type="checkbox"
                   aria-label="Select all"
@@ -941,10 +1070,12 @@ function CombinationsTable({
                 </td>
               </tr>
             ) : null}
-            {rows.map((r) => (
+            {rows.map((r, n) => (
               <ComboRow
                 key={r.key}
                 row={r}
+                item={sort.item(n)}
+                handle={sort.handle(n, simple ? r.colour || r.name || "variant" : types.map((t) => r.values[t]).join(" "))}
                 types={types}
                 simple={simple}
                 picked={picked.has(r.key)}
@@ -1026,6 +1157,8 @@ function AddCombination({
 
 function ComboRow({
   row: v,
+  item,
+  handle,
   types,
   simple,
   picked,
@@ -1040,6 +1173,8 @@ function ComboRow({
   onSuggestSku,
 }: {
   row: VariantRow;
+  item: SortItem;
+  handle: SortHandle;
   types: string[];
   simple: boolean;
   picked: boolean;
@@ -1066,9 +1201,14 @@ function ComboRow({
 
   return (
     <Fragment>
-      <tr className={cn("border-t align-middle", !v.is_active && "bg-muted/40 text-muted-foreground", anyError && "bg-danger-soft/30")}>
-        <td className="px-3 py-2">
-          <input type="checkbox" aria-label={`Select ${label}`} checked={picked} onChange={(e) => onPick(e.target.checked)} className="accent-royal" />
+      <tr {...item} className={cn("border-t align-middle", !v.is_active && "bg-muted/40 text-muted-foreground", anyError && "bg-danger-soft/30", sortableClass)}>
+        <td className="py-2 pr-2 pl-1">
+          <span className="flex items-center gap-1">
+            <button {...handle} className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+              <GripVertical aria-hidden className="size-4" />
+            </button>
+            <input type="checkbox" aria-label={`Select ${label}`} checked={picked} onChange={(e) => onPick(e.target.checked)} className="accent-royal" />
+          </span>
         </td>
         <td className="px-2 py-2">
           <button

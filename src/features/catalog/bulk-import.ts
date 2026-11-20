@@ -14,9 +14,10 @@ export const IMPORT_COLUMNS = [
   { key: "option1", header: "Main Variant", width: 14, note: "e.g. Large, 12V. Required when Main Variant Type is used." },
   { key: "option2Name", header: "Sub Variant Type", width: 16, note: "Optional, e.g. Colour. Each Main Variant can list its own colours." },
   { key: "option2", header: "Sub Variant", width: 16, note: "e.g. Volt Blue. One row per Main + Sub combination, each with its own SKU, price, stock and images." },
+  { key: "more", header: "More Sub Variants", width: 34, note: 'Optional extra sub-variant types for this row: "Type: value; Type: value", e.g. "Speed Type: Single Speed; Brake Type: Disc Brake". Rows of the same Main Variant must use the same types.' },
   { key: "colour", header: "Variant / Colour", width: 16, note: "Simple products only: e.g. Red. Leave empty when you use the variant type columns." },
   { key: "short", header: "Short Description", width: 40, note: "1–2 lines shown near the price (max 300 characters)." },
-  { key: "description", header: "Description", width: 50, note: "Full description." },
+  { key: "description", header: "Description", width: 50, note: "Medium description: 2–4 short paragraphs shown in the Description section." },
   { key: "mrp", header: "MRP (₹) *", width: 12, note: "Number only, e.g. 28999" },
   { key: "price", header: "Selling Price (₹) *", width: 16, note: "Can't be higher than MRP." },
   { key: "stock", header: "Stock", width: 10, note: "Opening stock (whole number). Empty = 0." },
@@ -45,6 +46,8 @@ export type ImportRow = {
   option1: string;
   option2Name: string;
   option2: string;
+  /** "Type: value; Type: value" for sub-variant types after the first one. */
+  more: string;
   short: string;
   description: string;
   mrp: string;
@@ -90,7 +93,8 @@ export function mapHeaders(headers: string[]): Partial<Record<ColumnKey, number>
   const clean = (h: string) => h.toLowerCase().replace(/[*()₹]/g, "").replace(/\s+/g, " ").trim();
   headers.forEach((h, i) => {
     const c = clean(h);
-    const col = IMPORT_COLUMNS.find((x) => clean(x.header) === c);
+    const alias: Record<string, string> = { "medium description": "description", "sub variants": "more sub variants", "more variants": "more sub variants" };
+    const col = IMPORT_COLUMNS.find((x) => clean(x.header) === (alias[c] ?? c));
     if (col && out[col.key] === undefined) out[col.key] = i;
   });
   return out;
@@ -140,6 +144,7 @@ export function rowsFromSheet(values: unknown[][], categories: Option[], brands:
       option1: get(r, "option1"),
       option2Name: get(r, "option2Name"),
       option2: get(r, "option2"),
+      more: get(r, "more"),
       short: get(r, "short"),
       description: get(r, "description"),
       mrp: get(r, "mrp").replace(/[,₹\s]/g, ""),
@@ -216,22 +221,59 @@ export function checkRows(rows: ImportRow[], existingSkus: Set<string>): Map<str
   }
   // Variant rules apply per product (rows grouped by name + category).
   for (const group of groupRows(rows)) {
-    const types = groupOptionNames(group);
+    const names = groupOptionNames(group);
+    const types = groupVariantTypes(group);
     const seen = new Map<string, number>();
+    const subTypesOf = new Map<string, { sig: string; row: number }>();
     for (const r of group) {
       const check = out.get(r.key)!;
-      if (types.option2 && !types.option1) check.errors.push("Sub Variant Type needs a Main Variant Type.");
-      if (types.option1 && !r.option1) check.errors.push(`Main Variant (${types.option1}) is missing.`);
-      if (types.option2 && !r.option2) check.errors.push(`Sub Variant (${types.option2}) is missing.`);
-      if (!types.option1 && (r.option1 || r.option2)) check.errors.push("Fill Main Variant Type for the variant values to be used.");
-      if (types.option1 && r.option1) {
-        const k = `${r.option1.toLowerCase()}|${types.option2 ? r.option2.toLowerCase() : ""}`;
-        if (seen.has(k)) check.errors.push(`Same variant combination as row ${seen.get(k)}.`);
-        else seen.set(k, r.rowNumber);
+      const more = parseMore(r.more);
+      if (names.option2 && !names.option1) check.errors.push("Sub Variant Type needs a Main Variant Type.");
+      if (!names.option1 && (r.option1 || r.option2 || r.more)) check.errors.push("Fill Main Variant Type for the variant values to be used.");
+      if (more.bad) check.errors.push('More Sub Variants: use "Type: value; Type: value".');
+      if (types.length > 8) check.errors.push("Use at most 8 variant types per product.");
+      if (more.items.some((m) => m.type.length > 30 || m.value.length > 60)) check.errors.push("Variant types can be at most 30 characters and values 60.");
+      if (more.items.some((m, i) => [names.option1, names.option2, ...more.items.slice(0, i).map((x) => x.type)].some((t) => t && norm(t) === norm(m.type)))) {
+        check.errors.push("More Sub Variants repeats a variant type.");
       }
+      if (!names.option1) continue;
+      if (!r.option1) {
+        check.errors.push(`Main Variant (${names.option1}) is missing.`);
+        continue;
+      }
+      const values = rowVariantValues(r, types);
+      // Each Main Variant can use its own sub-variant types; all its rows use the same ones.
+      const sig = types.slice(1).filter((t) => values[t]).join(", ");
+      const mainKey = norm(r.option1);
+      const first = subTypesOf.get(mainKey);
+      if (first && first.sig !== sig) check.errors.push(`All ${r.option1} rows must use the same sub-variant types as row ${first.row} (${first.sig || "none"}).`);
+      else if (!first) subTypesOf.set(mainKey, { sig, row: r.rowNumber });
+      const k = types.map((t) => norm(values[t] ?? "")).join("|");
+      if (seen.has(k)) check.errors.push(`Same variant combination as row ${seen.get(k)}.`);
+      else seen.set(k, r.rowNumber);
     }
   }
   return out;
+}
+
+/** "Speed Type: Single Speed; Brake Type: Disc" → items; `bad` when a part has no "Type:". */
+export function parseMore(text: string): { items: { type: string; value: string }[]; bad: boolean } {
+  let bad = false;
+  const items = text
+    .split(/[;\n]+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .flatMap((p) => {
+      const i = p.indexOf(":");
+      const type = i > 0 ? p.slice(0, i).trim() : "";
+      const value = i > 0 ? p.slice(i + 1).trim() : "";
+      if (!type || !value) {
+        bad = true;
+        return [];
+      }
+      return [{ type, value }];
+    });
+  return { items, bad };
 }
 
 /** Variant type names for a product: the first non-empty value on any of its rows. */
@@ -239,6 +281,31 @@ export function groupOptionNames(group: ImportRow[]): { option1: string; option2
   const option1 = group.map((r) => r.option1Name.trim()).find(Boolean) ?? "";
   const option2 = option1 ? (group.map((r) => r.option2Name.trim()).find(Boolean) ?? "") : "";
   return { option1, option2 };
+}
+
+/** All variant types of a product in order: main, sub, then the "More Sub Variants" types as first seen. */
+export function groupVariantTypes(group: ImportRow[]): string[] {
+  const { option1, option2 } = groupOptionNames(group);
+  if (!option1) return [];
+  const types = [option1, option2].filter(Boolean);
+  for (const r of group) {
+    for (const m of parseMore(r.more).items) {
+      if (!types.some((t) => norm(t) === norm(m.type))) types.push(m.type.slice(0, 30));
+    }
+  }
+  return types;
+}
+
+/** A row's value for each variant type (empty types are left out). */
+export function rowVariantValues(r: ImportRow, types: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (types[0] && r.option1) out[types[0]] = r.option1;
+  const { items } = parseMore(r.more);
+  types.slice(1).forEach((t, i) => {
+    const v = i === 0 && r.option2 ? r.option2 : items.find((m) => norm(m.type) === norm(t))?.value;
+    if (v) out[t] = v.slice(0, 60);
+  });
+  return out;
 }
 
 /** Rows with the same name + category become one product with one variant per row. */
@@ -258,6 +325,7 @@ export function toProductInput(group: ImportRow[], slug?: string) {
   const attributes = parseSpecs(productSpecsText);
   const seen = new Set<string>();
   const types = groupOptionNames(group);
+  const allTypes = groupVariantTypes(group);
   return {
     name: first.name.trim(),
     slug: slug ?? "",
@@ -271,6 +339,7 @@ export function toProductInput(group: ImportRow[], slug?: string) {
     is_featured: false,
     option1_name: types.option1 || undefined,
     option2_name: types.option2 || undefined,
+    variant_types: allTypes.length ? allTypes : undefined,
     variants: group.map((r, i) => ({
       sku: r.sku,
       // With variant types the name is built from the values ("12V · Volt Blue").
@@ -278,6 +347,7 @@ export function toProductInput(group: ImportRow[], slug?: string) {
       colour: r.colour || (/colou?r/i.test(types.option2) ? r.option2 : /colou?r/i.test(types.option1) ? r.option1 : "") || undefined,
       option1: types.option1 ? r.option1 : undefined,
       option2: types.option2 ? r.option2 : undefined,
+      values: allTypes.length ? rowVariantValues(r, allTypes) : undefined,
       // A row's specs that differ from the product's become that variant's own specs.
       specs: r.specs && r.specs !== productSpecsText ? parseSpecs(r.specs) : [],
       mrp: r.mrp,

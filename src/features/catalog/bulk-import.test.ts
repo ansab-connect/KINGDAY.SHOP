@@ -173,6 +173,39 @@ describe("multi-level variants", () => {
     );
     const checks = checkRows(rows, new Set());
     expect(checks.get(rows[1].key)!.errors.join(" ")).toMatch(/Same variant combination/);
-    expect(checks.get(rows[2].key)!.errors.join(" ")).toMatch(/Sub Variant \(Colour\) is missing/);
+    // A main value may have no sub-variants (Large is sold as one variant).
+    expect(checks.get(rows[2].key)!.errors).toEqual([]);
+  });
+  it("imports any number of sub-variant types per main value", () => {
+    const { rows } = rowsFromSheet(
+      sheet([
+        { ...base, name: "Volt Cycle", sku: "VC-24-BLU-SS", option1Name: "Wheel Size", option1: "24\"", option2Name: "Colour", option2: "Volt Blue", more: "Speed Type: Single Speed" },
+        { ...base, name: "Volt Cycle", sku: "VC-24-BLU-MS", option1: "24\"", option2: "Volt Blue", more: "Speed Type: Multi Speed" },
+        { ...base, name: "Volt Cycle", sku: "VC-29-RED-DB", option1: "29\"", option2: "Red", more: "Brake Type: Disc Brake" },
+        { ...base, name: "Volt Cycle", sku: "VC-29-RED-VB", option1: "29\"", option2: "Red", more: "Brake Type: V-Brake" },
+      ]),
+      cats,
+      brands,
+    );
+    const checks = checkRows(rows, new Set());
+    rows.forEach((r) => expect(checks.get(r.key)!.errors).toEqual([]));
+    const input = toProductInput(rows);
+    expect(input.variant_types).toEqual(["Wheel Size", "Colour", "Speed Type", "Brake Type"]);
+    expect(input.variants[0].values).toEqual({ "Wheel Size": "24\"", Colour: "Volt Blue", "Speed Type": "Single Speed" });
+    expect(input.variants[3].values).toEqual({ "Wheel Size": "29\"", Colour: "Red", "Brake Type": "V-Brake" });
+  });
+  it("flags mixed sub-variant types under one main value and bad cells", () => {
+    const { rows } = rowsFromSheet(
+      sheet([
+        { ...base, name: "Volt Cycle", sku: "VC-1", option1Name: "Wheel Size", option1: "24\"", more: "Speed Type: Single Speed" },
+        { ...base, name: "Volt Cycle", sku: "VC-2", option1: "24\"", more: "Brake Type: Disc" },
+        { ...base, name: "Volt Cycle", sku: "VC-3", option1: "26\"", more: "Single Speed" },
+      ]),
+      cats,
+      brands,
+    );
+    const checks = checkRows(rows, new Set());
+    expect(checks.get(rows[1].key)!.errors.join(" ")).toMatch(/same sub-variant types as row 2/);
+    expect(checks.get(rows[2].key)!.errors.join(" ")).toMatch(/Type: value/);
   });
 });

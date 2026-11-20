@@ -459,7 +459,7 @@ function RowSummary({ row: r, check: c, result, grouped, locked, onEdit, onRemov
         {[
           ["Category", categoriesLabel(r)],
           ["Brand", r.brandId ? r.brandText : r.brandText ? `${r.brandText} (not found)` : "—"],
-          ["Variant", [r.option1Name && r.option1 ? `${r.option1Name}: ${r.option1}` : "", r.option2Name && r.option2 ? `${r.option2Name}: ${r.option2}` : ""].filter(Boolean).join(" · ") || r.option1 || r.option2 || r.colour || "—"],
+          ["Variant", [r.option1Name && r.option1 ? `${r.option1Name}: ${r.option1}` : "", r.option2Name && r.option2 ? `${r.option2Name}: ${r.option2}` : "", r.more].filter(Boolean).join(" · ") || r.option1 || r.option2 || r.colour || "—"],
           ["Status", r.status === "active" ? "Active" : "Draft"],
           ["MRP", rupees(r.mrp)],
           ["Selling price", rupees(r.price)],
