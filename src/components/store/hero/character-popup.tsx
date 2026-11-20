@@ -6,11 +6,11 @@ import { Sparkles, X } from "lucide-react";
 
 const DISMISSED = "kingday.characterPromo.dismissed";
 const SHOWN = "kingday.characterPromo.shownThisVisit";
-const DELAY_MS = 7000;
+const DELAY_MS = 1200;
 
 /**
- * Occasional "Create Your Child's Character" popup: at most once per visit, a few seconds
- * after the homepage opens. × hides it for good (Account → My Characters still has it).
+ * "Create Your Child's Character" popup: shown first when the homepage opens (once per visit)
+ * for customers without a character. Later = next visit. × hides it for good (Account → My Characters still has it).
  */
 export function CharacterPopup() {
   const [open, setOpen] = useState(false);

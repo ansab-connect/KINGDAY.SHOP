@@ -32,7 +32,11 @@ export function familyScript(mine: CustomerCharacter[]): Line[] {
  * speech bubble. They never take clicks (pointer-events: none), so shopping isn't blocked.
  */
 export function Walkers({ mine, costume }: { mine: CustomerCharacter[]; costume: Costume }) {
-  const script = useMemo(() => familyScript(mine), [mine]);
+  // Only the customer's own characters walk (King and Mia stay in the hero).
+  const script = useMemo<Line[]>(
+    () => mine.flatMap((c) => [{ who: c, say: `Hi! I'm ${c.name}!` }, { who: c, say: "Hi Mamma! Hi Papa!" }, { who: c, say: "I need a gift! 🎁", run: true }]),
+    [mine],
+  );
   const [step, setStep] = useState<{ n: number } | null>(null);
 
   useEffect(() => {
@@ -49,7 +53,7 @@ export function Walkers({ mine, costume }: { mine: CustomerCharacter[]; costume:
     };
   }, []);
 
-  if (!step) return null;
+  if (!step || !script.length) return null;
   const line = script[step.n % script.length];
   const art = OFFICIAL_ART[line.who.id];
   return (
