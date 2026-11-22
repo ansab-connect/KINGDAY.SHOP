@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { CartCount } from "@/components/store/cart-toast";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { storeNav } from "@/config/storefront";
+import { track } from "@/lib/meta-pixel";
 import { cn } from "@/lib/utils";
 
 const isActive = (pathname: string, href: string) =>
@@ -20,7 +21,15 @@ const isActive = (pathname: string, href: string) =>
 function SearchForm({ id, className }: { id: string; className?: string }) {
   const ml = useLang() === "ml";
   return (
-    <form role="search" action="/shop" className={cn("relative", className)}>
+    <form
+      role="search"
+      action="/shop"
+      className={cn("relative", className)}
+      onSubmit={(e) => {
+        const q = String(new FormData(e.currentTarget).get("q") ?? "").trim();
+        if (q) track("Search", { search_string: q });
+      }}
+    >
       <label htmlFor={id} className="sr-only">{ml ? "ഉൽപ്പന്നങ്ങൾ തിരയുക" : "Search products"}</label>
       <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
       <input

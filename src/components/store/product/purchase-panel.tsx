@@ -11,6 +11,7 @@ import { useVariantSelection } from "@/components/store/product/variant-selectio
 import { OFFICIAL_WHATSAPP, supportMailto, whatsappLink } from "@/config/storefront";
 import { addToCart, startBuyNow } from "@/features/cart/cart-store";
 import { estimateTotals, type PriceSettings } from "@/features/orders/pricing";
+import { contentParams, track } from "@/lib/meta-pixel";
 import { whatsappOrderUrl } from "@/lib/whatsapp";
 import { formatPaise } from "@/lib/format";
 import type { StoreVariant } from "@/features/catalog/types";
@@ -44,6 +45,14 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
   const [qty, setQty] = useState(1);
   const router = useRouter();
   const buyRef = useRef<HTMLButtonElement>(null);
+  // ViewContent once per product page (not on re-renders or variant changes).
+  const viewed = useRef<string | null>(null);
+  useEffect(() => {
+    if (viewed.current === productId) return;
+    viewed.current = productId;
+    track("ViewContent", contentParams([{ id: variant.sku, name, price: variant.price, quantity: 1 }]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
   const [buyVisible, setBuyVisible] = useState(true);
   useEffect(() => {
     const el = buyRef.current;

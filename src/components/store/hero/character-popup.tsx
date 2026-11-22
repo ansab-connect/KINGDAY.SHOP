@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
+import { readConsent } from "@/lib/meta-pixel";
 
 const DISMISSED = "kingday.characterPromo.dismissed";
 const SHOWN = "kingday.characterPromo.shownThisVisit";
@@ -21,14 +22,21 @@ export function CharacterPopup() {
     } catch {
       return; // Storage blocked: don't risk showing it on every page view.
     }
-    const t = window.setTimeout(() => {
+    let t = 0;
+    // Wait until the cookie choice is answered, so the two popups never overlap.
+    const show = () => {
+      if (readConsent() === null) {
+        t = window.setTimeout(show, 1000);
+        return;
+      }
       setOpen(true);
       try {
         sessionStorage.setItem(SHOWN, "1");
       } catch {
         // ignore
       }
-    }, DELAY_MS);
+    };
+    t = window.setTimeout(show, DELAY_MS);
     return () => window.clearTimeout(t);
   }, []);
 
@@ -50,36 +58,13 @@ export function CharacterPopup() {
   };
 
   return (
-    <div
-      role="dialog"
-      aria-labelledby="char-popup-title"
-      className="fixed inset-x-3 bottom-20 z-50 mx-auto max-w-sm overflow-hidden rounded-3xl bg-gradient-to-br from-royal-800 to-deep text-white shadow-2xl ring-1 ring-gold/40 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 sm:right-auto sm:left-6 sm:w-sm lg:bottom-6"
-    >
-      <button type="button" onClick={dismiss} aria-label="Close" className="absolute top-2 right-2 z-10 grid size-9 place-items-center rounded-full text-white/70 hover:bg-white/10 hover:text-white">
+    <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-3 z-50 flex items-center rounded-full bg-royal py-1 pr-1 pl-1 text-white shadow-xl ring-1 ring-gold/40 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 lg:bottom-6 lg:left-6">
+      <Link href="/account/characters" onClick={() => setOpen(false)} className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold hover:bg-white/10 sm:text-sm">
+        <Sparkles aria-hidden className="size-4 text-gold" /> Create Your Child&apos;s Character
+      </Link>
+      <button type="button" onClick={dismiss} aria-label="Close" className="grid size-8 place-items-center rounded-full text-white/70 hover:bg-white/10 hover:text-white">
         <X aria-hidden className="size-4" />
       </button>
-      <div className="flex items-end gap-3 px-5 pt-5">
-        <div aria-hidden className="flex h-28 shrink-0 items-end">
-          {/* eslint-disable-next-line @next/next/no-img-element -- small static cut-out */}
-          <img src="/characters/king.webp" alt="" className="kd-bob h-full w-auto" />
-          {/* eslint-disable-next-line @next/next/no-img-element -- small static cut-out */}
-          <img src="/characters/mia.webp" alt="" className="kd-bob -ml-3 h-[80%] w-auto" style={{ animationDelay: "0.6s" }} />
-        </div>
-        <div className="min-w-0 pb-2">
-          <p id="char-popup-title" className="flex items-center gap-1.5 font-heading text-base leading-tight font-bold">
-            <Sparkles aria-hidden className="size-4 shrink-0 text-gold" /> Create Your Child&apos;s Character
-          </p>
-          <p className="mt-1 text-xs leading-snug text-white/75">Make them a new member of King &amp; Mia&apos;s family. Free, no photo needed.</p>
-        </div>
-      </div>
-      <div className="flex gap-2 p-4 pt-3">
-        <Link href="/account/characters" onClick={() => setOpen(false)} className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-gold text-sm font-bold text-deep hover:bg-gold-300">
-          Create Now
-        </Link>
-        <button type="button" onClick={() => setOpen(false)} className="h-11 rounded-full px-4 text-sm font-medium text-white/70 hover:text-white">
-          Later
-        </button>
-      </div>
     </div>
   );
 }

@@ -3,8 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { CharacterPopup } from "@/components/store/hero/character-popup";
 import { HeroActions } from "@/components/store/hero/hero-actions";
-import { SpeechPopup } from "@/components/store/hero/speech-popup";
-import { Walkers } from "@/components/store/hero/walkers";
+import { familyScript, Walkers } from "@/components/store/hero/walkers";
 import { Kid } from "@/components/store/hero/kid";
 import {
   characterSize,
@@ -67,7 +66,42 @@ export function HeroStage({ theme, characters, className, children }: Props) {
     };
   }, [characters]);
 
+  // Now and then a character says a short line in a small bubble beside them.
+  const [talk, setTalk] = useState<number | null>(null);
+  useEffect(() => {
+    if (characters) return;
+    let n = 0;
+    let hide: number | undefined;
+    const tick = () => {
+      setTalk(n++);
+      window.clearTimeout(hide);
+      hide = window.setTimeout(() => setTalk(null), 4500);
+    };
+    const first = window.setTimeout(tick, 2500);
+    const t = window.setInterval(tick, 8000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(t);
+      window.clearTimeout(hide);
+    };
+  }, [characters]);
+
   const cast = [KING, MIA, ...(mine ?? [])];
+  const script = familyScript(mine ?? []);
+  const line = talk === null ? null : script[talk % script.length];
+  const bubble = (id: string, i: number) =>
+    line && line.who.id === id ? (
+      <span
+        key={talk}
+        role="status"
+        className={cn(
+          "absolute -top-[2%] z-10 w-max max-w-[8.5rem] rounded-xl bg-white px-2 py-1 text-[0.6rem] leading-tight font-bold text-royal shadow-md ring-1 ring-gold/40 motion-safe:animate-in motion-safe:zoom-in-90 sm:max-w-[12rem] sm:text-xs",
+          i >= 2 ? "right-[72%] rounded-br-sm" : "left-[72%] rounded-bl-sm",
+        )}
+      >
+        {line.say}
+      </span>
+    ) : null;
 
   return (
     <div className={cn("relative isolate overflow-hidden", className)}>
@@ -94,18 +128,13 @@ export function HeroStage({ theme, characters, className, children }: Props) {
               {/* eslint-disable-next-line @next/next/no-img-element -- small static cut-out */}
               <img src={OFFICIAL[c.id].src} alt={c.name} className={cn("h-full w-auto object-contain drop-shadow-[0_10px_12px_rgb(0_0_0/0.3)]", i === 0 && "kd-hop")} fetchPriority={i === 0 ? "high" : "auto"} />
               <figcaption className="-mt-1 rounded-full bg-white/90 px-2 py-0.5 text-[0.65rem] font-bold text-deep shadow-sm sm:text-xs">{c.name}</figcaption>
+              {bubble(c.id, i)}
             </figure>
           ) : (
-          <Kid
-            key={c.id}
-            look={c.look}
-            costume={theme.costume}
-            size={characterSize(c)}
-            wave={i === 0 || i === 2}
-            delay={i * 0.6}
-            label={c.name}
-            className={cast.length > 3 ? "max-w-[22%]" : "max-w-[30%]"}
-          />
+            <div key={c.id} className={cn("relative flex h-full items-end justify-center", cast.length > 3 ? "max-w-[22%]" : "max-w-[30%]")}>
+              <Kid look={c.look} costume={theme.costume} size={characterSize(c)} wave={i === 0 || i === 2} delay={i * 0.6} label={c.name} className="max-w-full" />
+              {bubble(c.id, i)}
+            </div>
           ),
         )}
       </div>
@@ -113,7 +142,6 @@ export function HeroStage({ theme, characters, className, children }: Props) {
       {!characters ? (
         <>
           <HeroActions mine={mine ?? []} />
-          <SpeechPopup mine={mine ?? []} />
           {mine?.length ? <Walkers mine={mine} costume={theme.costume} /> : null}
         </>
       ) : null}

@@ -11,6 +11,7 @@ import { clearBuyNow, removeBuyNow, removeFromCart, setBuyNowQuantity, setCartQu
 import { placeOrderAction, quoteOrderAction, type OrderQuote } from "@/features/orders/checkout-actions";
 import type { Address } from "@/features/account/queries";
 import { formatPaise } from "@/lib/format";
+import { contentParams, track } from "@/lib/meta-pixel";
 import { cn } from "@/lib/utils";
 
 type Settings = { flatShipping: number; freeShippingAbove: number | null; codEnabled: boolean; freeShippingPrepaid?: boolean };
@@ -60,6 +61,13 @@ export function CheckoutView({
   const [method, setMethod] = useState<Method>(
     initialMethod === "cod" && settings.codEnabled ? "cod" : onlineEnabled ? "razorpay" : "cod",
   );
+  // InitiateCheckout once per checkout page view.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || !items.length) return;
+    started.current = true;
+    track("InitiateCheckout", contentParams(items.map((i) => ({ id: i.sku, name: i.productName, price: i.price, quantity: i.quantity }))));
+  }, [items]);
   // Exact totals (discount by payment method, delivery) from the same database function as the order.
   const [quote, setQuote] = useState<(OrderQuote & { sig: string }) | null>(null);
   const quoteSig = `${method}|${items.map((i) => `${i.variantId}:${i.quantity}`).join(",")}`;
@@ -110,6 +118,12 @@ export function CheckoutView({
     const sig = [items.map((i) => `${i.variantId}:${i.quantity}`).join(","), addressId, method, note].join("|");
     if (attempt.current?.sig !== sig) attempt.current = { sig, key: newKey() };
     const checkoutKey = attempt.current.key;
+    // Payment details submitted (once per checkout attempt).
+    track(
+      "AddPaymentInfo",
+      { ...contentParams(items.map((i) => ({ id: i.sku, name: i.productName, price: i.price, quantity: i.quantity })), total), payment_method: method === "razorpay" ? "online" : "cod" },
+      checkoutKey ? `api-${checkoutKey}` : undefined,
+    );
     start(async () => {
       const res = await placeOrderAction({
         items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),

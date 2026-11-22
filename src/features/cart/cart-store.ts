@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { contentParams, track } from "@/lib/meta-pixel";
 
 /**
  * Browser cart (localStorage) and the one-item "Buy now" list (sessionStorage).
@@ -91,7 +92,10 @@ export function addToCart(item: Omit<CartItem, "quantity">, quantity: number) {
   if (i >= 0) items[i] = { ...items[i], ...item, image: item.image ?? items[i].image, quantity: clampQty(items[i].quantity + quantity, item.maxQty) };
   else items.push({ ...item, quantity: clampQty(quantity, item.maxQty) });
   cart.write(items);
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CART_ADDED_EVENT, { detail: { variantId: item.variantId } }));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CART_ADDED_EVENT, { detail: { variantId: item.variantId } }));
+    track("AddToCart", contentParams([{ id: item.sku, name: item.productName, price: item.price, quantity }]));
+  }
 }
 
 export const setCartQuantity = cart.setQuantity;

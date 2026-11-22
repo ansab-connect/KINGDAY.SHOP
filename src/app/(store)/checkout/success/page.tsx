@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { CheckCircle2 } from "lucide-react";
+import { PurchaseEvent } from "@/components/analytics/meta-pixel";
 import { Container } from "@/components/store/section";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,11 +24,18 @@ async function Success({ searchParams }: PageProps<"/checkout/success">) {
   // RLS: customers can only read their own orders.
   const { data } = await supabase
     .from("orders")
-    .select("order_number, grand_total, customer_name, payment_method, payment_status")
+    .select("order_number, grand_total, customer_name, payment_method, payment_status, order_items(sku, product_name, unit_price, quantity)")
     .eq("order_number", number)
     .maybeSingle();
   if (!data) notFound();
-  const o = data as { order_number: string; grand_total: number; customer_name: string; payment_method: string; payment_status: string };
+  const o = data as {
+    order_number: string;
+    grand_total: number;
+    customer_name: string;
+    payment_method: string;
+    payment_status: string;
+    order_items: { sku: string; product_name: string; unit_price: number; quantity: number }[];
+  };
   const online = o.payment_method === "razorpay";
   // Online orders only reach this page once the server has recorded the payment.
   if (online && o.payment_status !== "paid") redirect(`/checkout/payment?order=${o.order_number}`);
@@ -35,6 +43,11 @@ async function Success({ searchParams }: PageProps<"/checkout/success">) {
 
   return (
     <div className="mx-auto flex max-w-lg flex-col items-center rounded-2xl border bg-white p-6 text-center shadow-card sm:p-10">
+      <PurchaseEvent
+        orderNumber={o.order_number}
+        value={o.grand_total}
+        items={(o.order_items ?? []).map((i) => ({ id: i.sku, name: i.product_name, price: i.unit_price, quantity: i.quantity }))}
+      />
       <CheckCircle2 aria-hidden className="size-14 text-success" />
       <h1 className="mt-4 font-heading text-2xl font-bold text-deep">Thank you, your order is placed!</h1>
       <p className="mt-2 text-muted-foreground">

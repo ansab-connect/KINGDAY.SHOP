@@ -1,5 +1,6 @@
 import { L } from "@/components/i18n/lang";
 import { InstallBanner } from "@/components/pwa/install-app";
+import { MetaPixel } from "@/components/analytics/meta-pixel";
 import { CartSync } from "@/components/store/cart-sync";
 import { CartToast } from "@/components/store/cart-toast";
 import { MobileTabBar } from "@/components/store/mobile-tab-bar";
@@ -33,6 +34,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       {isSupabaseConfigured ? <CartSync /> : null}
       <MobileTabBar />
       <CartToast />
+      <MetaPixel />
       {isGeminiConfigured() ? <AiChat /> : null}
       <InstallBanner />
     </div>
