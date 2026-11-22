@@ -1481,5 +1481,72 @@ await test("discounts: prepaid % off and free delivery online, COD % separate, t
   await db.query(`update public.store_settings set value = '0' where key = 'shipping.flat_rate'`);
 });
 
+
+console.log("Manual bills (0034)");
+await test("bills: sale bill reduces stock, totals and number set, cancel puts stock back", async () => {
+  await asSuperuser();
+  const [v] = await rows(`select v.id, v.price from public.product_variants v where v.is_active order by v.sku limit 1`);
+  await db.query(`update public.inventory set on_hand = 5, reserved = 0 where variant_id = $1`, [v.id]);
+  await user(admin2);
+  const p = { kind: "sale", customer_id: alice, customer_name: "Alice", customer_phone: "9876543210", discount: 1000, payments: [],
+    items: [{ variant_id: v.id, description: "", quantity: 2, unit_price: 50000 }, { description: "Gift wrap", quantity: 1, unit_price: 2000 }] };
+  const [{ b }] = await rows(`select public.create_bill($1::jsonb) as b`, [JSON.stringify({ ...p, payments: [{ method: "cash", amount: 1000 }, { method: "upi", amount: 100000, reference: "UTR123" }] })]);
+  assert(/^KD-SL-\d{6}$/.test(b.number), b.number);
+  const [bill] = await rows(`select * from public.bills where id = $1`, [b.id]);
+  assert(bill.subtotal === 102000 && bill.grand_total === 101000 && bill.payment_status === "paid" && bill.payment_method === "mixed", JSON.stringify(bill));
+  assert(bill.customer_id === alice && /^KD-CUS-/.test(bill.customer_code), `customer ${bill.customer_code}`);
+  const pays = await rows(`select method, amount from public.bill_payments where bill_id = $1 order by position`, [b.id]);
+  assert(pays.length === 2 && pays[1].method === "upi" && pays[1].amount === 100000, JSON.stringify(pays));
+  await asSuperuser();
+  const [inv] = await rows(`select on_hand from public.inventory where variant_id = $1`, [v.id]);
+  assert(inv.on_hand === 3, `stock ${inv.on_hand}`);
+  await user(admin2);
+  await expectError(`select public.create_bill($1::jsonb)`, [JSON.stringify({ ...p, items: [{ variant_id: v.id, description: "", quantity: 9, unit_price: 1 }] })], /not enough stock/);
+  await expectError(`select public.create_bill($1::jsonb)`, [JSON.stringify({ ...p, discount: 999999 })], /discount/);
+  await expectError(`select public.create_bill($1::jsonb)`, [JSON.stringify({ ...p, payments: [{ method: "bitcoin", amount: 500 }] })], /how the customer paid/);
+  await expectError(`select public.create_bill($1::jsonb)`, [JSON.stringify({ ...p, payments: [{ method: "cash", amount: 200000 }] })], /more than the total/);
+  await db.query(`select public.cancel_bill($1, 'Customer returned')`, [b.id]);
+  await asSuperuser();
+  const [after] = await rows(`select on_hand from public.inventory where variant_id = $1`, [v.id]);
+  const [c] = await rows(`select status from public.bills where id = $1`, [b.id]);
+  assert(after.on_hand === 5 && c.status === "cancelled", `${after.on_hand} ${c.status}`);
+});
+await test("bills: service bill has its own numbers, no products; customers can't bill or read", async () => {
+  await user(admin2);
+  const [{ b }] = await rows(`select public.create_bill($1::jsonb) as b`, [JSON.stringify({ kind: "service", customer_name: "Ravi", vehicle: "Kids jeep 12V", discount: 0, payments: [{ method: "cash", amount: 10000 }],
+    items: [{ description: "Battery check", quantity: 1, unit_price: 30000 }] })]);
+  assert(/^KD-SV-\d{6}$/.test(b.number), b.number);
+  const [x] = await rows(`select payment_status, grand_total from public.bills where id = $1`, [b.id]);
+  assert(x.payment_status === "partial" && x.grand_total === 30000, JSON.stringify(x));
+  await user(alice);
+  await expectError(`select public.create_bill($1::jsonb)`, [JSON.stringify({ kind: "service", customer_name: "x", items: [{ description: "a", quantity: 1, unit_price: 1 }] })], /not authorized/);
+  const seen = await rows(`select customer_id from public.bills`);
+  assert(seen.every((x) => x.customer_id === alice), "customer can read other people's bills");
+  await anon();
+  await expectError(`select public.create_bill('{}'::jsonb)`, [], /permission denied/);
+});
+await test("bills: next customer ID is the one a new customer gets; staff only", async () => {
+  await user(admin2);
+  const [{ c }] = await rows(`select public.next_customer_code() as c`);
+  await asSuperuser();
+  const [u] = await rows(`insert into auth.users (email, raw_user_meta_data) values ('walkin@test.local', '{"full_name":"Walk In"}') returning id`);
+  const [pr] = await rows(`select customer_code from public.profiles where id = $1`, [u.id]);
+  assert(pr.customer_code === c, `${pr.customer_code} != ${c}`);
+  await user(alice);
+  await expectError(`select public.next_customer_code()`, [], /not authorized/);
+});
+await test("bills: a bill with only a phone links to that customer's account, who can read it", async () => {
+  await asSuperuser();
+  await db.query(`update public.profiles set phone = '+91 98470 11111' where id = $1`, [bob]);
+  await user(admin2);
+  const [{ b }] = await rows(`select public.create_bill($1::jsonb) as b`, [JSON.stringify({ kind: "service", customer_name: "Bob", customer_phone: "9847011111", discount: 0, payments: [],
+    items: [{ description: "Check-up", quantity: 1, unit_price: 5000 }] })]);
+  await user(bob);
+  const mine = await rows(`select customer_code, (select count(*) from public.bill_items i where i.bill_id = b.id)::int as n from public.bills b where id = $1`, [b.id]);
+  assert(mine.length === 1 && /^KD-CUS-/.test(mine[0].customer_code) && mine[0].n === 1, JSON.stringify(mine));
+  await user(alice);
+  assert((await rows(`select id from public.bills where id = $1`, [b.id])).length === 0, "other customer sees it");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

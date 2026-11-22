@@ -133,6 +133,29 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   }
   const taken = await admin.from("profiles").select("id").eq("mobile_e164", mobile).maybeSingle();
   if (taken.data) {
+    // A customer first billed at the shop counter gets an account (and Customer ID) keyed
+    // by their phone. Registering with the same phone takes over that account, so their
+    // ID and bills stay linked. Only accounts that were never signed in to.
+    const { data: existing } = await admin.auth.admin.getUserById(taken.data.id as string);
+    const u = existing?.user;
+    if (u && u.user_metadata?.created_by === "billing" && !u.last_sign_in_at) {
+      const loginEmail = parsed.data.email || u.email!;
+      const { error: claimError } = await admin.auth.admin.updateUserById(u.id, {
+        email: loginEmail,
+        password: parsed.data.password,
+        email_confirm: true,
+        user_metadata: { ...u.user_metadata, full_name: parsed.data.fullName, created_by: null },
+      });
+      if (claimError) {
+        if (/already|registered|exists/i.test(claimError.message)) return { fieldErrors: { email: "This email already has an account. Sign in instead." }, values };
+        if (/password/i.test(claimError.message)) return { fieldErrors: { password: "Choose a stronger password." }, values };
+        return { error: "We couldn't create your account. Please try again.", values };
+      }
+      await admin.from("profiles").update({ full_name: parsed.data.fullName }).eq("id", u.id);
+      const supabase = await createClient();
+      await supabase.auth.signInWithPassword({ email: loginEmail, password: parsed.data.password });
+      redirect(safeNextPath(formData.get("next"), "/account"));
+    }
     return { fieldErrors: { mobile: "This mobile number already has an account. Sign in instead." }, values };
   }
 

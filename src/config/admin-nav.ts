@@ -19,6 +19,7 @@ import {
   Megaphone,
   LayoutDashboard,
   Package,
+  ReceiptText,
   Settings,
   ShoppingBag,
   Tag,
@@ -71,6 +72,7 @@ export const adminNav: AdminNavGroup[] = [
     label: "Sales",
     items: [
       { title: "Orders", href: "/admin/orders", icon: ShoppingBag, module: "orders", phase: 9 },
+      { title: "Billing", href: "/admin/billing", icon: ReceiptText, module: "orders" },
       { title: "Customers", href: "/admin/customers", icon: Users, module: "customers", phase: 7 },
       { title: "Coupons", href: "/admin/coupons", icon: TicketPercent, module: "coupons", phase: 8 },
       { title: "Promotions", href: "/admin/promotions", icon: Megaphone, module: "customers" },
