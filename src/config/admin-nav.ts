@@ -76,6 +76,7 @@ export const adminNav: AdminNavGroup[] = [
       { title: "Customers", href: "/admin/customers", icon: Users, module: "customers", phase: 7 },
       { title: "Coupons", href: "/admin/coupons", icon: TicketPercent, module: "coupons", phase: 8 },
       { title: "Promotions", href: "/admin/promotions", icon: Megaphone, module: "customers" },
+      { title: "Top Bar Messages", href: "/admin/announcements", icon: Megaphone, module: "cms" },
       { title: "Royal Moments", href: "/admin/instagram", icon: Camera, module: "cms" },
       { title: "Seasonal Themes", href: "/admin/themes", icon: Sparkles, module: "cms" },
     ],

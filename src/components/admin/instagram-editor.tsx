@@ -29,7 +29,7 @@ export function InstagramEditor({ initial }: { initial: { url: string; image_pat
       {posts.length === 0 ? <p className="text-sm text-muted-foreground">No posts yet. The homepage shows only the Follow button until you add some.</p> : null}
       {posts.map((p, i) => (
         <div key={p.key} className="grid gap-3 rounded-xl border p-4 sm:grid-cols-[10rem_1fr_auto]">
-          <SingleImageUpload id={`ig-${p.key}`} label="Post picture" bucket="category-images" folder="instagram" value={p.image_path} onChange={(image_path) => set(p.key, { image_path })} maxEdge={800} />
+          <SingleImageUpload id={`ig-${p.key}`} label="Picture (optional)" bucket="category-images" folder="instagram" value={p.image_path} onChange={(image_path) => set(p.key, { image_path })} maxEdge={800} />
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-deep">Instagram post link</span>

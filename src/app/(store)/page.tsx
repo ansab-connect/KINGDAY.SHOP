@@ -5,11 +5,11 @@ import { L } from "@/components/i18n/lang";
 import { HeroStage } from "@/components/store/hero/hero-stage";
 import { getActiveHeroTheme } from "@/features/marketing/hero-themes";
 import { getInstagramPosts, INSTAGRAM_URL } from "@/features/marketing/instagram";
-import { publicStorageUrl } from "@/lib/storage";
+import { InstagramEmbeds } from "@/components/store/instagram-embeds";
 import { NewsletterForm } from "@/components/store/newsletter-form";
 import { Stars } from "@/components/store/price";
 import { ProductCard, ProductGrid } from "@/components/store/product-card";
-import { CategoryIcon } from "@/components/store/product-visual";
+import { CategoryIcon, ProductVisual } from "@/components/store/product-visual";
 import { Container, SectionHeading } from "@/components/store/section";
 import { siteConfig } from "@/config/site";
 import { whyChoose } from "@/config/storefront";
@@ -22,7 +22,7 @@ import {
   getNewArrivals,
   getOfferProducts,
 } from "@/features/catalog/queries";
-import { discountPercent } from "@/lib/format";
+import { discountPercent, formatPaise } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: { absolute: `${siteConfig.name} | Premium Kids' Electric Jeeps, Bikes & Scooters` },
@@ -44,7 +44,7 @@ export default async function HomePage() {
     getInstagramPosts(),
     getActiveHeroTheme(),
   ]);
-  const offers = allOffers.slice(0, 3);
+  const offers = allOffers.slice(0, 6);
   const topDiscount = Math.max(...allOffers.map((p) => discountPercent(p.mrp, p.price)), 0);
 
   return (
@@ -200,9 +200,9 @@ export default async function HomePage() {
                 <L en="See all offers" ml="എല്ലാ ഓഫറുകളും" /> <ArrowRight aria-hidden className="size-4" />
               </Link>
             </div>
-            <ul className="grid grid-cols-1 gap-4 bg-white p-4 sm:grid-cols-3 sm:p-6 lg:rounded-l-3xl">
+            <ul className="grid grid-cols-3 gap-2 bg-white p-3 sm:gap-3 sm:p-5 lg:rounded-l-3xl">
               {offers.map((p) => (
-                <li key={p.id}><ProductCard product={p} /></li>
+                <li key={p.id}><MiniOfferCard product={p} /></li>
               ))}
             </ul>
           </div>
@@ -302,26 +302,7 @@ export default async function HomePage() {
       <section className="pb-10 sm:pb-14">
         <Container>
           <SectionHeading eyebrow="@kingday.official" title="Royal Moments" description="Real rides, real smiles, from our Instagram." align="center" />
-          {instagram.length ? (
-            <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6">
-              {instagram.map((p) => {
-                const src = publicStorageUrl("category-images", p.image_path);
-                return (
-                  <li key={p.url}>
-                    <a href={p.url} target="_blank" rel="noopener noreferrer" className="group relative block overflow-hidden rounded-xl" aria-label={p.caption || "Open this post on Instagram"}>
-                      {src ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- post thumbnails uploaded by the admin
-                        <img src={src} alt={p.caption} loading="lazy" className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                      ) : null}
-                      <span aria-hidden className="absolute inset-0 grid place-items-center bg-deep/0 transition-colors group-hover:bg-deep/40">
-                        <Camera className="size-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
-                      </span>
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
+          <InstagramEmbeds posts={instagram} />
           <div className="mt-6 flex justify-center">
             <a
               href={INSTAGRAM_URL}
@@ -394,6 +375,23 @@ function PromoBanner({
           dark ? "text-royal-400/50" : "text-gold-400/60"
         }`}
       />
+    </Link>
+  );
+}
+
+/** Small offer tile for the home "Special offers" grid: photo, % off, price. */
+function MiniOfferCard({ product }: { product: Awaited<ReturnType<typeof getOfferProducts>>[number] }) {
+  const off = discountPercent(product.mrp, product.price);
+  return (
+    <Link href={`/products/${product.slug}`} className="group block overflow-hidden rounded-xl border border-border/70 bg-white transition-shadow hover:shadow-lift">
+      <div className="relative">
+        <ProductVisual image={product.images[0]} categorySlug={product.category.slug} sizes="(min-width: 1024px) 14vw, 33vw" className="aspect-square bg-gradient-to-b from-canvas to-white" />
+        {off >= 5 ? <span className="absolute top-1.5 left-1.5 rounded-md bg-gold px-1.5 py-0.5 text-[0.6rem] font-bold text-deep shadow-sm">-{off}%</span> : null}
+      </div>
+      <div className="p-1.5 sm:p-2">
+        <p className="line-clamp-1 text-[0.7rem] font-semibold text-deep sm:text-xs">{product.name}</p>
+        <p className="text-xs font-bold text-royal tabular sm:text-sm">{formatPaise(product.price)}</p>
+      </div>
     </Link>
   );
 }

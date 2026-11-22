@@ -13,14 +13,14 @@ async function Content() {
     <>
       <PageHeader
         title="Royal Moments"
-        description="The Instagram gallery on the homepage. Add real posts from @kingday.official: paste the post link and upload its picture."
+        description="The Instagram gallery on the homepage. Add real posts from @kingday.official: paste the post or reel link. The homepage plays the real Instagram video, so no picture is needed."
       />
       <p className="mb-4 text-sm text-muted-foreground">
         Open{" "}
         <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-royal hover:underline">
           instagram.com/kingday.official
         </a>
-        , open a post, tap ⋯ → Copy link, and paste it here. Save the post picture to your phone and upload it.
+        , open a post or reel, tap ⋯ → Copy link, and paste it here. A picture is optional.
       </p>
       <Card className="shadow-card">
         <CardContent>

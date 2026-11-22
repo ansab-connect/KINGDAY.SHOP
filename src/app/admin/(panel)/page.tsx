@@ -100,12 +100,12 @@ async function AdminDashboardPageContent() {
       <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {sales ? (
           <>
-            <StatCard label="Total revenue" value={formatPaise(s.revenue.value)} change={s.revenue.change} hint="vs previous 30 days" icon={IndianRupee} tone="royal" />
-            <StatCard label="Total orders" value={formatNumber(s.orders.value)} change={s.orders.change} hint="vs previous 30 days" icon={ShoppingBag} tone="gold" />
+            <StatCard label="Total revenue" value={formatPaise(s.revenue.value)} change={s.revenue.change} hint="vs previous 30 days" icon={IndianRupee} tone="royal" href="/admin/reports" />
+            <StatCard label="Total orders" value={formatNumber(s.orders.value)} change={s.orders.change} hint="vs previous 30 days" icon={ShoppingBag} tone="gold" href="/admin/orders" />
           </>
         ) : null}
-        {sees("customers") ? <StatCard label="Customers" value={formatNumber(s.customers.value)} hint={`${s.customers.newThisMonth} new this month`} icon={Users} tone="neutral" /> : null}
-        {sees("products") ? <StatCard label="Active products" value={formatNumber(s.products.active)} hint={`${s.products.total} in catalogue`} icon={Package} tone="neutral" /> : null}
+        {sees("customers") ? <StatCard label="Customers" value={formatNumber(s.customers.value)} hint={`${s.customers.newThisMonth} new this month`} icon={Users} tone="neutral" href="/admin/customers" /> : null}
+        {sees("products") ? <StatCard label="Active products" value={formatNumber(s.products.active)} hint={`${s.products.total} in catalogue`} icon={Package} tone="neutral" href="/admin/products" /> : null}
       </section>
 
       {/* Operational KPIs */}

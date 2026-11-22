@@ -33,12 +33,12 @@ async function ControlCentre() {
       <PageHeader title="Control Centre" description="Super Admin home: accounts, permissions, system settings and recent activity." />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Super Admins" value={show(counts.superAdmins)} icon={Crown} tone="gold" />
-        <StatCard label="Admins" value={show(counts.admins)} icon={ShieldCheck} />
-        <StatCard label="Staff" value={show(counts.staff)} icon={IdCard} tone="neutral" />
-        <StatCard label="Service Staff" value={show(counts.serviceStaff)} icon={Wrench} tone="neutral" />
-        <StatCard label="Customers" value={show(counts.customers)} icon={Users} tone="neutral" hint="With a KD-CUS Customer ID" />
-        <StatCard label="Inactive team accounts" value={show(counts.inactive)} icon={UserX} tone={counts.inactive ? "warning" : "neutral"} />
+        <StatCard label="Super Admins" value={show(counts.superAdmins)} icon={Crown} tone="gold" href="/super-admin/admins" />
+        <StatCard label="Admins" value={show(counts.admins)} icon={ShieldCheck} href="/super-admin/admins" />
+        <StatCard label="Staff" value={show(counts.staff)} icon={IdCard} tone="neutral" href="/admin/staff" />
+        <StatCard label="Service Staff" value={show(counts.serviceStaff)} icon={Wrench} tone="neutral" href="/admin/staff" />
+        <StatCard label="Customers" value={show(counts.customers)} icon={Users} tone="neutral" hint="With a KD-CUS Customer ID" href="/admin/customers" />
+        <StatCard label="Inactive team accounts" value={show(counts.inactive)} icon={UserX} tone={counts.inactive ? "warning" : "neutral"} href="/admin/users" />
       </div>
 
       <h2 className="mt-8 mb-3 font-heading text-lg font-semibold text-deep">Tools</h2>

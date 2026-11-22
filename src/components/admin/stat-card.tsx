@@ -1,5 +1,6 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,8 @@ type StatCardProps = {
   change?: number;
   hint?: string;
   tone?: "royal" | "gold" | "neutral" | "warning";
+  /** Clicking the card opens this page. */
+  href?: string;
 };
 
 const toneStyles = {
@@ -21,10 +24,10 @@ const toneStyles = {
   warning: "bg-warning-soft text-warning",
 } as const;
 
-export function StatCard({ label, value, icon: Icon, change, hint, tone = "royal" }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, change, hint, tone = "royal", href }: StatCardProps) {
   const up = (change ?? 0) >= 0;
-  return (
-    <Card className="gap-0 py-0 shadow-card transition-shadow duration-300 hover:shadow-lift">
+  const card = (
+    <Card className={cn("h-full gap-0 py-0 shadow-card transition-shadow duration-300 hover:shadow-lift", href && "group-hover:ring-1 group-hover:ring-royal-200")}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -46,8 +49,16 @@ export function StatCard({ label, value, icon: Icon, change, hint, tone = "royal
             </span>
           ) : null}
           {hint ? <span className="text-muted-foreground">{hint}</span> : null}
+          {href ? <ChevronRight aria-hidden className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-royal" /> : null}
         </div>
       </CardContent>
     </Card>
+  );
+  return href ? (
+    <Link href={href} aria-label={`${label}: ${value}. Open`} className="group block rounded-xl focus-visible:ring-3 focus-visible:ring-royal-200 focus-visible:outline-none">
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }

@@ -141,11 +141,15 @@ type AddressRow = { user_id: string; line1: string; line2: string | null; landma
 const addressText = (a: AddressRow) =>
   [a.line1, a.line2, a.landmark ? `Near ${a.landmark}` : null, `${a.city}, ${a.state} ${a.postal_code}`].filter(Boolean).join(", ");
 
-/** Parses what was typed: a Customer ID (1–6 digits, "KD-CUS-000012") or a mobile number (7+ digits). */
-function parseCustomerQuery(q: string): { code: string } | { mobile: string } | null {
+/**
+ * Parses what was typed. "KD-CUS-12" = that Customer ID only. A plain short number (1–6
+ * digits) could be an ID or the end of a mobile number, so both are searched. 7+ digits =
+ * mobile number.
+ */
+function parseCustomerQuery(q: string): { code: string; mobileEnd?: string } | { mobile: string } | null {
   const t = q.replace(/\s/g, "").toUpperCase();
-  const id = t.match(/^(?:KD-?)?(?:CUS-?)?(\d{1,6})$/);
-  if (id) return { code: `KD-CUS-${id[1].padStart(6, "0")}` };
+  const id = t.match(/^(KD-?|CUS-?|KD-?CUS-?)?(\d{1,6})$/);
+  if (id) return { code: `KD-CUS-${id[2].padStart(6, "0")}`, mobileEnd: !id[1] && id[2].length >= 3 ? id[2] : undefined };
   const digits = t.replace(/^\+/, "");
   if (/^\d{7,15}$/.test(digits)) return { mobile: digits.length > 10 ? digits.slice(-10) : digits };
   return null;
@@ -185,13 +189,16 @@ export async function searchBillCustomersAction(q: string): Promise<BillCustomer
   // Full 10-digit mobile = exact match; fewer digits = numbers that end with them.
   query =
     "code" in parsed
-      ? query.eq("customer_code", parsed.code)
+      ? parsed.mobileEnd
+        ? query.or(`customer_code.eq.${parsed.code},mobile_e164.like.%${parsed.mobileEnd}`)
+        : query.eq("customer_code", parsed.code)
       : parsed.mobile.length === 10
         ? query.eq("mobile_e164", `+91${parsed.mobile}`)
         : query.like("mobile_e164", `%${parsed.mobile}`);
   const { data } = await query.order("customer_code").limit(10);
   type P = { id: string; full_name: string | null; phone: string | null; customer_code: string };
-  const people = (data ?? []) as P[];
+  const exact = "code" in parsed ? parsed.code : null;
+  const people = ((data ?? []) as P[]).sort((a, b) => Number(b.customer_code === exact) - Number(a.customer_code === exact));
   if (!people.length) return [];
   const known = await knownAddresses(supabase, people.map((p) => p.id));
   return people.map((p) => ({ id: p.id, code: p.customer_code, name: p.full_name ?? "", phone: p.phone ?? "", addresses: known.get(p.id) ?? [] }));
