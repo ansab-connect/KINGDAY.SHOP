@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, SearchX, X } from "lucide-react";
 import { ProductGrid } from "@/components/store/product-card";
 import { AutoSubmit } from "@/components/store/shop/auto-submit";
 import { FilterSheet } from "@/components/store/shop/filter-sheet";
-import { getBrands, getCategories, getPriceBounds, getProducts, parseFilters } from "@/features/catalog/queries";
+import { getAllCategories, getBrands, getCategories, getPriceBounds, getProducts, parseFilters } from "@/features/catalog/queries";
 import { SORT_OPTIONS, type ProductFilters } from "@/features/catalog/types";
 import { cn } from "@/lib/utils";
 
@@ -39,19 +39,21 @@ export async function ProductListing({
 }) {
   const parsed = parseFilters(await searchParams);
   const filters: ProductFilters = { ...parsed, ...fixed };
-  const [{ items, total, page, pageCount }, categories, brands, bounds] = await Promise.all([
+  const [{ items, total, page, pageCount }, categories, allCategories, brands, bounds] = await Promise.all([
     getProducts(filters),
     getCategories(),
+    getAllCategories(),
     getBrands(),
     getPriceBounds(),
   ]);
+  const subcategories = allCategories.filter((c) => c.parentSlug);
   const href = (patch: Partial<ProductFilters>) => buildHref(basePath, filters, fixed, { page: 1, ...patch });
 
 
   const chips: { label: string; href: string }[] = [];
   if (filters.q) chips.push({ label: `“${filters.q}”`, href: href({ q: undefined }) });
   if (filters.category && !fixed.category) {
-    chips.push({ label: categories.find((c) => c.slug === filters.category)?.name ?? filters.category, href: href({ category: undefined }) });
+    chips.push({ label: allCategories.find((c) => c.slug === filters.category)?.name ?? filters.category, href: href({ category: undefined }) });
   }
   for (const b of filters.brands ?? []) {
     chips.push({ label: brands.find((x) => x.slug === b)?.name ?? b, href: href({ brands: filters.brands?.filter((x) => x !== b) }) });
@@ -74,7 +76,16 @@ export async function ProductListing({
           <div className="mt-3 flex flex-col gap-2">
             <RadioRow id={`${idPrefix}-cat-all`} name="category" value="" checked={!filters.category} label="All categories" />
             {categories.map((c) => (
-              <RadioRow key={c.slug} id={`${idPrefix}-cat-${c.slug}`} name="category" value={c.slug} checked={filters.category === c.slug} label={c.name} count={c.productCount} />
+              <div key={c.slug} className="flex flex-col gap-2">
+                <RadioRow id={`${idPrefix}-cat-${c.slug}`} name="category" value={c.slug} checked={filters.category === c.slug} label={c.name} count={c.productCount} />
+                {subcategories
+                  .filter((s) => s.parentSlug === c.slug)
+                  .map((s) => (
+                    <div key={s.slug} className="pl-6">
+                      <RadioRow id={`${idPrefix}-cat-${s.slug}`} name="category" value={s.slug} checked={filters.category === s.slug} label={s.name} count={s.productCount} />
+                    </div>
+                  ))}
+              </div>
             ))}
           </div>
         </fieldset>

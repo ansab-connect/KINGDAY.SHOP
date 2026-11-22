@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { PageHero } from "@/components/store/page-hero";
@@ -29,15 +30,44 @@ async function CategoryContent({ params, searchParams }: Pick<PageProps<"/catego
   const { slug } = await params;
   const category = await getCategoryBySlug(slug);
   if (!category) notFound();
+  const all = await getAllCategories();
+  const parent = category.parentSlug ? all.find((c) => c.slug === category.parentSlug) ?? null : null;
+  const top = parent ?? category;
+  const children = all.filter((c) => c.parentSlug === top.slug);
 
   return (
     <>
       <PageHero
         title={category.name}
         description={category.description}
-        crumbs={[{ name: "Home", href: "/" }, { name: "Categories", href: "/categories" }, { name: category.name }]}
+        crumbs={[
+          { name: "Home", href: "/" },
+          { name: "Categories", href: "/categories" },
+          ...(parent ? [{ name: parent.name, href: `/categories/${parent.slug}` }] : []),
+          { name: category.name },
+        ]}
       />
       <Container className="py-10 sm:py-12">
+        {children.length ? (
+          <nav aria-label={`${top.name} sub-categories`} className="-mx-4 mb-6 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <ul className="flex gap-2">
+              {[{ slug: top.slug, name: `All ${top.name}`, productCount: top.productCount }, ...children].map((c) => {
+                const on = c.slug === category.slug;
+                return (
+                  <li key={c.slug} className="shrink-0">
+                    <Link
+                      href={`/categories/${c.slug}`}
+                      aria-current={on ? "page" : undefined}
+                      className={`inline-flex h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors ${on ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-200 hover:text-royal"}`}
+                    >
+                      {c.name} <span className={`text-xs font-normal ${on ? "text-white/75" : "text-muted-foreground"}`}>{c.productCount}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        ) : null}
         <Suspense fallback={<ListingSkeleton />}>
           <ProductListing searchParams={searchParams} basePath={`/categories/${category.slug}`} fixed={{ category: category.slug }} />
         </Suspense>

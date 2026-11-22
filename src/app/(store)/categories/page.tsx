@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { PageHero } from "@/components/store/page-hero";
 import { ProductVisual } from "@/components/store/product-visual";
 import { Container } from "@/components/store/section";
-import { getCategories } from "@/features/catalog/queries";
+import { getAllCategories, getCategories } from "@/features/catalog/queries";
 
 export const metadata: Metadata = {
   title: "Shop by Category",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function CategoriesPage() {
-  const categories = await getCategories();
+  const [categories, all] = await Promise.all([getCategories(), getAllCategories()]);
   return (
     <>
       <PageHero
@@ -36,6 +36,19 @@ export default async function CategoriesPage() {
                   <ArrowRight aria-hidden className="mt-1 size-5 shrink-0 text-royal-300 transition-transform group-hover:translate-x-1 group-hover:text-royal" />
                 </div>
               </Link>
+              {all.some((s) => s.parentSlug === c.slug) ? (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {all
+                    .filter((s) => s.parentSlug === c.slug)
+                    .map((s) => (
+                      <li key={s.slug}>
+                        <Link href={`/categories/${s.slug}`} className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-white px-3.5 text-sm font-medium text-deep hover:border-royal-200 hover:text-royal">
+                          {s.name} <span className="text-xs text-muted-foreground">{s.productCount}</span>
+                        </Link>
+                      </li>
+                    ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ul>
