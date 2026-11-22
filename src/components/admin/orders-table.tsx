@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tag } from "lucide-react";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/admin/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -84,20 +85,21 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden sm:table-cell">Payment</TableHead>
                 <TableHead className="hidden lg:table-cell">Method</TableHead>
-                <TableHead className="pr-6 text-right">Total</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="pr-6 text-right"><span className="sr-only">Shipping label</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">{previewOrders.length === 0 ? "No orders yet. New orders will appear here." : "No orders match these filters."}</TableCell>
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">{previewOrders.length === 0 ? "No orders yet. New orders will appear here." : "No orders match these filters."}</TableCell>
                 </TableRow>
               ) : (
                 rows.slice(0, 100).map((o) => (
-                  <TableRow key={o.id}>
+                  <TableRow key={o.id} className="relative cursor-pointer hover:bg-royal-50/40">
                     <TableCell className="pl-6">
                       {live ? (
-                        <Link href={`/admin/orders/${o.id}`} className="font-medium text-royal underline-offset-4 hover:underline">{o.number}</Link>
+                        <Link href={`/admin/orders/${o.id}`} className="font-medium text-royal underline-offset-4 after:absolute after:inset-0 hover:underline">{o.number}</Link>
                       ) : (
                         <span className="font-medium text-deep">{o.number}</span>
                       )}
@@ -111,7 +113,20 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                     <TableCell><OrderStatusBadge status={o.status} /></TableCell>
                     <TableCell className="hidden sm:table-cell"><PaymentStatusBadge status={o.paymentStatus} /></TableCell>
                     <TableCell className="hidden text-muted-foreground lg:table-cell">{o.paymentMethod === "cod" ? "Cash on delivery" : "Razorpay"}</TableCell>
-                    <TableCell className="pr-6 text-right font-medium tabular">{formatPaise(o.total)}</TableCell>
+                    <TableCell className="text-right font-medium tabular">{formatPaise(o.total)}</TableCell>
+                    <TableCell className="pr-6 text-right">
+                      {live ? (
+                        <a
+                          href={`/admin/orders/${o.id}/label`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="relative z-10 inline-flex h-8 items-center gap-1 rounded-lg border bg-white px-2.5 text-xs font-semibold text-royal hover:bg-royal-50"
+                          title="Shipping label (print or save as PDF)"
+                        >
+                          <Tag aria-hidden className="size-3.5" /> Label
+                        </a>
+                      ) : null}
+                    </TableCell>
                   </TableRow>
                 ))
               )}

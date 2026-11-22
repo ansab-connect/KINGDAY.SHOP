@@ -72,9 +72,9 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
           <>
             <OrderStatusBadge status={o.status} />
             <PaymentStatusBadge status={payment} />
-            <Button asChild size="sm" variant="outline">
+            <Button asChild size="sm" className="bg-royal text-white hover:bg-royal-800">
               <a href={`/admin/orders/${o.id}/label`} target="_blank" rel="noopener noreferrer">
-                <Tag aria-hidden className="size-4" /> Shipping label
+                <Tag aria-hidden className="size-4" /> Download shipping label
               </a>
             </Button>
           </>
@@ -191,8 +191,8 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
             </CardContent>
           </Card>
 
-          <Card className="shadow-card">
-            <CardHeader><CardTitle className="font-heading text-base">Customer</CardTitle></CardHeader>
+          <Card id="delivery" className="scroll-mt-24 shadow-card">
+            <CardHeader><CardTitle className="font-heading text-base">Customer &amp; delivery address</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
               {editable ? (
                 <OrderDetailsEditor

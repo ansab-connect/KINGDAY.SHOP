@@ -28,9 +28,14 @@ async function Label({ params }: { params: PageProps<"/admin/orders/[id]/label">
   return (
     <main className="label-page bg-neutral-200 py-6 print:bg-white print:py-0">
       <style>{`@page { size: 100mm 150mm; margin: 0 } @media print { body { margin: 0 } .no-print { display: none !important } }`}</style>
-      <div className="no-print mx-auto mb-4 flex w-[100mm] items-center justify-between gap-2">
+      <div className="no-print mx-auto mb-4 flex w-[100mm] flex-wrap items-center justify-between gap-2">
         <span className="text-sm text-neutral-700">Label for {o.order_number}</span>
-        <PrintButton />
+        <span className="flex gap-2">
+          <a href={`/admin/orders/${o.id}#delivery`} className="inline-flex h-9 items-center rounded-lg border border-neutral-400 bg-white px-3 text-sm font-semibold text-neutral-800 hover:bg-neutral-50">
+            Edit details
+          </a>
+          <PrintButton label="Download / Print" />
+        </span>
       </div>
       <article className="mx-auto flex h-[150mm] w-[100mm] flex-col overflow-hidden bg-white p-[5mm] font-sans text-black shadow-lg print:shadow-none">
         <header className="flex items-center justify-between border-b-2 border-black pb-2">
