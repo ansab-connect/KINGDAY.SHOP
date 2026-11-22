@@ -6,9 +6,10 @@ import { Gift, Wrench, X } from "lucide-react";
 import { Kid } from "@/components/store/hero/kid";
 import { OFFICIAL_ART } from "@/components/store/hero/walkers";
 import { MIA, type CustomerCharacter } from "@/features/marketing/hero-theme-config";
+import { cn } from "@/lib/utils";
 
 /** Two playful buttons on the hero: vehicle help (Book Service) and a gift popup. */
-export function HeroActions({ mine }: { mine: CustomerCharacter[] }) {
+export function HeroActions({ mine, split = false }: { mine: CustomerCharacter[]; split?: boolean }) {
   const [gift, setGift] = useState(false);
   const star = mine[0] ?? MIA;
 
@@ -22,7 +23,7 @@ export function HeroActions({ mine }: { mine: CustomerCharacter[] }) {
   const chip = "inline-flex h-8 items-center gap-1.5 rounded-full bg-white/90 px-3 text-[0.7rem] font-bold text-royal shadow-md hover:bg-white sm:text-xs";
   return (
     <>
-      <div className="absolute inset-x-0 top-[27%] z-10 flex flex-wrap justify-center gap-2 px-3 sm:top-[25%]">
+      <div className={cn("absolute inset-x-0 top-[27%] z-10 flex flex-wrap justify-center gap-2 px-3 sm:top-[25%]", split && "lg:top-6 lg:right-0 lg:left-auto lg:w-[52%]")}>
         <Link href="/book-service" className={chip}>
           <Wrench aria-hidden className="size-3.5 text-gold-600" /> My Vehicle Needs Help!
         </Link>

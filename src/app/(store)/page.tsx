@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Banknote, Camera, Check, Lock, MessageCircle, Quote, ShieldCheck, Truck, Wrench } from "lucide-react";
+import { ArrowRight, BatteryCharging, Camera, Check, ChevronRight, Crown, Lock, MessageCircle, Music, Quote, ShieldCheck, ShoppingCart, Smile, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { HeroStage } from "@/components/store/hero/hero-stage";
 import { getActiveHeroTheme } from "@/features/marketing/hero-themes";
@@ -49,72 +49,106 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* 1. Hero: animated scenes with King, Mia and the customer's characters */}
+      {/* 1. Hero: our seasonal scene with King, Mia and the customer's characters */}
       <section className="bg-deep text-white">
-        <HeroStage theme={heroTheme} className="h-[21rem] w-full sm:h-[27rem] lg:h-[32rem]">
-          <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-deep/80 via-deep/40 to-transparent px-4 pt-5 pb-10 text-center sm:pt-8">
-            <h1 className="text-[1.7rem] leading-[1.1] font-extrabold drop-shadow-[0_2px_6px_rgb(0_0_0/0.5)] sm:text-5xl lg:text-6xl">
-              <L en={<>Every Child Deserves a <span className="text-gold">Royal Ride.</span></>} ml={<span className="block text-[0.72em] leading-tight">ഓരോ കുഞ്ഞിനും ഒരു <span className="text-gold">രാജകീയ യാത്ര.</span></span>} />
-            </h1>
-          </div>
-        </HeroStage>
-        <Container className="grid grid-cols-2 gap-2 py-4 sm:flex sm:justify-center sm:gap-3 sm:py-5">
-          <Link
-            href="/shop"
-            className="group inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gold px-4 text-sm font-semibold text-deep shadow-[0_10px_30px_-10px_rgb(212_175_55/0.7)] transition-all hover:bg-gold-300 focus-visible:ring-3 focus-visible:ring-gold/40 focus-visible:outline-none sm:h-12 sm:px-7"
-          >
-            <L en="Shop the collection" ml="കളക്ഷൻ കാണുക" />
-            <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </Link>
-          <Link
-            href="/book-service"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/25 px-4 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/5 sm:h-12 sm:px-7"
-          >
-            <Wrench aria-hidden className="size-4 text-gold" />
-            <L en="Book Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
-          </Link>
-        </Container>
-        <div className="border-t border-white/10 bg-white/[0.03]">
-          <Container>
-            <ul className="flex snap-x gap-5 overflow-x-auto py-3 text-xs text-white/80 [scrollbar-width:none] sm:justify-center sm:gap-10 sm:text-sm [&::-webkit-scrollbar]:hidden">
-              {[
-                { icon: Truck, en: "Free delivery on prepaid orders", ml: "പ്രീപെയ്ഡിന് സൗജന്യ ഡെലിവറി" },
-                { icon: ShieldCheck, en: "Safety-checked rides", ml: "സുരക്ഷ ഉറപ്പാക്കിയവ" },
-                { icon: Banknote, en: "Cash on delivery", ml: "ക്യാഷ് ഓൺ ഡെലിവറി" },
-                { icon: Wrench, en: "BEST FIT after-sales service", ml: "BEST FIT സർവീസ്" },
-              ].map((t) => (
-                <li key={t.en} className="flex shrink-0 snap-start items-center gap-2 whitespace-nowrap">
-                  <t.icon aria-hidden className="size-4 text-gold" /> <L en={t.en} ml={t.ml} />
-                </li>
-              ))}
-            </ul>
+        <HeroStage theme={heroTheme} split className="h-[22rem] w-full sm:h-[28rem] lg:h-[36rem]">
+          <div className="absolute inset-0 z-10 bg-gradient-to-b from-deep/80 via-deep/20 to-transparent lg:bg-gradient-to-r lg:from-deep/85 lg:via-deep/45 lg:to-transparent" />
+          <Container className="absolute inset-x-0 top-0 z-10 pt-5 text-center sm:pt-8 lg:inset-y-0 lg:flex lg:items-center lg:pt-0 lg:text-left">
+            <div className="lg:max-w-[46%]">
+              <p className="hidden items-center gap-2 text-base font-semibold text-white/90 lg:flex">
+                <Crown aria-hidden className="size-6 text-gold" /> <L en="Premium Kids Ride-On Toys" ml="കുട്ടികൾക്കുള്ള പ്രീമിയം റൈഡ്-ഓണുകൾ" />
+              </p>
+              <h1 className="text-[1.7rem] leading-[1.1] font-extrabold drop-shadow-[0_2px_6px_rgb(0_0_0/0.45)] sm:text-5xl lg:mt-4 lg:text-[3.6rem]">
+                <L en={<>Every Child Deserves <br className="hidden lg:block" />a <span className="text-gold">Royal Ride.</span></>} ml={<span className="block text-[0.72em] leading-tight">ഓരോ കുഞ്ഞിനും ഒരു <span className="text-gold">രാജകീയ യാത്ര.</span></span>} />
+              </h1>
+              <ul className="mt-7 hidden flex-wrap gap-2.5 lg:flex">
+                {[
+                  { icon: ShieldCheck, en: "Safe & Sturdy", ml: "സുരക്ഷിതം" },
+                  { icon: BatteryCharging, en: "Rechargeable", ml: "റീചാർജബിൾ" },
+                  { icon: Music, en: "Music & Lights", ml: "സംഗീതം & ലൈറ്റ്" },
+                  { icon: Smile, en: "Kid-Friendly Design", ml: "കുട്ടികൾക്കിണങ്ങിയ" },
+                ].map((f) => (
+                  <li key={f.en} className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm leading-tight font-medium backdrop-blur-sm">
+                    <f.icon aria-hidden className="size-5 text-gold" /> <L en={f.en} ml={f.ml} />
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 hidden gap-4 lg:flex">
+                <Link
+                  href="/shop"
+                  className="group inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gold px-6 text-sm font-bold text-deep shadow-[0_10px_30px_-10px_rgb(212_175_55/0.8)] transition-all hover:bg-gold-300 sm:h-13 sm:px-8 sm:text-base"
+                >
+                  <ShoppingCart aria-hidden className="size-5" /> <L en="Shop Now" ml="ഇപ്പോൾ വാങ്ങൂ" />
+                  <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <Link
+                  href="/book-service"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full border-2 border-white/80 px-6 text-sm font-bold text-white transition-colors hover:bg-white/10 sm:h-13 sm:px-8 sm:text-base"
+                >
+                  <Wrench aria-hidden className="size-5" /> <L en="Book a Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
+                </Link>
+              </div>
+            </div>
           </Container>
-        </div>
+        </HeroStage>
+        {/* Phones and tablets: buttons and features under the scene */}
+        <Container className="py-4 lg:hidden">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-center sm:gap-3">
+            <Link
+                  href="/shop"
+                  className="group inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gold px-4 text-sm font-bold text-deep shadow-[0_10px_30px_-10px_rgb(212_175_55/0.8)] transition-all hover:bg-gold-300 sm:h-13 sm:px-8 sm:text-base"
+                >
+                  <ShoppingCart aria-hidden className="size-5" /> <L en="Shop Now" ml="ഇപ്പോൾ വാങ്ങൂ" />
+                  <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <Link
+                  href="/book-service"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full border-2 border-white/80 px-4 text-sm font-bold text-white transition-colors hover:bg-white/10 sm:h-13 sm:px-8 sm:text-base"
+                >
+                  <Wrench aria-hidden className="size-5" /> <L en="Book a Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
+                </Link>
+          </div>
+          <ul className="mt-3 flex snap-x gap-2 overflow-x-auto [scrollbar-width:none] sm:justify-center [&::-webkit-scrollbar]:hidden">
+            {[
+                  { icon: ShieldCheck, en: "Safe & Sturdy", ml: "സുരക്ഷിതം" },
+                  { icon: BatteryCharging, en: "Rechargeable", ml: "റീചാർജബിൾ" },
+                  { icon: Music, en: "Music & Lights", ml: "സംഗീതം & ലൈറ്റ്" },
+                  { icon: Smile, en: "Kid-Friendly Design", ml: "കുട്ടികൾക്കിണങ്ങിയ" },
+                ].map((f) => (
+              <li key={f.en} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium whitespace-nowrap">
+                <f.icon aria-hidden className="size-4 text-gold" /> <L en={f.en} ml={f.ml} />
+              </li>
+            ))}
+          </ul>
+        </Container>
       </section>
 
-      {/* 2. Featured categories */}
-      <section className="py-8 sm:py-12">
+      {/* 2. Featured categories: cards that overlap the hero */}
+      <section className="relative z-10 pb-6 sm:pb-10 lg:-mt-14">
         <Container>
-          <SectionHeading eyebrow={<L en="Shop by category" ml="വിഭാഗം അനുസരിച്ച്" />} title={<L en="Find the perfect ride" ml="മികച്ച റൈഡ് കണ്ടെത്തൂ" />} href="/categories" linkLabel={<L en="All categories" ml="എല്ലാ വിഭാഗങ്ങളും" />} />
-          <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-4 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-7 [&::-webkit-scrollbar]:hidden">
+          <h2 className="sr-only"><L en="Shop by category" ml="വിഭാഗം അനുസരിച്ച്" /></h2>
+          <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pt-5 pb-3 [scrollbar-color:var(--color-royal-200)_transparent] [scrollbar-width:thin] lg:gap-4 lg:pt-0">
             {categories.map((c, i) => (
-              <li key={c.slug} className="w-28 shrink-0 snap-start sm:w-auto">
+              <li key={c.slug} className="w-60 shrink-0 snap-start lg:w-72">
                 <Link
                   href={`/categories/${c.slug}`}
-                  className="group flex h-full flex-col items-center rounded-2xl border border-border/70 bg-white p-3 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-royal-100 hover:shadow-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:p-4"
+                  className={`group flex h-full items-center gap-3 rounded-2xl border border-white p-3 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift sm:p-4 ${["bg-royal-50", "bg-[#fbeef8]", "bg-[#f1ecfb]", "bg-gold-50"][i % 4]}`}
                 >
-                  <span className="grid size-16 place-items-center overflow-hidden rounded-2xl bg-royal-50 sm:size-20">
+                  <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/70 sm:size-24">
                     {c.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- category photos from our own storage
-                      <img src={c.imageUrl} alt="" loading={i < 6 ? "eager" : "lazy"} className="size-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      <img src={c.imageUrl} alt="" loading={i < 4 ? "eager" : "lazy"} className="size-full object-contain p-1 transition-transform duration-500 group-hover:scale-105" />
                     ) : (
-                      <CategoryIcon slug={c.slug} strokeWidth={1.4} className="size-8 text-royal transition-transform duration-500 group-hover:scale-110 sm:size-9" />
+                      <CategoryIcon slug={c.slug} strokeWidth={1.4} className="size-10 text-royal" />
                     )}
                   </span>
-                  <p className="mt-2.5 line-clamp-2 text-xs leading-tight font-semibold text-deep sm:text-sm">{c.name}</p>
-                  <p className="mt-0.5 text-[0.68rem] text-muted-foreground">
-                    <L en={`${c.productCount} items`} ml={`${c.productCount} എണ്ണം`} />
-                  </p>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-heading text-sm leading-tight font-extrabold text-deep uppercase xl:text-base">{c.name}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground"><L en={`${c.productCount} items`} ml={`${c.productCount} എണ്ണം`} /></span>
+                  </span>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-deep shadow-sm transition-transform group-hover:translate-x-0.5">
+                    <ChevronRight aria-hidden className="size-4" />
+                  </span>
                 </Link>
               </li>
             ))}

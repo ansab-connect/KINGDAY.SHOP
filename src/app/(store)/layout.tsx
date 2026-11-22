@@ -1,3 +1,4 @@
+import { BadgeCheck, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { InstallBanner } from "@/components/pwa/install-app";
 import { MetaPixel } from "@/components/analytics/meta-pixel";
@@ -22,11 +23,15 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
           Preview store: products, prices and reviews are sample data.
         </p>
       )}
-      <div className="bg-deep px-4 py-1.5 text-center text-[0.7rem] font-medium tracking-wide text-white/85 sm:text-xs">
-        <L
-          en={<>Free delivery on prepaid orders <span className="text-gold">·</span> Cash on delivery available <span className="hidden text-gold sm:inline">·</span> <span className="hidden sm:inline">Safety-checked rides</span></>}
-          ml={<>പ്രീപെയ്ഡ് ഓർഡറുകൾക്ക് സൗജന്യ ഡെലിവറി <span className="text-gold">·</span> ക്യാഷ് ഓൺ ഡെലിവറി</>}
-        />
+      <div className="bg-royal text-white">
+        <div className="mx-auto flex h-9 max-w-7xl items-center justify-center gap-6 px-4 text-[0.7rem] font-medium sm:justify-between sm:text-xs lg:h-11 lg:px-8 lg:text-sm">
+          <span className="flex items-center gap-2"><Truck aria-hidden className="size-4 text-gold" /> <L en="Free delivery on prepaid orders" ml="പ്രീപെയ്ഡിന് സൗജന്യ ഡെലിവറി" /></span>
+          <span className="hidden items-center gap-2 sm:flex"><ShieldCheck aria-hidden className="size-4 text-gold" /> <L en="Trusted & Safe Shopping" ml="സുരക്ഷിത ഷോപ്പിംഗ്" /></span>
+          <span className="hidden items-center gap-2 md:flex"><BadgeCheck aria-hidden className="size-4 text-gold" /> <L en="Genuine Products" ml="യഥാർത്ഥ ഉൽപ്പന്നങ്ങൾ" /></span>
+          <a href="/book-service" className="hidden items-center gap-1.5 rounded-full bg-gold px-4 py-1 font-semibold text-deep hover:bg-gold-300 lg:inline-flex">
+            <Wrench aria-hidden className="size-3.5" /> <L en="Book a Service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />
+          </a>
+        </div>
       </div>
       <StoreHeader />
       <main id="main" className="flex-1">{children}</main>

@@ -25,6 +25,8 @@ type Props = {
   className?: string;
   /** Overlay (e.g. the headline) drawn above the scene. */
   children?: React.ReactNode;
+  /** Desktop: text on the left, characters on the right. */
+  split?: boolean;
 };
 
 const SCENE_MS = 3500;
@@ -39,7 +41,7 @@ const OFFICIAL: Record<string, { src: string; height: string }> = {
  * King, Mia and the customer's own characters. Pure CSS/SVG; uploaded banners load as images,
  * and fall back to the drawn scene if they fail.
  */
-export function HeroStage({ theme, characters, className, children }: Props) {
+export function HeroStage({ theme, characters, className, children, split = false }: Props) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
   const [mine, setMine] = useState<CustomerCharacter[] | null>(characters ?? null);
@@ -121,7 +123,7 @@ export function HeroStage({ theme, characters, className, children }: Props) {
       <Effects effect={theme.effect} accent={theme.accent} />
 
       {children}
-      <div className="absolute inset-x-0 bottom-0 flex h-[60%] items-end justify-center gap-1 px-3 pb-3 sm:gap-3">
+      <div className={cn("absolute inset-x-0 bottom-0 flex h-[60%] items-end justify-center gap-1 px-3 pb-3 sm:gap-3", split && "lg:right-0 lg:left-auto lg:h-[80%] lg:w-[52%] lg:pb-14")}>
         {cast.map((c, i) =>
           OFFICIAL[c.id] ? (
             <figure key={c.id} className={cn("kd-bob relative flex flex-col items-center", OFFICIAL[c.id].height, cast.length > 3 ? "max-w-[24%]" : "max-w-[34%]")} style={{ animationDelay: `${i * 0.6}s` }}>
@@ -141,7 +143,7 @@ export function HeroStage({ theme, characters, className, children }: Props) {
 
       {!characters ? (
         <>
-          <HeroActions mine={mine ?? []} />
+          <HeroActions mine={mine ?? []} split={split} />
           {mine?.length ? <Walkers mine={mine} costume={theme.costume} /> : null}
         </>
       ) : null}
