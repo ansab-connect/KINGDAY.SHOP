@@ -6,23 +6,23 @@ import { KING, MIA, type Costume, type CustomerCharacter } from "@/features/mark
 
 export const OFFICIAL_ART: Record<string, string> = { [KING.id]: "/characters/king.webp", [MIA.id]: "/characters/mia.webp" };
 
-type Line = { who: CustomerCharacter; say: string; run?: boolean };
+type Line = { who: CustomerCharacter; say: string; run?: boolean; href?: string };
 
 const EVERY_MS = 11000;
 
-/** King and Mia introduce the family (and each customer character), then chat now and then. */
-export function familyScript(mine: CustomerCharacter[]): Line[] {
-  const lines: Line[] = [
-    { who: KING, say: "Hi! I'm King!" },
-    { who: MIA, say: "I'm Mia, King's little sister!" },
-  ];
-  for (const c of mine) {
-    lines.push({ who: KING, say: `Meet our new family member, ${c.name}!` }, { who: c, say: `Hi! I'm ${c.name}!` }, { who: MIA, say: "Welcome to our family!" });
-  }
+/**
+ * What King and Mia say in the hero: real offers that lead to a sale (each bubble links on),
+ * plus a welcome for the customer's own characters. `topDiscount` = best % off right now.
+ */
+export function familyScript(mine: CustomerCharacter[], topDiscount = 0): Line[] {
+  const lines: Line[] = [{ who: KING, say: "Hi, I'm King! 👑" }];
+  if (topDiscount >= 5) lines.push({ who: MIA, say: `${topDiscount}% OFF! 🎁`, href: "/offers" });
+  lines.push({ who: KING, say: "Pay online, save more! 💳", href: "/shop" });
+  for (const c of mine) lines.push({ who: c, say: `Hi! I'm ${c.name}!` }, { who: MIA, say: `Welcome, ${c.name}!` });
   lines.push(
-    { who: mine[0] ?? KING, say: "Hi Mamma! Hi Papa!" },
-    { who: MIA, say: "I need a gift! 🎁" },
-    { who: KING, say: "Let's go shopping!", run: true },
+    { who: MIA, say: "Free delivery! 🚚", href: "/shop" },
+    { who: KING, say: "COD available!", href: "/shop" },
+    { who: MIA, say: "Shop now! 🛒", run: true, href: "/shop" },
   );
   return lines;
 }
@@ -34,7 +34,7 @@ export function familyScript(mine: CustomerCharacter[]): Line[] {
 export function Walkers({ mine, costume }: { mine: CustomerCharacter[]; costume: Costume }) {
   // Only the customer's own characters walk (King and Mia stay in the hero).
   const script = useMemo<Line[]>(
-    () => mine.flatMap((c) => [{ who: c, say: `Hi! I'm ${c.name}!` }, { who: c, say: "Hi Mamma! Hi Papa!" }, { who: c, say: "I need a gift! 🎁", run: true }]),
+    () => mine.flatMap((c) => [{ who: c, say: `Hi! I'm ${c.name}!` }, { who: c, say: "Free delivery! 🚚" }, { who: c, say: "Let's shop! 🛒", run: true }]),
     [mine],
   );
   const [step, setStep] = useState<{ n: number } | null>(null);

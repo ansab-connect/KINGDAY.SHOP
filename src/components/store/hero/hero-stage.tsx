@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import Link from "next/link";
 import { CharacterPopup } from "@/components/store/hero/character-popup";
 import { HeroActions } from "@/components/store/hero/hero-actions";
 import { familyScript, Walkers } from "@/components/store/hero/walkers";
@@ -27,6 +28,8 @@ type Props = {
   children?: React.ReactNode;
   /** Desktop: text on the left, characters on the right. */
   split?: boolean;
+  /** Best % off right now, for King and Mia's offer lines. */
+  topDiscount?: number;
 };
 
 const SCENE_MS = 3500;
@@ -41,7 +44,7 @@ const OFFICIAL: Record<string, { src: string; height: string }> = {
  * King, Mia and the customer's own characters. Pure CSS/SVG; uploaded banners load as images,
  * and fall back to the drawn scene if they fail.
  */
-export function HeroStage({ theme, characters, className, children, split = false }: Props) {
+export function HeroStage({ theme, characters, className, children, split = false, topDiscount = 0 }: Props) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
   const [mine, setMine] = useState<CustomerCharacter[] | null>(characters ?? null);
@@ -89,20 +92,24 @@ export function HeroStage({ theme, characters, className, children, split = fals
   }, [characters]);
 
   const cast = [KING, MIA, ...(mine ?? [])];
-  const script = familyScript(mine ?? []);
+  const script = familyScript(mine ?? [], topDiscount);
   const line = talk === null ? null : script[talk % script.length];
+  const bubbleClass = (i: number) =>
+    cn(
+      "absolute -top-[2%] z-10 w-max max-w-[8.5rem] rounded-xl bg-white px-2 py-1 text-[0.6rem] leading-tight font-bold text-royal shadow-md ring-1 ring-gold/40 motion-safe:animate-in motion-safe:zoom-in-90 sm:max-w-[12rem] sm:text-xs",
+      i >= 2 ? "right-[72%] rounded-br-sm" : "left-[72%] rounded-bl-sm",
+    );
   const bubble = (id: string, i: number) =>
     line && line.who.id === id ? (
-      <span
-        key={talk}
-        role="status"
-        className={cn(
-          "absolute -top-[2%] z-10 w-max max-w-[8.5rem] rounded-xl bg-white px-2 py-1 text-[0.6rem] leading-tight font-bold text-royal shadow-md ring-1 ring-gold/40 motion-safe:animate-in motion-safe:zoom-in-90 sm:max-w-[12rem] sm:text-xs",
-          i >= 2 ? "right-[72%] rounded-br-sm" : "left-[72%] rounded-bl-sm",
-        )}
-      >
-        {line.say}
-      </span>
+      line.href ? (
+        <Link key={talk} href={line.href} className={cn(bubbleClass(i), "hover:bg-gold-50 hover:underline")}>
+          {line.say}
+        </Link>
+      ) : (
+        <span key={talk} role="status" className={bubbleClass(i)}>
+          {line.say}
+        </span>
+      )
     ) : null;
 
   return (

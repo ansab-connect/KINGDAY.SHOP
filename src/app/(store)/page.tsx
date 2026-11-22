@@ -51,7 +51,7 @@ export default async function HomePage() {
     <>
       {/* 1. Hero: our seasonal scene with King, Mia and the customer's characters */}
       <section className="bg-deep text-white">
-        <HeroStage theme={heroTheme} split className="h-[22rem] w-full sm:h-[28rem] lg:h-[36rem]">
+        <HeroStage theme={heroTheme} split topDiscount={topDiscount} className="h-[22rem] w-full sm:h-[28rem] lg:h-[36rem]">
           <div className="absolute inset-0 z-10 bg-gradient-to-b from-deep/80 via-deep/20 to-transparent lg:bg-gradient-to-r lg:from-deep/85 lg:via-deep/45 lg:to-transparent" />
           <Container className="absolute inset-x-0 top-0 z-10 pt-5 text-center sm:pt-8 lg:inset-y-0 lg:flex lg:items-center lg:pt-0 lg:text-left">
             <div className="lg:max-w-[46%]">
