@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ClickableRow } from "@/components/admin/clickable-row";
 import { ChevronRight, CornerDownRight, Plus } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { PreviewNotice } from "@/components/admin/preview-notice";
@@ -69,12 +70,12 @@ async function CategoriesContent() {
                 <TableRow><TableCell colSpan={5} className="py-12 text-center text-muted-foreground">No categories yet.</TableCell></TableRow>
               ) : (
                 rows.map((c) => (
-                  <TableRow key={c.id} className={c.href ? "relative cursor-pointer" : undefined}>
+                  <ClickableRow key={c.id} href={c.href ?? null}>
                     <TableCell className="pl-6">
                       <span className={`flex items-center gap-2 ${c.parentName ? "pl-6 text-muted-foreground" : "font-medium text-deep"}`}>
                         {c.parentName ? <CornerDownRight aria-hidden className="size-3.5" /> : null}
                         {c.href ? (
-                          <Link href={c.href} className="after:absolute after:inset-0 hover:text-royal">{c.name}</Link>
+                          <Link href={c.href} className="hover:text-royal">{c.name}</Link>
                         ) : (
                           c.name
                         )}
@@ -84,7 +85,7 @@ async function CategoriesContent() {
                     <TableCell className="text-right tabular">{c.productCount}</TableCell>
                     <TableCell>{c.active ? <Pill tone="success">Visible</Pill> : <Pill tone="neutral">Hidden</Pill>}</TableCell>
                     <TableCell className="pr-6">{c.href ? <ChevronRight aria-hidden className="size-4 text-muted-foreground" /> : null}</TableCell>
-                  </TableRow>
+                  </ClickableRow>
                 ))
               )}
             </TableBody>

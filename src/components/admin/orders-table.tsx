@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClickableRow } from "@/components/admin/clickable-row";
 import { Tag } from "lucide-react";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/admin/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,10 +97,10 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                 </TableRow>
               ) : (
                 rows.slice(0, 100).map((o) => (
-                  <TableRow key={o.id} className="relative cursor-pointer hover:bg-royal-50/40">
+                  <ClickableRow key={o.id} href={live ? `/admin/orders/${o.id}` : null}>
                     <TableCell className="pl-6">
                       {live ? (
-                        <Link href={`/admin/orders/${o.id}`} className="font-medium text-royal underline-offset-4 after:absolute after:inset-0 hover:underline">{o.number}</Link>
+                        <Link href={`/admin/orders/${o.id}`} className="font-medium text-royal underline-offset-4 hover:underline">{o.number}</Link>
                       ) : (
                         <span className="font-medium text-deep">{o.number}</span>
                       )}
@@ -120,14 +121,14 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                           href={`/admin/orders/${o.id}/label`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="relative z-10 inline-flex h-8 items-center gap-1 rounded-lg border bg-white px-2.5 text-xs font-semibold text-royal hover:bg-royal-50"
+                          className="inline-flex h-8 items-center gap-1 rounded-lg border bg-white px-2.5 text-xs font-semibold text-royal hover:bg-royal-50"
                           title="Shipping label (print or save as PDF)"
                         >
                           <Tag aria-hidden className="size-3.5" /> Label
                         </a>
                       ) : null}
                     </TableCell>
-                  </TableRow>
+                  </ClickableRow>
                 ))
               )}
             </TableBody>

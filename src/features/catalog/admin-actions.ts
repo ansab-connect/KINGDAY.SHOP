@@ -163,7 +163,7 @@ export async function saveProduct(input: unknown): Promise<ActionResult<{ id: st
   if (error) return dbError(error, "product");
   const { error: discountError } = await supabase
     .from("products")
-    .update({ prepaid_discount_pct: parsed.data.prepaid_discount_pct, cod_discount_pct: parsed.data.cod_discount_pct })
+    .update({ prepaid_discount_pct: parsed.data.prepaid_discount_pct, cod_discount_pct: parsed.data.cod_discount_pct, video_link: parsed.data.video_link })
     .eq("id", data as string);
   if (discountError) return dbError(discountError, "product");
 
@@ -191,6 +191,23 @@ export async function saveProduct(input: unknown): Promise<ActionResult<{ id: st
 
   updateTag(CATALOG_TAG);
   return { ok: true, data: { id: data as string }, message: `Product saved.${stockNote}` };
+}
+
+/** Active = on the store; Inactive = hidden (saved as Draft). */
+export async function setProductActive(id: string, active: boolean): Promise<ActionResult> {
+  const denied = await guard("products", ["edit"]);
+  if (denied) return denied;
+  if (!idSchema.safeParse(id).success) return { ok: false, error: "Invalid product." };
+  const supabase = await createClient();
+  const { data: current } = await supabase.from("products").select("published_at").eq("id", id).maybeSingle();
+  if (!current) return { ok: false, error: "Product not found or not allowed." };
+  const { error } = await supabase
+    .from("products")
+    .update(active ? { status: "active", published_at: current.published_at ?? new Date().toISOString() } : { status: "draft" })
+    .eq("id", id);
+  if (error) return dbError(error, "product");
+  updateTag(CATALOG_TAG);
+  return { ok: true, data: undefined, message: active ? "Product is live on the store." : "Product hidden from the store." };
 }
 
 export async function deleteProduct(id: string): Promise<ActionResult> {

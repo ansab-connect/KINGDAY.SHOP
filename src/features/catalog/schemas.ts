@@ -1,3 +1,4 @@
+import { normaliseSocialVideoUrl } from "@/lib/social-video";
 import { z } from "zod";
 import { comboKey } from "./variant-types";
 
@@ -173,6 +174,8 @@ export const productInputSchema = z
       .transform((list) => list.filter(Boolean)),
     age_range: optionalText(40),
     video_path: optionalText(300),
+    /** Instagram reel or YouTube link, shown in the product gallery. */
+    video_link: optionalText(300).refine((v) => !v || normaliseSocialVideoUrl(v) !== null, "Paste an Instagram reel or YouTube video link.").transform((v) => normaliseSocialVideoUrl(v)),
     status: z.enum(PRODUCT_STATUSES).default("draft"),
     is_featured: z.boolean().default(false),
     /** % off when paid online / cash on delivery (0–50). Applied by the database at checkout. */

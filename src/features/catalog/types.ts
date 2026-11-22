@@ -60,6 +60,8 @@ export type StoreProduct = {
   /** Listing images: shared images, or the default variant's gallery when there are none. */
   images: ProductImage[];
   video: string | null;
+  /** Instagram reel / YouTube link shown in the gallery. */
+  videoLink?: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
   isNew: boolean;

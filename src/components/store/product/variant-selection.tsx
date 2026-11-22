@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, useState } from "react";
 import { L } from "@/components/i18n/lang";
+import type { SocialVideo } from "@/lib/social-video";
 import { ProductGallery } from "@/components/store/product/product-gallery";
 import type { ProductImage, StoreVariant } from "@/features/catalog/types";
 
@@ -40,11 +41,13 @@ export function useVariantSelection(): Selection {
 export function VariantGallery({
   sharedImages,
   video,
+  social = null,
   categorySlug,
   name,
 }: {
   sharedImages: ProductImage[];
   video: string | null;
+  social?: SocialVideo | null;
   categorySlug: string;
   name: string;
 }) {
@@ -52,7 +55,7 @@ export function VariantGallery({
   const images = variant.images.length ? variant.images : sharedImages;
   // Re-mount when the picture set changes so the gallery starts at the first image.
   const key = images.map((i) => i.src).join("|") || "none";
-  return <ProductGallery key={key} images={images} video={video} categorySlug={categorySlug} name={name} />;
+  return <ProductGallery key={key} images={images} video={video} social={social} categorySlug={categorySlug} name={name} />;
 }
 
 /** Specifications table: product specs, with the selected combination's specs taking priority. */

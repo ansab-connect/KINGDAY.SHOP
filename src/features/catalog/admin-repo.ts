@@ -64,6 +64,8 @@ export type AdminProduct = {
   age_range: string | null;
   video_path: string | null;
   video_url: string | null;
+  /** Instagram reel / YouTube link. */
+  video_link: string | null;
   status: "draft" | "active" | "archived";
   is_featured: boolean;
   seo_title: string | null;
@@ -135,7 +137,9 @@ export async function listBrands(): Promise<AdminBrand[]> {
   })) as AdminBrand[];
 }
 
-export async function listProducts(filters: { q?: string; status?: string } = {}): Promise<AdminProductRow[]> {
+export async function listProducts(
+  filters: { q?: string; status?: string; categoryIds?: string[]; brandIds?: string[] } = {},
+): Promise<AdminProductRow[]> {
   const supabase = await createClient();
   let query = supabase
     .from("products")
@@ -148,6 +152,8 @@ export async function listProducts(filters: { q?: string; status?: string } = {}
     .order("updated_at", { ascending: false })
     .limit(200);
   if (filters.status && ["draft", "active", "archived"].includes(filters.status)) query = query.eq("status", filters.status);
+  if (filters.categoryIds?.length) query = query.in("category_id", filters.categoryIds);
+  if (filters.brandIds?.length) query = query.in("brand_id", filters.brandIds);
   if (filters.q) {
     const q = filters.q.replace(/[%_,()]/g, " ").trim().slice(0, 80);
     if (q) query = query.ilike("name", `%${q}%`);
@@ -190,7 +196,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
     .from("products")
     .select(
       `id, name, slug, category_id, brand_id, short_description, description, highlights, age_range, video_path,
-       status, is_featured, seo_title, seo_description, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct,
+       status, is_featured, seo_title, seo_description, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct, video_link,
        product_variants(id, sku, name, options, option1, option2, specs, mrp, price, weight_grams, is_default, is_active, position, inventory(on_hand, reserved)),
        product_attributes(name, value, position),
        product_images(id, storage_path, alt, position, variant_id)`,

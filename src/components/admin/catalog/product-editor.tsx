@@ -1,5 +1,6 @@
 "use client";
 
+import { parseSocialVideo } from "@/lib/social-video";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -65,6 +66,7 @@ export function ProductEditor({
     seo_title: product?.seo_title ?? "",
     seo_description: product?.seo_description ?? "",
     video_path: product?.video_path ?? null,
+    video_link: product?.video_link ?? "",
   });
   const [highlights, setHighlights] = useState<string[]>(product?.highlights.length ? product.highlights : [""]);
   const initialTypes = product
@@ -246,6 +248,7 @@ export function ProductEditor({
   }
 
   const videoUrl = publicStorageUrl("product-videos", basics.video_path);
+  const linkVideo = parseSocialVideo(basics.video_link);
 
   return (
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_20rem]" noValidate>
@@ -374,6 +377,28 @@ export function ProductEditor({
           <button type="button" onClick={() => setAttributes((l) => [...l, { key: nextKey(), name: "", value: "" }])} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-royal hover:underline">
             <Plus aria-hidden className="size-4" /> Add specification
           </button>
+        </FormSection>
+        <FormSection title="Instagram / YouTube video" description="Optional. Paste the reel or video link; it shows in the product photos with its cover image.">
+          <TextField
+            id="p-video-link"
+            label="Video link"
+            placeholder="https://www.instagram.com/reel/... or https://youtu.be/..."
+            maxLength={300}
+            value={basics.video_link}
+            error={errors.video_link ?? (basics.video_link && !linkVideo ? "Paste an Instagram reel or YouTube video link." : undefined)}
+            onChange={(v) => setB("video_link", v.trim())}
+          />
+          {linkVideo ? (
+            <a href={linkVideo.url} target="_blank" rel="noopener noreferrer" className="flex w-fit items-center gap-3 rounded-xl border p-2 pr-4 text-sm font-medium text-deep hover:bg-muted">
+              {linkVideo.kind === "youtube" ? (
+                // eslint-disable-next-line @next/next/no-img-element -- YouTube cover preview
+                <img src={linkVideo.thumb} alt="" className="h-14 w-20 rounded-lg object-cover" />
+              ) : (
+                <span className="grid h-14 w-20 place-items-center rounded-lg bg-gradient-to-br from-[#f58529] via-[#dd2a7b] to-[#8134af] text-xs font-bold text-white">Reel</span>
+              )}
+              {linkVideo.kind === "youtube" ? "YouTube video found" : "Instagram reel found"} · open
+            </a>
+          ) : null}
         </FormSection>
         <FormSection title="Product video" description="Optional. MP4 or WebM, up to 50 MB.">
           {product ? (

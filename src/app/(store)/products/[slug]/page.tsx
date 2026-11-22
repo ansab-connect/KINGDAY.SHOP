@@ -9,6 +9,7 @@ import { L } from "@/components/i18n/lang";
 import { Breadcrumbs } from "@/components/store/page-hero";
 import { Rating, Stars } from "@/components/store/price";
 import { ProductGrid } from "@/components/store/product-card";
+import { resolveSocialVideo } from "@/features/catalog/social-video";
 import { VariantGallery, VariantSelectionProvider, VariantSpecs } from "@/components/store/product/variant-selection";
 import { PurchasePanel } from "@/components/store/product/purchase-panel";
 import { Container, SectionHeading } from "@/components/store/section";
@@ -65,6 +66,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
   const boxSpec = product.specs.find((s) => /in the box|box content|package content|included/i.test(s.label));
   const warrantySpec = product.specs.find((s) => /warranty/i.test(s.label));
   const productUrl = `${siteConfig.url}/products/${product.slug}`;
+  const social = await resolveSocialVideo(product.videoLink ?? null);
   const waNumber = storeContact.whatsapp.replace(/\D/g, "") || null;
 
   const jsonLd = {
@@ -107,7 +109,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
 
         <VariantSelectionProvider variants={product.variants} defaultVariantId={product.defaultVariantId}>
         <div className="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-14">
-          <VariantGallery sharedImages={product.sharedImages} video={product.video} categorySlug={product.category.slug} name={product.name} />
+          <VariantGallery sharedImages={product.sharedImages} video={product.video} social={social} categorySlug={product.category.slug} name={product.name} />
 
           <div className="lg:pt-2">
             {product.brand ? <p className="text-xs font-semibold tracking-[0.16em] text-gold-600 uppercase">{product.brand.name}</p> : null}

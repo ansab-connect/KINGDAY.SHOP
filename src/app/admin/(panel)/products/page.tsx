@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, Package, Plus, Search, Star, FileSpreadsheet } from "lucide-react";
+import { ChevronDown, ChevronRight, Package, Plus, Search, Star, FileSpreadsheet, X } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { PreviewNotice } from "@/components/admin/preview-notice";
 import { StaffOnly } from "@/components/admin/staff-only";
@@ -8,7 +8,9 @@ import { Pill, StockBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { listProducts, type AdminProductRow } from "@/features/catalog/admin-repo";
+import { ClickableRow } from "@/components/admin/clickable-row";
+import { ProductActiveSwitch } from "@/components/admin/catalog/product-active-switch";
+import { listBrands, listCategories, listProducts, type AdminProductRow } from "@/features/catalog/admin-repo";
 import { previewProducts } from "@/features/preview/data";
 import { isSupabaseConfigured } from "@/lib/env";
 import { discountPercent, formatPaise } from "@/lib/format";
@@ -27,9 +29,24 @@ const FILTERS = [
 
 type Row = AdminProductRow & { href: string | null };
 
-async function loadRows(q: string, status: string): Promise<Row[]> {
+type Option = { id: string; name: string; parentId: string | null };
+
+async function loadOptions(): Promise<{ categories: Option[]; brands: Option[] }> {
+  if (!isSupabaseConfigured) return { categories: [], brands: [] };
+  const [cats, brands] = await Promise.all([listCategories(), listBrands()]);
+  // Parents first, each followed by its sub-categories.
+  const top = cats.filter((c) => !c.parent_id);
+  const ordered = top.flatMap((t) => [t, ...cats.filter((c) => c.parent_id === t.id)]);
+  const rest = cats.filter((c) => !ordered.includes(c));
+  return {
+    categories: [...ordered, ...rest].map((c) => ({ id: c.id, name: c.name, parentId: c.parent_id })),
+    brands: brands.map((b) => ({ id: b.id, name: b.name, parentId: null })),
+  };
+}
+
+async function loadRows(q: string, status: string, categoryIds: string[], brandIds: string[]): Promise<Row[]> {
   if (isSupabaseConfigured) {
-    return (await listProducts({ q, status })).map((p) => ({ ...p, href: `/admin/products/${p.id}` }));
+    return (await listProducts({ q, status, categoryIds, brandIds })).map((p) => ({ ...p, href: `/admin/products/${p.id}` }));
   }
   return previewProducts
     .filter((p) => (!status || p.status === status) && (!q || p.name.toLowerCase().includes(q.toLowerCase())))
@@ -43,14 +60,25 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.slice(0, 80) : "";
   const status = typeof params.status === "string" && ["active", "draft", "archived"].includes(params.status) ? params.status : "";
-  const rows = await loadRows(q, status);
-  const qs = (s: string) => {
+  const list = (v: string | string[] | undefined) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 50);
+  const cat = list(params.cat);
+  const brand = list(params.brand);
+  const { categories, brands } = await loadOptions();
+  // Picking a main category also includes its sub-categories.
+  const catIds = [...new Set([...cat, ...categories.filter((c) => c.parentId && cat.includes(c.parentId)).map((c) => c.id)])];
+  const rows = await loadRows(q, status, catIds, brand);
+  const qs = (next: { status?: string; cat?: string[]; brand?: string[] }) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
-    if (s) sp.set("status", s);
+    const st = next.status ?? status;
+    if (st) sp.set("status", st);
+    for (const c of next.cat ?? cat) sp.append("cat", c);
+    for (const b of next.brand ?? brand) sp.append("brand", b);
     const str = sp.toString();
     return str ? `/admin/products?${str}` : "/admin/products";
   };
+  const nameOf = (opts: Option[], id: string) => opts.find((o) => o.id === id)?.name ?? "Unknown";
+  const filtered = cat.length + brand.length > 0;
 
   return (
     <>
@@ -75,7 +103,7 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
           {FILTERS.map((f) => (
             <Link
               key={f.value}
-              href={qs(f.value)}
+              href={qs({ status: f.value })}
               aria-current={status === f.value ? "page" : undefined}
               className={cn(
                 "shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium",
@@ -88,11 +116,37 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
         </nav>
         <form action="/admin/products" className="relative sm:w-72" role="search">
           {status ? <input type="hidden" name="status" value={status} /> : null}
+          {cat.map((c) => <input key={c} type="hidden" name="cat" value={c} />)}
+          {brand.map((b) => <input key={b} type="hidden" name="brand" value={b} />)}
           <label htmlFor="product-search" className="sr-only">Search products</label>
           <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <input id="product-search" name="q" type="search" defaultValue={q} placeholder="Search by name…" className="h-10 w-full rounded-lg border bg-card pr-3 pl-9 text-sm outline-none focus:border-royal-300 focus:ring-3 focus:ring-royal-100" />
         </form>
       </div>
+
+      {isSupabaseConfigured ? (
+        <form action="/admin/products" className="mb-4 flex flex-wrap items-center gap-2">
+          {q ? <input type="hidden" name="q" value={q} /> : null}
+          {status ? <input type="hidden" name="status" value={status} /> : null}
+          <MultiPick label="Categories" name="cat" options={categories} selected={cat} />
+          <MultiPick label="Brands" name="brand" options={brands} selected={brand} />
+          {cat.map((id) => (
+            <Link key={id} href={qs({ cat: cat.filter((x) => x !== id) })} className="inline-flex h-9 items-center gap-1 rounded-full bg-royal-50 px-3 text-sm font-medium text-royal hover:bg-royal-100">
+              {nameOf(categories, id)} <X aria-label="Remove" className="size-3.5" />
+            </Link>
+          ))}
+          {brand.map((id) => (
+            <Link key={id} href={qs({ brand: brand.filter((x) => x !== id) })} className="inline-flex h-9 items-center gap-1 rounded-full bg-gold-50 px-3 text-sm font-medium text-gold-800 hover:bg-gold-100">
+              {nameOf(brands, id)} <X aria-label="Remove" className="size-3.5" />
+            </Link>
+          ))}
+          {filtered ? (
+            <Link href={qs({ cat: [], brand: [] })} className="h-9 px-2 text-sm leading-9 font-medium text-muted-foreground hover:text-royal hover:underline">
+              Clear filters
+            </Link>
+          ) : null}
+        </form>
+      ) : null}
 
       <Card className="py-0 shadow-card">
         <CardContent className="px-0">
@@ -121,7 +175,7 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
                 </TableRow>
               ) : (
                 rows.map((p) => (
-                  <TableRow key={p.id} className={p.href ? "relative" : undefined}>
+                  <ClickableRow key={p.id} href={p.href}>
                     <TableCell className="pl-6">
                       <div className="flex items-center gap-3">
                         <span aria-hidden className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-royal-50 font-heading text-sm font-bold text-royal">
@@ -135,7 +189,7 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
                         <div className="min-w-0">
                           <p className="flex items-center gap-1.5 font-medium text-deep">
                             {p.href ? (
-                              <Link href={p.href} className="max-w-56 truncate after:absolute after:inset-0 hover:text-royal">{p.name}</Link>
+                              <Link href={p.href} className="max-w-56 truncate hover:text-royal">{p.name}</Link>
                             ) : (
                               <span className="max-w-56 truncate">{p.name}</span>
                             )}
@@ -153,9 +207,15 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
                     </TableCell>
                     <TableCell className="hidden sm:table-cell"><StockBadge stock={p.stock} reorderLevel={5} /></TableCell>
                     <TableCell className="hidden tabular xl:table-cell">{p.variant_count}</TableCell>
-                    <TableCell><Pill tone={statusTone[p.status]}>{statusLabel[p.status]}</Pill></TableCell>
+                    <TableCell>
+                      {p.href && p.status !== "archived" ? (
+                        <ProductActiveSwitch id={p.id} name={p.name} active={p.status === "active"} />
+                      ) : (
+                        <Pill tone={statusTone[p.status]}>{statusLabel[p.status]}</Pill>
+                      )}
+                    </TableCell>
                     <TableCell className="pr-6">{p.href ? <ChevronRight aria-hidden className="size-4 text-muted-foreground" /> : null}</TableCell>
-                  </TableRow>
+                  </ClickableRow>
                 ))
               )}
             </TableBody>
@@ -163,6 +223,33 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
         </CardContent>
       </Card>
     </>
+  );
+}
+
+/** Dropdown of checkboxes; "Apply" submits the filter form (works without JavaScript). */
+function MultiPick({ label, name, options, selected }: { label: string; name: string; options: Option[]; selected: string[] }) {
+  if (!options.length) return null;
+  return (
+    <details className="group relative">
+      <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border bg-card px-3 text-sm font-medium text-deep hover:border-royal-200 [&::-webkit-details-marker]:hidden">
+        {label}
+        {selected.length ? <span className="rounded-full bg-royal px-1.5 text-xs text-white">{selected.length}</span> : null}
+        <ChevronDown aria-hidden className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="absolute left-0 z-30 mt-1 w-64 rounded-xl border bg-card p-2 shadow-lift">
+        <ul className="max-h-72 overflow-y-auto">
+          {options.map((o) => (
+            <li key={o.id}>
+              <label className={cn("flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted", o.parentId && "pl-7 text-muted-foreground")}>
+                <input type="checkbox" name={name} value={o.id} defaultChecked={selected.includes(o.id)} className="size-4 accent-royal" />
+                {o.name}
+              </label>
+            </li>
+          ))}
+        </ul>
+        <button type="submit" className="mt-2 h-9 w-full rounded-lg bg-royal text-sm font-semibold text-white hover:bg-royal-800">Apply</button>
+      </div>
+    </details>
   );
 }
 

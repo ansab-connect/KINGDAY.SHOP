@@ -19,6 +19,7 @@ type Raw = {
   highlights: string[] | null;
   age_range: string | null;
   video_path: string | null;
+  video_link: string | null;
   is_featured: boolean;
   seo_title: string | null;
   seo_description: string | null;
@@ -49,7 +50,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
     supabase
       .from("products")
       .select(
-        `id, name, slug, short_description, description, highlights, age_range, video_path, is_featured,
+        `id, name, slug, short_description, description, highlights, age_range, video_path, video_link, is_featured,
          seo_title, seo_description, published_at, created_at, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct,
          category:categories(slug, name, parent:parent_id(slug)),
          brand:brands(slug, name),
@@ -160,6 +161,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
         ],
         images,
         video: publicStorageUrl("product-videos", p.video_path),
+        videoLink: p.video_link,
         seoTitle: p.seo_title,
         seoDescription: p.seo_description,
         isNew: index < NEW_ARRIVAL_COUNT,
