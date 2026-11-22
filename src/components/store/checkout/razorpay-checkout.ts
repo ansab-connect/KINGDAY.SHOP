@@ -65,6 +65,8 @@ export async function openRazorpayCheckout(session: CheckoutSession): Promise<Ch
       name: "KING DAY",
       description: `Order ${session.orderNumber}`,
       prefill: session.prefill,
+      // The customer already gave these at checkout: don't ask again.
+      readonly: { contact: true, name: true, ...(session.prefill.email ? { email: true } : {}) },
       notes: { order_number: session.orderNumber },
       theme: { color: "#4B0082" },
       // Full-page redirect to the bank instead of a pop-up (pop-ups are blocked in

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Mail, MessageCircle, Phone } from "lucide-react";
+import { ArrowLeft, Mail, MessageCircle, Phone, Tag } from "lucide-react";
 import { MarkCodPaidForm, OrderNoteForm, OrderStatusForm, ShipmentForm } from "@/components/admin/order-actions";
 import { LockedNote, OrderDetailsEditor, OrderItemsEditor, type VariantOption } from "@/components/admin/order-edit-forms";
 import { PageHeader } from "@/components/admin/page-header";
@@ -72,6 +72,11 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
           <>
             <OrderStatusBadge status={o.status} />
             <PaymentStatusBadge status={payment} />
+            <Button asChild size="sm" variant="outline">
+              <a href={`/admin/orders/${o.id}/label`} target="_blank" rel="noopener noreferrer">
+                <Tag aria-hidden className="size-4" /> Shipping label
+              </a>
+            </Button>
           </>
         }
       />

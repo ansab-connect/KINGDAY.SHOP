@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Banknote, CreditCard, Loader2, Lock, MapPin, Pencil, Plus, ShoppingBag, Zap } from "lucide-react";
+import { AlertCircle, Banknote, CheckCircle2, CreditCard, Loader2, Lock, MapPin, Pencil, Plus, ShoppingBag, Zap } from "lucide-react";
 import { AddressForm } from "@/components/store/account/account-forms";
 import { CartLine } from "@/components/store/cart-line";
 import { openRazorpayCheckout } from "@/components/store/checkout/razorpay-checkout";
@@ -55,6 +55,8 @@ export function CheckoutView({
   const [editing, setEditing] = useState<Address | "new" | null>(addresses.length ? null : "new");
   const addressId = chosen && addresses.some((a) => a.id === chosen) ? chosen : (addresses.find((a) => a.is_default)?.id ?? addresses[0]?.id ?? "");
   const setAddressId = setChosen;
+  const [picking, setPicking] = useState(false);
+  const selected = addresses.find((a) => a.id === addressId) ?? null;
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -168,7 +170,34 @@ export function CheckoutView({
           <h2 id="addr-h" className="flex items-center gap-2 font-heading text-lg font-semibold text-deep">
             <MapPin aria-hidden className="size-5 text-royal" /> Delivery address
           </h2>
-          {addresses.length ? (
+          {addresses.length && !picking && selected ? (
+            // Returning customers: their address is ready; nothing to type.
+            <div className="mt-4 rounded-xl border border-royal bg-royal-50/60 p-4 text-sm ring-1 ring-royal">
+              <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-royal uppercase">
+                <CheckCircle2 aria-hidden className="size-4" /> Deliver to
+              </p>
+              <p className="mt-2 font-semibold text-deep">
+                {selected.full_name} <span className="font-normal text-muted-foreground">· {selected.phone}</span>
+              </p>
+              <p className="mt-1 leading-relaxed text-muted-foreground">
+                {selected.line1}
+                {selected.line2 ? `, ${selected.line2}` : ""}
+                {selected.landmark ? `, near ${selected.landmark}` : ""}
+                <br />
+                {selected.city}, {selected.state} {selected.postal_code}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => setEditing(selected)} className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-white px-4 text-sm font-semibold text-deep hover:bg-muted">
+                  <Pencil aria-hidden className="size-3.5" /> Edit
+                </button>
+                {addresses.length > 1 ? (
+                  <button type="button" onClick={() => setPicking(true)} className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-white px-4 text-sm font-semibold text-royal hover:bg-royal-50">
+                    Change address ({addresses.length})
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : addresses.length ? (
             <fieldset className="mt-4 grid gap-3 sm:grid-cols-2">
               <legend className="sr-only">Choose a delivery address</legend>
               {addresses.map((a) => (
@@ -176,7 +205,10 @@ export function CheckoutView({
                   key={a.id}
                   className={cn("relative flex gap-3 rounded-xl border p-4 text-sm", addressId === a.id ? "border-royal bg-royal-50/60 ring-1 ring-royal" : "hover:border-royal/40")}
                 >
-                  <input id={`addr-${a.id}`} type="radio" name="address" value={a.id} checked={addressId === a.id} onChange={() => setAddressId(a.id)} className="mt-1 size-4 accent-royal" />
+                  <input id={`addr-${a.id}`} type="radio" name="address" value={a.id} checked={addressId === a.id} onChange={() => {
+                      setAddressId(a.id);
+                      setPicking(false);
+                    }} className="mt-1 size-4 accent-royal" />
                   <label htmlFor={`addr-${a.id}`} className="min-w-0 flex-1 cursor-pointer break-words pr-8">
                     <span className="block font-semibold text-deep">{a.label || a.full_name}</span>
                     <span className="block text-muted-foreground">
