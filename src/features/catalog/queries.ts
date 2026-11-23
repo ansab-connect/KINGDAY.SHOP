@@ -52,7 +52,8 @@ function sortProducts(list: StoreProduct[], sort: SortOption): StoreProduct[] {
   }
 }
 
-const inCategory = (p: StoreProduct, slug: string) => p.category.slug === slug || p.category.parentSlug === slug;
+/** In this category or any category inside it (any depth). */
+const inCategory = (p: StoreProduct, slug: string) => (p.category.path ?? [p.category.slug, p.category.parentSlug]).includes(slug);
 
 export async function getProducts(filters: ProductFilters = {}) {
   const { products } = await getCatalog();
@@ -115,6 +116,13 @@ export async function getCategories() {
 
 export async function getCategoryBySlug(slug: string) {
   return (await getCatalog()).categories.find((c) => c.slug === slug) ?? null;
+}
+
+/** The category and the ones above it, top level first (for breadcrumbs). */
+export async function getCategoryTrail(slug: string) {
+  const cats = (await getCatalog()).categories;
+  const bySlug = new Map(cats.map((c) => [c.slug, c]));
+  return (bySlug.get(slug)?.path ?? [slug]).map((s) => bySlug.get(s)).filter((c): c is NonNullable<typeof c> => Boolean(c));
 }
 
 export async function getSubcategories(parentSlug: string) {

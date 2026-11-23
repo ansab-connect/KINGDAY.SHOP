@@ -1,4 +1,5 @@
-export type CategoryRef = { slug: string; name: string; parentSlug: string | null };
+/** path: slugs from the top-level category down to this one (Cycles › Electric › Women). */
+export type CategoryRef = { slug: string; name: string; parentSlug: string | null; path?: string[] };
 export type BrandRef = { slug: string; name: string };
 
 export type ProductImage = { src: string; alt: string };
@@ -75,6 +76,10 @@ export type StoreCategory = {
   slug: string;
   name: string;
   parentSlug: string | null;
+  /** Slugs from the top-level category down to this one. */
+  path: string[];
+  /** 0 = top level. */
+  depth: number;
   description: string;
   imageUrl: string | null;
   seoTitle: string | null;

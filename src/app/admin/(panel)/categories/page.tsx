@@ -10,29 +10,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listCategories } from "@/features/catalog/admin-repo";
+import { treeOrder } from "@/features/catalog/category-tree";
 import { previewCategories } from "@/features/preview/data";
 import { isSupabaseConfigured } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Categories" };
 
-type Row = { id: string; name: string; slug: string; parentName: string | null; productCount: number; active: boolean; href: string | null };
+type Row = { id: string; name: string; slug: string; parentName: string | null; depth: number; productCount: number; active: boolean; href: string | null };
 
 async function loadRows(): Promise<Row[]> {
   if (!isSupabaseConfigured) {
     return previewCategories.map((c) => ({
-      id: c.id, name: c.name, slug: c.slug, parentName: c.parent, productCount: c.productCount, active: c.active, href: null,
+      id: c.id, name: c.name, slug: c.slug, parentName: c.parent, depth: c.parent ? 1 : 0, productCount: c.productCount, active: c.active, href: null,
     }));
   }
   const cats = await listCategories();
   const byId = new Map(cats.map((c) => [c.id, c]));
-  // Parents first, each followed by its children.
-  const ordered = cats.filter((c) => !c.parent_id).flatMap((p) => [p, ...cats.filter((c) => c.parent_id === p.id)]);
-  const orphans = cats.filter((c) => c.parent_id && !byId.has(c.parent_id));
-  return [...ordered, ...orphans].map((c) => ({
+  // Each category followed by the ones inside it, at any depth.
+  return treeOrder(cats.map((c) => ({ ...c, parentId: c.parent_id }))).map((c) => ({
     id: c.id,
     name: c.name,
     slug: c.slug,
     parentName: c.parent_id ? byId.get(c.parent_id)?.name ?? null : null,
+    depth: c.depth,
     productCount: c.product_count,
     active: c.is_active,
     href: `/admin/categories/${c.id}`,
@@ -72,7 +72,7 @@ async function CategoriesContent() {
                 rows.map((c) => (
                   <ClickableRow key={c.id} href={c.href ?? null}>
                     <TableCell className="pl-6">
-                      <span className={`flex items-center gap-2 ${c.parentName ? "pl-6 text-muted-foreground" : "font-medium text-deep"}`}>
+                      <span className={`flex items-center gap-2 ${c.parentName ? "text-muted-foreground" : "font-medium text-deep"}`} style={{ paddingLeft: `${c.depth * 1.5}rem` }}>
                         {c.parentName ? <CornerDownRight aria-hidden className="size-3.5" /> : null}
                         {c.href ? (
                           <Link href={c.href} className="hover:text-royal">{c.name}</Link>

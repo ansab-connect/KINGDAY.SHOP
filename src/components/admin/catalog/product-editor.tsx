@@ -1,6 +1,7 @@
 "use client";
 
 import { parseSocialVideo } from "@/lib/social-video";
+import { treeOrder } from "@/features/catalog/category-tree";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -119,12 +120,11 @@ export function ProductEditor({
 
   const setB = <K extends keyof typeof basics>(k: K, val: (typeof basics)[K]) => setBasics((p) => ({ ...p, [k]: val }));
 
-  const categoryOptions = categories
-    .filter((c) => !c.parent_id)
-    .flatMap((p) => [
-      { value: p.id, label: p.name },
-      ...categories.filter((c) => c.parent_id === p.id).map((c) => ({ value: c.id, label: `— ${c.name}` })),
-    ]);
+  // Every level, in tree order: "Cycles", "— Electric Cycles", "— — Women".
+  const categoryOptions = treeOrder(categories.map((c) => ({ ...c, parentId: c.parent_id ?? null }))).map((c) => ({
+    value: c.id,
+    label: `${"— ".repeat(c.depth)}${c.name}`,
+  }));
 
   function suggestSku(row: VariantRow): string {
     const cat = categories.find((c) => c.id === basics.category_id)?.name ?? "KD";

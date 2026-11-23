@@ -6,7 +6,7 @@ import { PageHero } from "@/components/store/page-hero";
 import { Container } from "@/components/store/section";
 import { ListingSkeleton } from "@/components/store/shop/listing-skeleton";
 import { ProductListing } from "@/components/store/shop/product-listing";
-import { getAllCategories, getCategoryBySlug } from "@/features/catalog/queries";
+import { getAllCategories, getCategoryBySlug, getCategoryTrail } from "@/features/catalog/queries";
 
 export async function generateStaticParams() {
   const all = await getAllCategories();
@@ -30,10 +30,13 @@ async function CategoryContent({ params, searchParams }: Pick<PageProps<"/catego
   const { slug } = await params;
   const category = await getCategoryBySlug(slug);
   if (!category) notFound();
-  const all = await getAllCategories();
+  const [all, trail] = await Promise.all([getAllCategories(), getCategoryTrail(category.slug)]);
   const parent = category.parentSlug ? all.find((c) => c.slug === category.parentSlug) ?? null : null;
-  const top = parent ?? category;
-  const children = all.filter((c) => c.parentSlug === top.slug);
+  // Categories nest to any depth. With sub-categories: show them (go one level deeper).
+  // At the last level: show its siblings, so shoppers can switch sideways.
+  const own = all.filter((c) => c.parentSlug === category.slug);
+  const top = own.length || !parent ? category : parent;
+  const children = own.length ? own : parent ? all.filter((c) => c.parentSlug === parent.slug) : [];
 
   return (
     <>
@@ -43,7 +46,7 @@ async function CategoryContent({ params, searchParams }: Pick<PageProps<"/catego
         crumbs={[
           { name: "Home", href: "/" },
           { name: "Categories", href: "/categories" },
-          ...(parent ? [{ name: parent.name, href: `/categories/${parent.slug}` }] : []),
+          ...trail.filter((c) => c.slug !== category.slug).map((c) => ({ name: c.name, href: `/categories/${c.slug}` })),
           { name: category.name },
         ]}
       />

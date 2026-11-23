@@ -155,6 +155,8 @@ export const previewStoreCategories: StoreCategory[] = productCategories.map((c)
   slug: c.slug,
   name: c.name,
   parentSlug: null,
+  path: [c.slug],
+  depth: 0,
   imageUrl: null,
   seoTitle: null,
   seoDescription: null,

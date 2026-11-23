@@ -1,3 +1,4 @@
+import { pathIds } from "./category-tree";
 import "server-only";
 import { createPublicClient } from "@/lib/supabase/public";
 import { publicStorageUrl } from "@/lib/storage";
@@ -172,15 +173,22 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       } satisfies StoreProduct;
     });
 
-  const countFor = (slug: string) =>
-    products.filter((p) => p.category.slug === slug || p.category.parentSlug === slug).length;
-
-  const categories: StoreCategory[] = ((categoriesRes.data ?? []) as unknown as {
+  type RawCategory = {
     slug: string; name: string; description: string | null; image_path: string | null; seo_title: string | null; seo_description: string | null; parent: { slug: string } | null;
-  }[]).map((c) => ({
+  };
+  const rawCategories = (categoriesRes.data ?? []) as unknown as RawCategory[];
+  // Categories nest to any depth: every product carries its full path, so it also shows
+  // (and is counted) under each category above it.
+  const tree = rawCategories.map((c) => ({ id: c.slug, parentId: c.parent?.slug ?? null }));
+  for (const p of products) p.category.path = pathIds([...tree, ...(tree.some((t) => t.id === p.category.slug) ? [] : [{ id: p.category.slug, parentId: p.category.parentSlug }])], p.category.slug);
+  const countFor = (slug: string) => products.filter((p) => (p.category.path ?? [p.category.slug]).includes(slug)).length;
+
+  const categories: StoreCategory[] = rawCategories.map((c) => ({
     slug: c.slug,
     name: c.name,
     parentSlug: c.parent?.slug ?? null,
+    path: pathIds(tree, c.slug),
+    depth: pathIds(tree, c.slug).length - 1,
     description: c.description ?? "",
     imageUrl: publicStorageUrl("category-images", c.image_path),
     seoTitle: c.seo_title,

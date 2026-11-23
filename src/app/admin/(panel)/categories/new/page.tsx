@@ -4,6 +4,7 @@ import { PreviewSaveNotice } from "@/components/admin/catalog/preview-save-notic
 import { PageHeader } from "@/components/admin/page-header";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { listCategories } from "@/features/catalog/admin-repo";
+import { treeOrder } from "@/features/catalog/category-tree";
 import { previewCategories } from "@/features/preview/data";
 import { isSupabaseConfigured } from "@/lib/env";
 
@@ -11,11 +12,11 @@ export const metadata: Metadata = { title: "New category" };
 
 async function NewCategoryContent() {
   const parents = isSupabaseConfigured
-    ? (await listCategories()).filter((c) => !c.parent_id).map((c) => ({ id: c.id, name: c.name }))
+    ? treeOrder((await listCategories()).map((c) => ({ id: c.id, parentId: c.parent_id, name: c.name }))).map((c) => ({ id: c.id, name: `${"— ".repeat(c.depth)}${c.name}` }))
     : previewCategories.filter((c) => !c.parent).map((c) => ({ id: c.id, name: c.name }));
   return (
     <>
-      <PageHeader title="New category" description="Create a category or subcategory" />
+      <PageHeader title="New category" description="Create a category, or put it inside another one (any number of levels, e.g. Cycles › Electric Cycles › Women)" />
       <PreviewSaveNotice />
       <CategoryForm category={null} parents={parents} canDelete={false} />
     </>

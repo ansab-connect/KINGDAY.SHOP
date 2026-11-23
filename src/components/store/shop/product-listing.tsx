@@ -3,8 +3,9 @@ import { ChevronLeft, ChevronRight, SearchX, X } from "lucide-react";
 import { ProductGrid } from "@/components/store/product-card";
 import { AutoSubmit } from "@/components/store/shop/auto-submit";
 import { FilterSheet } from "@/components/store/shop/filter-sheet";
-import { getAllCategories, getBrands, getCategories, getPriceBounds, getProducts, parseFilters } from "@/features/catalog/queries";
+import { getAllCategories, getBrands, getPriceBounds, getProducts, parseFilters } from "@/features/catalog/queries";
 import { SORT_OPTIONS, type ProductFilters } from "@/features/catalog/types";
+import { treeOrder } from "@/features/catalog/category-tree";
 import { cn } from "@/lib/utils";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -39,14 +40,13 @@ export async function ProductListing({
 }) {
   const parsed = parseFilters(await searchParams);
   const filters: ProductFilters = { ...parsed, ...fixed };
-  const [{ items, total, page, pageCount }, categories, allCategories, brands, bounds] = await Promise.all([
+  const [{ items, total, page, pageCount }, allCategories, brands, bounds] = await Promise.all([
     getProducts(filters),
-    getCategories(),
     getAllCategories(),
     getBrands(),
     getPriceBounds(),
   ]);
-  const subcategories = allCategories.filter((c) => c.parentSlug);
+  const categoryTree = treeOrder(allCategories.map((c) => ({ ...c, id: c.slug, parentId: c.parentSlug })));
   const href = (patch: Partial<ProductFilters>) => buildHref(basePath, filters, fixed, { page: 1, ...patch });
 
 
@@ -75,16 +75,10 @@ export async function ProductListing({
           <legend className="font-heading text-sm font-semibold text-deep">Category</legend>
           <div className="mt-3 flex flex-col gap-2">
             <RadioRow id={`${idPrefix}-cat-all`} name="category" value="" checked={!filters.category} label="All categories" />
-            {categories.map((c) => (
-              <div key={c.slug} className="flex flex-col gap-2">
+            {/* Every level, nested (Cycles › Electric Cycles › Women). */}
+            {categoryTree.map((c) => (
+              <div key={c.slug} style={{ paddingLeft: `${c.depth * 1.25}rem` }}>
                 <RadioRow id={`${idPrefix}-cat-${c.slug}`} name="category" value={c.slug} checked={filters.category === c.slug} label={c.name} count={c.productCount} />
-                {subcategories
-                  .filter((s) => s.parentSlug === c.slug)
-                  .map((s) => (
-                    <div key={s.slug} className="pl-6">
-                      <RadioRow id={`${idPrefix}-cat-${s.slug}`} name="category" value={s.slug} checked={filters.category === s.slug} label={s.name} count={s.productCount} />
-                    </div>
-                  ))}
               </div>
             ))}
           </div>

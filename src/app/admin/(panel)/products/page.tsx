@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ClickableRow } from "@/components/admin/clickable-row";
 import { ProductActiveSwitch } from "@/components/admin/catalog/product-active-switch";
+import { descendantIds, treeOrder } from "@/features/catalog/category-tree";
 import { listBrands, listCategories, listProducts, type AdminProductRow } from "@/features/catalog/admin-repo";
 import { previewProducts } from "@/features/preview/data";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -29,18 +30,16 @@ const FILTERS = [
 
 type Row = AdminProductRow & { href: string | null };
 
-type Option = { id: string; name: string; parentId: string | null };
+type Option = { id: string; name: string; parentId: string | null; depth: number };
 
 async function loadOptions(): Promise<{ categories: Option[]; brands: Option[] }> {
   if (!isSupabaseConfigured) return { categories: [], brands: [] };
   const [cats, brands] = await Promise.all([listCategories(), listBrands()]);
   // Parents first, each followed by its sub-categories.
-  const top = cats.filter((c) => !c.parent_id);
-  const ordered = top.flatMap((t) => [t, ...cats.filter((c) => c.parent_id === t.id)]);
-  const rest = cats.filter((c) => !ordered.includes(c));
   return {
-    categories: [...ordered, ...rest].map((c) => ({ id: c.id, name: c.name, parentId: c.parent_id })),
-    brands: brands.map((b) => ({ id: b.id, name: b.name, parentId: null })),
+    // Every level in tree order (Cycles, Electric Cycles, Women, …).
+    categories: treeOrder(cats.map((c) => ({ id: c.id, name: c.name, parentId: c.parent_id }))),
+    brands: brands.map((b) => ({ id: b.id, name: b.name, parentId: null, depth: 0 })),
   };
 }
 
@@ -65,7 +64,8 @@ async function ProductsContent({ searchParams }: { searchParams: PageProps<"/adm
   const brand = list(params.brand);
   const { categories, brands } = await loadOptions();
   // Picking a main category also includes its sub-categories.
-  const catIds = [...new Set([...cat, ...categories.filter((c) => c.parentId && cat.includes(c.parentId)).map((c) => c.id)])];
+  // Picking a category also includes every level inside it.
+  const catIds = [...new Set(cat.flatMap((id) => [id, ...descendantIds(categories, id)]))];
   const rows = await loadRows(q, status, catIds, brand);
   const qs = (next: { status?: string; cat?: string[]; brand?: string[] }) => {
     const sp = new URLSearchParams();
@@ -240,7 +240,7 @@ function MultiPick({ label, name, options, selected }: { label: string; name: st
         <ul className="max-h-72 overflow-y-auto">
           {options.map((o) => (
             <li key={o.id}>
-              <label className={cn("flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted", o.parentId && "pl-7 text-muted-foreground")}>
+              <label className={cn("flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted", o.depth > 0 && "text-muted-foreground")} style={{ paddingLeft: `${0.5 + o.depth * 1.25}rem` }}>
                 <input type="checkbox" name={name} value={o.id} defaultChecked={selected.includes(o.id)} className="size-4 accent-royal" />
                 {o.name}
               </label>

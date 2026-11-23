@@ -1548,5 +1548,16 @@ await test("bills: a bill with only a phone links to that customer's account, wh
   assert((await rows(`select id from public.bills where id = $1`, [b.id])).length === 0, "other customer sees it");
 });
 
+
+console.log("Categories any depth (0035)");
+await test("categories: three levels deep is fine, loops are refused", async () => {
+  await asSuperuser();
+  const [a] = await rows(`insert into public.categories (name, slug) values ('Cycles T', 'cycles-t') returning id`);
+  const [b] = await rows(`insert into public.categories (name, slug, parent_id) values ('Electric T', 'electric-t', $1) returning id`, [a.id]);
+  const [c] = await rows(`insert into public.categories (name, slug, parent_id) values ('Women T', 'women-t', $1) returning id`, [b.id]);
+  assert(c.id, "third level");
+  await expectError(`update public.categories set parent_id = $1 where id = $2`, [c.id, a.id], /inside itself/);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);
