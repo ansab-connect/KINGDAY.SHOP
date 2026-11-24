@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, BatteryCharging, Camera, Check, ChevronRight, Crown, Lock, MessageCircle, Music, Quote, ShieldCheck, ShoppingCart, Smile, Wrench } from "lucide-react";
+import { ArrowRight, BatteryCharging, Camera, Check, Crown, Lock, MessageCircle, Music, Quote, ShieldCheck, ShoppingCart, Smile, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { HeroStage } from "@/components/store/hero/hero-stage";
 import { getActiveHeroTheme } from "@/features/marketing/hero-themes";
@@ -127,28 +127,24 @@ export default async function HomePage() {
       <section className="relative z-10 pb-6 sm:pb-10 lg:-mt-14">
         <Container>
           <h2 className="sr-only"><L en="Shop by category" ml="വിഭാഗം അനുസരിച്ച്" /></h2>
-          <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pt-5 pb-3 [scrollbar-color:var(--color-royal-200)_transparent] [scrollbar-width:thin] lg:gap-4 lg:pt-0">
+          {/* All categories at a glance: a compact grid, no sideways scrolling. */}
+          <ul className="grid grid-cols-4 gap-2 pt-5 sm:gap-3 md:grid-cols-7 lg:pt-0">
             {categories.map((c, i) => (
-              <li key={c.slug} className="w-60 shrink-0 snap-start lg:w-72">
+              <li key={c.slug}>
                 <Link
                   href={`/categories/${c.slug}`}
-                  className={`group flex h-full items-center gap-3 rounded-2xl border border-white p-3 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift sm:p-4 ${["bg-royal-50", "bg-[#fbeef8]", "bg-[#f1ecfb]", "bg-gold-50"][i % 4]}`}
+                  className={`group flex h-full flex-col items-center gap-1.5 rounded-2xl border border-white px-1.5 py-2.5 text-center shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift sm:gap-2 sm:p-3 ${["bg-royal-50", "bg-[#fbeef8]", "bg-[#f1ecfb]", "bg-gold-50"][i % 4]}`}
                 >
-                  <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/70 sm:size-24">
+                  <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/70 sm:size-16 lg:size-20">
                     {c.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- category photos from our own storage
-                      <img src={c.imageUrl} alt="" loading={i < 4 ? "eager" : "lazy"} className="size-full object-contain p-1 transition-transform duration-500 group-hover:scale-105" />
+                      <img src={c.imageUrl} alt="" loading={i < 8 ? "eager" : "lazy"} className="size-full object-contain p-1 transition-transform duration-500 group-hover:scale-105" />
                     ) : (
-                      <CategoryIcon slug={c.slug} strokeWidth={1.4} className="size-10 text-royal" />
+                      <CategoryIcon slug={c.slug} strokeWidth={1.4} className="size-7 text-royal sm:size-8" />
                     )}
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-heading text-sm leading-tight font-extrabold text-deep uppercase xl:text-base">{c.name}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground"><L en={`${c.productCount} items`} ml={`${c.productCount} എണ്ണം`} /></span>
-                  </span>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-deep shadow-sm transition-transform group-hover:translate-x-0.5">
-                    <ChevronRight aria-hidden className="size-4" />
-                  </span>
+                  <span className="line-clamp-2 font-heading text-[0.62rem] leading-tight font-extrabold break-words text-deep uppercase sm:text-xs">{c.name}</span>
+                  <span className="hidden text-[0.68rem] text-muted-foreground sm:block"><L en={`${c.productCount} items`} ml={`${c.productCount} എണ്ണം`} /></span>
                 </Link>
               </li>
             ))}

@@ -21,6 +21,8 @@ export const instagramPost = z.object({
     .regex(/^https:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/[A-Za-z0-9_-]{5,40}\/?(\?.*)?$/, "Paste the link of a post or reel from instagram.com."),
   /** Optional now: the homepage shows Instagram's own player. */
   image_path: z.union([z.literal(""), z.string().regex(/^instagram\/[a-z0-9-]{6,80}\.(webp|jpg|jpeg|png|avif)$/, "Upload a valid picture.")]).default(""),
+  /** Optional short clip (MP4/WebM in product-videos/instagram/): plays on its own on the homepage. */
+  video_path: z.union([z.literal(""), z.string().regex(/^instagram\/[a-z0-9-]{6,80}\.(mp4|webm)$/, "Upload a valid video.")]).default(""),
   caption: z.string().trim().max(150),
 });
 export type InstagramPost = z.infer<typeof instagramPost>;

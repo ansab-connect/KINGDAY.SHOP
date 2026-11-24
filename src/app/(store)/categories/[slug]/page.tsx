@@ -61,16 +61,16 @@ async function CategoryContent({ params, searchParams }: Pick<PageProps<"/catego
         {isBicycles ? <FinderBanner compact={!isBicycleHome} /> : null}
         {isBicycleHome ? <BicycleTypeCards tree={bikes} /> : null}
         {children.length && !isBicycleHome ? (
-          <nav aria-label={`${top.name} sub-categories`} className="-mx-4 mb-6 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <ul className="flex gap-2">
+          <nav aria-label={`${top.name} sub-categories`} className="mb-6">
+            <ul className="flex flex-wrap gap-2">
               {[{ slug: top.slug, name: `All ${top.name}`, productCount: top.productCount }, ...children].map((c) => {
                 const on = c.slug === category.slug;
                 return (
-                  <li key={c.slug} className="shrink-0">
+                  <li key={c.slug}>
                     <Link
                       href={`/categories/${c.slug}`}
                       aria-current={on ? "page" : undefined}
-                      className={`inline-flex h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors ${on ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-200 hover:text-royal"}`}
+                      className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold sm:h-10 sm:px-4 sm:text-sm transition-colors ${on ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-200 hover:text-royal"}`}
                     >
                       {c.name} <span className={`text-xs font-normal ${on ? "text-white/75" : "text-muted-foreground"}`}>{c.productCount}</span>
                     </Link>
