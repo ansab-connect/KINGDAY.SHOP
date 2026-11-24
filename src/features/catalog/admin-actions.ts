@@ -168,24 +168,35 @@ export async function saveProduct(input: unknown): Promise<ActionResult<{ id: st
     .eq("id", data as string);
   if (discountError) return dbError(discountError, "product");
 
-  // Extra categories: keep exactly the ones chosen (the main category is never repeated here).
+  // Categories: the extra ones chosen ("Also show in") plus each variant's own category
+  // (listed there with that variant's price). Keep exactly these rows.
   const productId = data as string;
-  const extras = [...new Set(parsed.data.extra_category_ids)].filter((c) => c !== parsed.data.category_id);
-  const { data: existing, error: extrasReadError } = await supabase.from("product_categories").select("category_id").eq("product_id", productId);
-  if (!extrasReadError) {
-    const had = new Set((existing ?? []).map((r) => r.category_id as string));
-    const remove = [...had].filter((c) => !extras.includes(c));
-    const add = extras.filter((c) => !had.has(c));
+  const desired = new Map<string, string | null>();
+  for (const c of parsed.data.extra_category_ids) if (c !== parsed.data.category_id) desired.set(c, null);
+  const linked = parsed.data.variants.filter((v) => v.category_id);
+  if (linked.length) {
+    const { data: saved } = await supabase.from("product_variants").select("id, sku").eq("product_id", productId);
+    const idBySku = new Map(((saved ?? []) as { id: string; sku: string }[]).map((v) => [v.sku, v.id]));
+    for (const v of linked) {
+      const id = v.id ?? idBySku.get(v.sku);
+      if (id) desired.set(v.category_id!, id);
+    }
+  }
+  const { data: existing, error: catReadError } = await supabase.from("product_categories").select("category_id, variant_id").eq("product_id", productId);
+  if (!catReadError) {
+    const had = new Map(((existing ?? []) as { category_id: string; variant_id: string | null }[]).map((r) => [r.category_id, r.variant_id]));
+    const remove = [...had.keys()].filter((c) => !desired.has(c));
+    const upsert = [...desired].filter(([c, v]) => !had.has(c) || had.get(c) !== v).map(([category_id, variant_id]) => ({ product_id: productId, category_id, variant_id }));
     if (remove.length) {
       const { error: e } = await supabase.from("product_categories").delete().eq("product_id", productId).in("category_id", remove);
       if (e) return dbError(e, "product");
     }
-    if (add.length) {
-      const { error: e } = await supabase.from("product_categories").insert(add.map((category_id) => ({ product_id: productId, category_id })));
+    if (upsert.length) {
+      const { error: e } = await supabase.from("product_categories").upsert(upsert, { onConflict: "product_id,category_id" });
       if (e) return dbError(e, "product");
     }
-  } else if (extras.length) {
-    return { ok: false, error: "Product saved, but extra categories need database update 0037 first." };
+  } else if (desired.size) {
+    return { ok: false, error: "Product saved, but categories need database updates 0037 and 0038 first." };
   }
 
   // Stock typed into the editor for saved variants: record the difference in the stock

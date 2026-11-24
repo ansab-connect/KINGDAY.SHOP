@@ -39,7 +39,7 @@ export function ProductCard({ product, priority = false }: { product: StoreProdu
       <div className="flex flex-1 flex-col gap-1 p-3 sm:p-3.5">
         {product.brand ? <p className="truncate text-[0.68rem] font-medium text-muted-foreground">{product.brand.name}</p> : null}
         <h3 className="line-clamp-2 min-h-[2.5rem] text-[0.8125rem] leading-snug font-semibold text-deep sm:text-sm">
-          <Link href={`/products/${product.slug}`} className="after:absolute after:inset-0 focus-visible:outline-none">
+          <Link href={`/products/${product.slug}${product.listedVariantId ? `?v=${product.listedVariantId}` : ""}`} className="after:absolute after:inset-0 focus-visible:outline-none">
             {product.name}
           </Link>
         </h3>

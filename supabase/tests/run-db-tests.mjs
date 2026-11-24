@@ -1595,5 +1595,16 @@ await test("product_categories: shoppers read, only product staff change", async
   assert((await rows(`select category_id from public.product_categories where product_id = $1`, [productId])).length === 2, "anon can't read extra categories");
 });
 
+console.log("Variant categories (0038)");
+await test("product_categories: a category can point at one variant of the product", async () => {
+  await user(superAdmin);
+  const [v] = await rows(`select id from public.product_variants where product_id = $1 limit 1`, [productId]);
+  const [pc] = await rows(`select category_id from public.product_categories where product_id = $1 limit 1`, [productId]);
+  assert((await rows(`update public.product_categories set variant_id = $1 where product_id = $2 and category_id = $3 returning variant_id`, [v.id, productId, pc.category_id])).length === 1, "admin cannot link a variant");
+  await anon();
+  const [r] = await rows(`select variant_id from public.product_categories where product_id = $1 and category_id = $2`, [productId, pc.category_id]);
+  assert(r.variant_id === v.id, "anon can't read the variant link");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

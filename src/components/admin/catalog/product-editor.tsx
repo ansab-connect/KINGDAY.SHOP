@@ -96,6 +96,7 @@ export function ProductEditor({
         mrp: paiseToRupees(v.mrp),
         price: paiseToRupees(v.price),
         opening_stock: String(v.on_hand ?? 0),
+        category_id: v.category_id ?? "",
         on_hand: v.on_hand,
         is_active: v.is_active,
         is_default: v.is_default,
@@ -170,6 +171,7 @@ export function ProductEditor({
           mrp: v.mrp,
           price: v.price,
           opening_stock: v.id ? "0" : v.opening_stock || "0",
+          category_id: v.category_id,
           // Saved variants: a changed stock count is recorded as an adjustment.
           stock_target: v.id && v.opening_stock !== "" && Number(v.opening_stock) !== (v.on_hand ?? 0) ? Number(v.opening_stock) : undefined,
           is_active: v.is_active,
@@ -351,6 +353,7 @@ export function ProductEditor({
             errors={errors}
             product={product ? { id: product.id, name: basics.name, images: product.images } : null}
             onSuggestSku={suggestSku}
+            categoryOptions={categoryOptions}
           />
         </FormSection>
 

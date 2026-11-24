@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState, useSyncExternalStore } from "react";
+
+const noop = () => () => {};
 import { L } from "@/components/i18n/lang";
 import type { SocialVideo } from "@/lib/social-video";
 import { ProductGallery } from "@/components/store/product/product-gallery";
@@ -23,9 +25,14 @@ export function VariantSelectionProvider({
   defaultVariantId: string;
   children: React.ReactNode;
 }) {
-  const [id, setId] = useState(defaultVariantId);
+  // null until the shopper picks one. Opened from a category listing that shows one
+  // variant (?v=<id>), the page starts on that variant; otherwise on the default.
+  const [picked, setPicked] = useState<string | null>(null);
+  const search = useSyncExternalStore(noop, () => window.location.search, () => "");
+  const fromUrl = new URLSearchParams(search).get("v");
+  const id = picked ?? (fromUrl && variants.some((v) => v.id === fromUrl) ? fromUrl : defaultVariantId);
   const value = useMemo<Selection>(
-    () => ({ variants, variant: variants.find((v) => v.id === id) ?? variants[0], select: setId }),
+    () => ({ variants, variant: variants.find((v) => v.id === id) ?? variants[0], select: setPicked }),
     [variants, id],
   );
   return <VariantContext.Provider value={value}>{children}</VariantContext.Provider>;

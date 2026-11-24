@@ -131,6 +131,8 @@ export const variantInputSchema = z
     option2: optionalText(60),
     /** Values by variant type name, e.g. {"Wheel Size": "24″", "Colour": "Volt Blue"}. */
     values: z.record(z.string(), z.string().trim().max(60, "Use at most 60 characters.")).optional(),
+    /** Category this variant is listed in with its own price (e.g. the 24″ category). Empty = none. */
+    category_id: optionalUuid,
     /** Specifications that apply only to this combination. */
     specs: z
       .array(attributeSpec)
@@ -210,6 +212,13 @@ export const productInputSchema = z
         ctx.addIssue({ code: "custom", path: ["variants", i, "sku"], message: `Same SKU as variant ${prev + 1}.` });
       }
       seen.set(variant.sku, i);
+    });
+    const byCategory = new Map<string, number>();
+    v.variants.forEach((variant, i) => {
+      if (!variant.category_id) return;
+      const prev = byCategory.get(variant.category_id);
+      if (prev !== undefined) ctx.addIssue({ code: "custom", path: ["variants", i, "category_id"], message: `Variant ${prev + 1} already uses this category. Choose another one.` });
+      byCategory.set(variant.category_id, i);
     });
     if (!v.variant_types && v.option2_name && !v.option1_name) {
       ctx.addIssue({ code: "custom", path: ["option1_name"], message: "Choose the main variant type first." });

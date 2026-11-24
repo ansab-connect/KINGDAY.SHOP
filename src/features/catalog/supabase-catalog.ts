@@ -75,7 +75,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .order("created_at", { ascending: false })
       .limit(2000),
     // Extra categories (0037). If the table isn't there yet, products just show in their main category.
-    supabase.from("product_categories").select("product_id, category:categories(slug)").limit(10000),
+    supabase.from("product_categories").select("product_id, variant_id, category:categories(slug)").limit(10000),
   ]);
 
   for (const r of [productsRes, categoriesRes, brandsRes, reviewsRes]) {
@@ -184,15 +184,21 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
   const tree = rawCategories.map((c) => ({ id: c.slug, parentId: c.parent?.slug ?? null }));
   for (const p of products) p.category.path = pathIds([...tree, ...(tree.some((t) => t.id === p.category.slug) ? [] : [{ id: p.category.slug, parentId: p.category.parentSlug }])], p.category.slug);
   const extraSlugs = new Map<string, string[]>();
+  const variantLinks = new Map<string, Record<string, string>>();
   if (!extraRes.error) {
-    for (const r of (extraRes.data ?? []) as unknown as { product_id: string; category: { slug: string } | null }[]) {
-      if (r.category) extraSlugs.set(r.product_id, [...(extraSlugs.get(r.product_id) ?? []), r.category.slug]);
+    for (const r of (extraRes.data ?? []) as unknown as { product_id: string; variant_id: string | null; category: { slug: string } | null }[]) {
+      if (!r.category) continue;
+      extraSlugs.set(r.product_id, [...(extraSlugs.get(r.product_id) ?? []), r.category.slug]);
+      if (r.variant_id) variantLinks.set(r.product_id, { ...(variantLinks.get(r.product_id) ?? {}), [r.category.slug]: r.variant_id });
     }
   }
   const visible = new Set(tree.map((t) => t.id));
   for (const p of products) {
     const extra = (extraSlugs.get(p.id) ?? []).filter((s) => visible.has(s));
     if (extra.length) p.alsoIn = [...new Set(extra.flatMap((s) => pathIds(tree, s)))];
+    // Only links to variants that are on sale (inactive variants are not loaded).
+    const links = Object.entries(variantLinks.get(p.id) ?? {}).filter(([slug, id]) => visible.has(slug) && p.variants.some((v) => v.id === id));
+    if (links.length) p.variantByCategory = Object.fromEntries(links);
   }
   const countFor = (slug: string) => products.filter((p) => productCategorySlugs(p).includes(slug)).length;
 

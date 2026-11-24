@@ -1,4 +1,4 @@
-import { productCategorySlugs, type StoreCategory, type StoreProduct } from "./types";
+import { productCategorySlugs, productForCategory, type StoreCategory, type StoreProduct } from "./types";
 
 /**
  * "Find Your Perfect Bicycle": bicycle types › wheel sizes, each size with an age
@@ -165,7 +165,8 @@ export function findBicycles(tree: BicycleTree, products: StoreProduct[], fits: 
     const hasOwn = Boolean(own && (own.ageMin != null || own.ageMax != null || own.heightMin != null || own.heightMax != null));
     const fit: FitRange = hasOwn ? own! : size ?? { ageMin: null, ageMax: null, heightMin: null, heightMax: null };
     const d = distanceOf(fit, q);
-    const r = { product: p, size, fit, modelSpecific: hasOwn, note: own?.note ?? null, distance: d ?? Infinity };
+    // The size's own variant (e.g. the 24″ variant of a multi-size model) sets the price shown.
+    const r = { product: size ? productForCategory(p, size.slug, () => undefined) : p, size, fit, modelSpecific: hasOwn, note: own?.note ?? null, distance: d ?? Infinity };
     (d == null ? unrated : scored).push(r);
   }
   const bySize = (a: FinderResult, b: FinderResult) =>

@@ -29,7 +29,7 @@ function ResultCard({ r }: { r: FinderResult }) {
       {p.stock <= 0 ? <span className="absolute top-2 right-2 rounded-md bg-white/90 px-2 py-0.5 text-[0.65rem] font-semibold text-deep">Out of stock</span> : null}
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
         <h3 className="line-clamp-2 text-sm leading-snug font-semibold text-deep">
-          <Link href={`/products/${p.slug}`} className="after:absolute after:inset-0 focus-visible:outline-none">{p.name}</Link>
+          <Link href={`/products/${p.slug}${p.listedVariantId ? `?v=${p.listedVariantId}` : ""}`} className="after:absolute after:inset-0 focus-visible:outline-none">{p.name}</Link>
         </h3>
         <dl className="grid gap-0.5 text-xs text-muted-foreground">
           <div className="flex gap-1"><dt className="font-medium text-deep/80">Wheel:</dt><dd>{r.size ? inchLabel(r.size.inch) : "—"}</dd></div>

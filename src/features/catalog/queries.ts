@@ -5,7 +5,7 @@ import { discountPercent } from "@/lib/format";
 import { CATALOG_TAG } from "./cache-tags";
 import { previewSnapshot } from "./preview-catalog";
 import { loadSupabaseCatalog } from "./supabase-catalog";
-import { productCategorySlugs, SORT_OPTIONS, type CatalogSnapshot, type ProductFilters, type SortOption, type StoreProduct } from "./types";
+import { productCategorySlugs, productForCategory, SORT_OPTIONS, type CatalogSnapshot, type ProductFilters, type SortOption, type StoreProduct } from "./types";
 
 /**
  * Storefront catalogue queries.
@@ -56,8 +56,11 @@ function sortProducts(list: StoreProduct[], sort: SortOption): StoreProduct[] {
 const inCategory = (p: StoreProduct, slug: string) => productCategorySlugs(p).includes(slug);
 
 export async function getProducts(filters: ProductFilters = {}) {
-  const { products } = await getCatalog();
+  const { products: all, categories } = await getCatalog();
   const q = filters.q?.trim().toLowerCase();
+  // In a category, a product whose variant belongs there is listed with that variant's price.
+  const pathBySlug = new Map(categories.map((c) => [c.slug, c.path]));
+  const products = filters.category ? all.map((p) => productForCategory(p, filters.category!, (s) => pathBySlug.get(s))) : all;
   const filtered = products.filter((p) => {
     if (filters.category && !inCategory(p, filters.category)) return false;
     if (filters.brands?.length && !(p.brand && filters.brands.includes(p.brand.slug))) return false;

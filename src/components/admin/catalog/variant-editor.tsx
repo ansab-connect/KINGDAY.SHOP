@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { createContext, Fragment, useContext, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Crown,
@@ -51,7 +51,12 @@ export type VariantRow = {
   on_hand: number | null;
   is_active: boolean;
   is_default: boolean;
+  /** Category this variant is listed in with its own price ("" = none). */
+  category_id: string;
 };
+
+/** Categories a variant can be listed in (tree order, indented labels). */
+const CategoryOptions = createContext<{ value: string; label: string }[]>([]);
 
 let seq = 0;
 export const nextKey = () => `vr-${++seq}`;
@@ -71,6 +76,7 @@ export function newVariantRow(patch: Partial<VariantRow> = {}): VariantRow {
     on_hand: null,
     is_active: true,
     is_default: false,
+    category_id: "",
     ...patch,
   };
 }
@@ -88,6 +94,8 @@ type Props = {
   errors: Record<string, string>;
   product: ProductInfo;
   onSuggestSku: (row: VariantRow) => string;
+  /** Categories a variant can be listed in with its own price. */
+  categoryOptions?: { value: string; label: string }[];
 };
 
 const MAX_TYPES = 8;
@@ -122,7 +130,15 @@ function dedupe(list: VariantRow[], types: string[]) {
   return { kept, dropped };
 }
 
-export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, rows, onRowsChange, optionTypes, errors, product, onSuggestSku }: Props) {
+export function VariantEditor({ categoryOptions = [], ...props }: Props) {
+  return (
+    <CategoryOptions.Provider value={categoryOptions}>
+      <VariantEditorInner {...props} />
+    </CategoryOptions.Provider>
+  );
+}
+
+function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, rows, onRowsChange, optionTypes, errors, product, onSuggestSku }: Omit<Props, "categoryOptions">) {
   const main = types[0] ?? "";
   // Pending choices that have no combination yet: extra main values, and per main value
   // the sub-variant types and values added before "Generate Combinations".
@@ -1302,6 +1318,7 @@ function ComboRow({
                   <span className="font-medium text-muted-foreground">Variant name (optional)</span>
                   <input value={v.name} maxLength={120} placeholder={`Automatic: ${label}`} onChange={(e) => patch(v.key, { name: e.target.value })} className={inputClass} />
                 </label>
+                <VariantCategoryField value={v.category_id} error={err("category_id")} onChange={(category_id) => patch(v.key, { category_id })} label={label} />
                 <label className="inline-flex items-center gap-2 text-sm">
                   <input type="radio" name="default-variant" checked={v.is_default} onChange={() => patch(v.key, { is_default: true })} className="accent-royal" />
                   Default selection on the product page
@@ -1347,5 +1364,23 @@ function ComboRow({
         </tr>
       ) : null}
     </Fragment>
+  );
+}
+
+/** "Show in category": list this variant in a category with its own MRP and price. */
+function VariantCategoryField({ value, error, onChange, label }: { value: string; error?: string; onChange: (v: string) => void; label: string }) {
+  const options = useContext(CategoryOptions);
+  if (!options.length) return null;
+  return (
+    <label className="flex flex-col gap-1 text-xs">
+      <span className="font-medium text-muted-foreground">Show in category (with this variant&apos;s price)</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={`Category for ${label}`} aria-invalid={Boolean(error)} className={inputClass}>
+        <option value="">— Not listed separately —</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      {error ? <span className="text-danger">{error}</span> : <span className="text-muted-foreground">e.g. the 24″ variant → “24 Inch” category. Shoppers there see this variant&apos;s price.</span>}
+    </label>
   );
 }

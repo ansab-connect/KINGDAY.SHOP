@@ -48,6 +48,8 @@ export type AdminVariant = {
   is_active: boolean;
   on_hand: number;
   reserved: number;
+  /** Category this variant is listed in with its own price. */
+  category_id: string | null;
 };
 
 export type AdminProductImage = { id: string; storage_path: string; url: string | null; alt: string; position: number; variant_id: string | null };
@@ -208,9 +210,11 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
   if (error) fail("Loading product", error);
   if (!data) return null;
   // Missing table (database update 0037 not applied yet) just means no extra categories.
-  const { data: extraRows } = await supabase.from("product_categories").select("category_id").eq("product_id", id);
+  const { data: extraRows } = await supabase.from("product_categories").select("category_id, variant_id").eq("product_id", id);
+  const catRows = (extraRows ?? []) as { category_id: string; variant_id: string | null }[];
+  const variantCategory = new Map(catRows.filter((r) => r.variant_id).map((r) => [r.variant_id!, r.category_id]));
 
-  type RawVariant = Omit<AdminVariant, "on_hand" | "reserved"> & { position: number; inventory: { on_hand: number; reserved: number } | null };
+  type RawVariant = Omit<AdminVariant, "on_hand" | "reserved" | "category_id"> & { position: number; inventory: { on_hand: number; reserved: number } | null };
   const d = data as unknown as Omit<AdminProduct, "variants" | "attributes" | "images" | "video_url" | "extra_category_ids"> & {
     product_variants: RawVariant[];
     product_attributes: { name: string; value: string; position: number }[];
@@ -219,7 +223,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
 
   return {
     ...d,
-    extra_category_ids: ((extraRows ?? []) as { category_id: string }[]).map((r) => r.category_id).filter((c) => c !== d.category_id),
+    extra_category_ids: catRows.filter((r) => !r.variant_id && r.category_id !== d.category_id).map((r) => r.category_id),
     prepaid_discount_pct: Number(d.prepaid_discount_pct) || 0,
     cod_discount_pct: Number(d.cod_discount_pct) || 0,
     video_url: publicStorageUrl("product-videos", d.video_path),
@@ -227,7 +231,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
       .sort((a, b) => a.position - b.position)
       .map((raw) => {
         const { inventory, ...rest } = raw;
-        const v: AdminVariant & { position?: number } = { ...rest, on_hand: inventory?.on_hand ?? 0, reserved: inventory?.reserved ?? 0 };
+        const v: AdminVariant & { position?: number } = { ...rest, on_hand: inventory?.on_hand ?? 0, reserved: inventory?.reserved ?? 0, category_id: variantCategory.get(rest.id) ?? null };
         delete v.position;
         return v;
       }),

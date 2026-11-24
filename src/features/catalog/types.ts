@@ -34,6 +34,10 @@ export type StoreProduct = {
   category: CategoryRef;
   /** Extra categories it also shows in, each with the ones above it (slugs). */
   alsoIn?: string[];
+  /** Category slug → the variant shown there (e.g. the 24″ category shows the 24″ variant and its price). */
+  variantByCategory?: Record<string, string>;
+  /** Set on listings when the card shows a specific variant: the product page opens on it. */
+  listedVariantId?: string;
   brand: BrandRef | null;
   /** Price of the default variant (paise). */
   mrp: number;
@@ -137,4 +141,29 @@ export type ProductFilters = {
 export function productCategorySlugs(p: Pick<StoreProduct, "category" | "alsoIn">): string[] {
   const main = p.category.path ?? [p.category.slug, ...(p.category.parentSlug ? [p.category.parentSlug] : [])];
   return p.alsoIn?.length ? [...new Set([...main, ...p.alsoIn])] : main;
+}
+
+/**
+ * The product as listed in one category: when one of its variants belongs to that
+ * category (or to a category inside it), the card shows that variant's price, stock
+ * and pictures and opens on it. Otherwise the product is returned unchanged.
+ * `pathOf` gives a category's slugs from the top down (to match sub-categories).
+ */
+export function productForCategory(p: StoreProduct, slug: string, pathOf: (slug: string) => string[] | undefined): StoreProduct {
+  const links = p.variantByCategory;
+  if (!links) return p;
+  const entries = Object.entries(links);
+  const hit = entries.find(([c]) => c === slug) ?? entries.find(([c]) => (pathOf(c) ?? []).includes(slug));
+  const v = hit && p.variants.find((x) => x.id === hit[1]);
+  if (!v) return p;
+  return {
+    ...p,
+    sku: v.sku,
+    mrp: v.mrp,
+    price: v.price,
+    stock: v.stock,
+    defaultVariantId: v.id,
+    images: v.images.length ? v.images : p.images,
+    listedVariantId: v.id,
+  };
 }
