@@ -148,7 +148,7 @@ await test("selling price above MRP is rejected", async () => {
 await test("draft products are hidden from the public", async () => {
   await anon();
   assert((await rows(`select id from public.products where slug = 'test-jeep'`)).length === 0, "draft visible");
-  assert((await rows(`select id from public.categories`)).length === 7, "categories not readable");
+  assert((await rows(`select id from public.categories where id not in (select category_id from public.bicycle_fits )`)).length === 7, "categories not readable");
   await user(staff);
   await db.query(`update public.products set status = 'active' where id = $1`, [productId]);
   await anon();
@@ -1557,6 +1557,29 @@ await test("categories: three levels deep is fine, loops are refused", async () 
   const [c] = await rows(`insert into public.categories (name, slug, parent_id) values ('Women T', 'women-t', $1) returning id`, [b.id]);
   assert(c.id, "third level");
   await expectError(`update public.categories set parent_id = $1 where id = $2`, [c.id, a.id], /inside itself/);
+});
+
+console.log("Bicycles finder (0036)");
+await test("bicycles: types and wheel sizes with age ranges", async () => {
+  await anon();
+  const types = await rows(`select c.slug from public.categories c join public.bicycle_fits f on f.category_id = c.id where f.kind = 'type' order by c.sort_order`);
+  assert(types.map((t) => t.slug).join() === "kids-bicycles,junior-bicycles,mens-bicycles,womens-bicycles,electric-cycles", "types: " + types.map((t) => t.slug));
+  const sizes = await rows(`select c.name, f.age_min, f.age_max, f.model_based from public.categories c join public.bicycle_fits f on f.category_id = c.id where f.kind = 'size'`);
+  assert(sizes.length === 19, "19 sizes, got " + sizes.length);
+  assert(sizes.some((s) => s.name === "12 Inch | 2–3 Years" && s.age_min === 2 && s.age_max === 3), "12 inch kids: " + sizes.map((s) => s.name));
+  assert(sizes.some((s) => s.name === "27.5 Inch | 18+ Years"), "27.5 inch adult");
+  assert(sizes.filter((s) => s.model_based).length === 7, "7 electric sizes are model based");
+});
+await test("bicycles: shoppers read fits, only editors change them", async () => {
+  await anon();
+  const [f] = await rows(`select category_id from public.bicycle_fits where kind = 'size' limit 1`);
+  await user(alice);
+  assert((await rows(`update public.bicycle_fits set age_min = 1 where category_id = $1 returning category_id`, [f.category_id])).length === 0, "customer edited a fit");
+  await expectError(`insert into public.product_bicycle_fits (product_id, age_min) values ($1, 5)`, [productId], /row-level security/);
+  await user(superAdmin);
+  assert((await rows(`update public.bicycle_fits set height_min_cm = 90 where category_id = $1 returning category_id`, [f.category_id])).length === 1, "admin cannot edit");
+  assert((await rows(`insert into public.product_bicycle_fits (product_id, age_min, age_max) values ($1, 5, 9) returning product_id`, [productId])).length === 1, "admin cannot set product fit");
+  await expectError(`update public.bicycle_fits set age_min = 9, age_max = 3 where category_id = $1`, [f.category_id], /check/);
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

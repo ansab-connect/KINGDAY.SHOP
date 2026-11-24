@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bike,
   Bot,
   Camera,
   Cog,
@@ -64,6 +65,7 @@ export const adminNav: AdminNavGroup[] = [
     items: [
       { title: "Products", href: "/admin/products", icon: Package, module: "products", phase: 5 },
       { title: "Categories", href: "/admin/categories", icon: FolderTree, module: "categories", phase: 5 },
+      { title: "Bicycles", href: "/admin/bicycles", icon: Bike, module: "categories" },
       { title: "Brands", href: "/admin/brands", icon: Tag, module: "brands", phase: 5 },
       { title: "Inventory", href: "/admin/inventory", icon: Boxes, module: "inventory", phase: 6 },
     ],

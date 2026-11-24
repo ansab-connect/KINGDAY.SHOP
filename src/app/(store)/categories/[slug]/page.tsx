@@ -6,6 +6,9 @@ import { PageHero } from "@/components/store/page-hero";
 import { Container } from "@/components/store/section";
 import { ListingSkeleton } from "@/components/store/shop/listing-skeleton";
 import { ProductListing } from "@/components/store/shop/product-listing";
+import { BicycleTypeCards, FinderBanner } from "@/components/store/bicycles/bicycle-nav";
+import { getBicycleTree } from "@/features/catalog/bicycle-queries";
+import { isBicycleCategory } from "@/features/catalog/bicycles";
 import { getAllCategories, getCategoryBySlug, getCategoryTrail } from "@/features/catalog/queries";
 
 export async function generateStaticParams() {
@@ -18,8 +21,10 @@ export async function generateMetadata({ params }: PageProps<"/categories/[slug]
   const { slug } = await params;
   const category = await getCategoryBySlug(slug);
   if (!category) return { title: "Category not found" };
+  // Bicycles cover adults too (Men's, Women's), so no "for Kids" there.
+  const adultsToo = isBicycleCategory(await getBicycleTree(), category);
   return {
-    title: category.seoTitle ?? `${category.name} for Kids`,
+    title: category.seoTitle ?? (adultsToo ? category.name : `${category.name} for Kids`),
     description: category.seoDescription ?? `${category.description} Shop ${category.name.toLowerCase()} at KING DAY.`,
     alternates: { canonical: `/categories/${category.slug}` },
     openGraph: { title: `${category.name} | KING DAY`, description: category.description },
@@ -30,7 +35,9 @@ async function CategoryContent({ params, searchParams }: Pick<PageProps<"/catego
   const { slug } = await params;
   const category = await getCategoryBySlug(slug);
   if (!category) notFound();
-  const [all, trail] = await Promise.all([getAllCategories(), getCategoryTrail(category.slug)]);
+  const [all, trail, bikes] = await Promise.all([getAllCategories(), getCategoryTrail(category.slug), getBicycleTree()]);
+  const isBicycles = isBicycleCategory(bikes, category);
+  const isBicycleHome = isBicycles && bikes.root?.slug === category.slug;
   const parent = category.parentSlug ? all.find((c) => c.slug === category.parentSlug) ?? null : null;
   // Categories nest to any depth. With sub-categories: show them (go one level deeper).
   // At the last level: show its siblings, so shoppers can switch sideways.
@@ -51,7 +58,9 @@ async function CategoryContent({ params, searchParams }: Pick<PageProps<"/catego
         ]}
       />
       <Container className="py-10 sm:py-12">
-        {children.length ? (
+        {isBicycles ? <FinderBanner compact={!isBicycleHome} /> : null}
+        {isBicycleHome ? <BicycleTypeCards tree={bikes} /> : null}
+        {children.length && !isBicycleHome ? (
           <nav aria-label={`${top.name} sub-categories`} className="-mx-4 mb-6 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <ul className="flex gap-2">
               {[{ slug: top.slug, name: `All ${top.name}`, productCount: top.productCount }, ...children].map((c) => {
