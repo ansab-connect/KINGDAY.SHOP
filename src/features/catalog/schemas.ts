@@ -164,6 +164,8 @@ export const productInputSchema = z
     name: z.string().trim().min(2, "Enter the product name.").max(160),
     slug: slugField,
     category_id: uuid,
+    /** Other categories the product also shows in (e.g. 24″, 26″ and 27.5″ for one bicycle model). */
+    extra_category_ids: z.array(uuid).max(30, "Choose at most 30 extra categories.").default([]),
     brand_id: optionalUuid,
     short_description: optionalText(300),
     description: optionalText(10000),

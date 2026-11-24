@@ -5,7 +5,7 @@ import { discountPercent } from "@/lib/format";
 import { CATALOG_TAG } from "./cache-tags";
 import { previewSnapshot } from "./preview-catalog";
 import { loadSupabaseCatalog } from "./supabase-catalog";
-import { SORT_OPTIONS, type CatalogSnapshot, type ProductFilters, type SortOption, type StoreProduct } from "./types";
+import { productCategorySlugs, SORT_OPTIONS, type CatalogSnapshot, type ProductFilters, type SortOption, type StoreProduct } from "./types";
 
 /**
  * Storefront catalogue queries.
@@ -53,7 +53,7 @@ function sortProducts(list: StoreProduct[], sort: SortOption): StoreProduct[] {
 }
 
 /** In this category or any category inside it (any depth). */
-const inCategory = (p: StoreProduct, slug: string) => (p.category.path ?? [p.category.slug, p.category.parentSlug]).includes(slug);
+const inCategory = (p: StoreProduct, slug: string) => productCategorySlugs(p).includes(slug);
 
 export async function getProducts(filters: ProductFilters = {}) {
   const { products } = await getCatalog();

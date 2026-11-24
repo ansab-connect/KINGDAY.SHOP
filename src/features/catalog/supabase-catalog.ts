@@ -3,7 +3,7 @@ import "server-only";
 import { createPublicClient } from "@/lib/supabase/public";
 import { publicStorageUrl } from "@/lib/storage";
 import { valuesFromOptions } from "./variant-types";
-import type { CatalogSnapshot, ProductReview, StoreBrand, StoreCategory, StoreProduct, StoreVariant } from "./types";
+import { productCategorySlugs, type CatalogSnapshot, type ProductReview, type StoreBrand, type StoreCategory, type StoreProduct, type StoreVariant } from "./types";
 
 /**
  * Loads the public catalogue from Supabase and maps it to storefront types.
@@ -47,7 +47,7 @@ const NEW_ARRIVAL_COUNT = 8;
 export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
   const supabase = createPublicClient();
 
-  const [productsRes, categoriesRes, brandsRes, reviewsRes] = await Promise.all([
+  const [productsRes, categoriesRes, brandsRes, reviewsRes, extraRes] = await Promise.all([
     supabase
       .from("products")
       .select(
@@ -74,6 +74,8 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .eq("status", "approved")
       .order("created_at", { ascending: false })
       .limit(2000),
+    // Extra categories (0037). If the table isn't there yet, products just show in their main category.
+    supabase.from("product_categories").select("product_id, category:categories(slug)").limit(10000),
   ]);
 
   for (const r of [productsRes, categoriesRes, brandsRes, reviewsRes]) {
@@ -181,7 +183,18 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
   // (and is counted) under each category above it.
   const tree = rawCategories.map((c) => ({ id: c.slug, parentId: c.parent?.slug ?? null }));
   for (const p of products) p.category.path = pathIds([...tree, ...(tree.some((t) => t.id === p.category.slug) ? [] : [{ id: p.category.slug, parentId: p.category.parentSlug }])], p.category.slug);
-  const countFor = (slug: string) => products.filter((p) => (p.category.path ?? [p.category.slug]).includes(slug)).length;
+  const extraSlugs = new Map<string, string[]>();
+  if (!extraRes.error) {
+    for (const r of (extraRes.data ?? []) as unknown as { product_id: string; category: { slug: string } | null }[]) {
+      if (r.category) extraSlugs.set(r.product_id, [...(extraSlugs.get(r.product_id) ?? []), r.category.slug]);
+    }
+  }
+  const visible = new Set(tree.map((t) => t.id));
+  for (const p of products) {
+    const extra = (extraSlugs.get(p.id) ?? []).filter((s) => visible.has(s));
+    if (extra.length) p.alsoIn = [...new Set(extra.flatMap((s) => pathIds(tree, s)))];
+  }
+  const countFor = (slug: string) => products.filter((p) => productCategorySlugs(p).includes(slug)).length;
 
   const categories: StoreCategory[] = rawCategories.map((c) => ({
     slug: c.slug,

@@ -56,6 +56,7 @@ export function ProductEditor({
     name: product?.name ?? "",
     slug: product?.slug ?? "",
     category_id: product?.category_id ?? "",
+    extra_category_ids: product?.extra_category_ids ?? [],
     brand_id: product?.brand_id ?? "",
     age_range: product?.age_range ?? "",
     short_description: product?.short_description ?? "",
@@ -289,6 +290,14 @@ export function ProductEditor({
             <SelectField id="p-category" label="Category" required value={basics.category_id} error={errors.category_id} placeholder="Choose a category" options={categoryOptions} onChange={(v) => setB("category_id", v)} />
             <SelectField id="p-brand" label="Brand" value={basics.brand_id} error={errors.brand_id} placeholder="No brand" options={brands.map((b) => ({ value: b.id, label: b.name }))} onChange={(v) => setB("brand_id", v)} />
           </div>
+          <ExtraCategoriesField
+            options={categoryOptions}
+            names={new Map(categories.map((c) => [c.id, c.name]))}
+            mainId={basics.category_id}
+            value={basics.extra_category_ids}
+            error={errors.extra_category_ids}
+            onChange={(v) => setB("extra_category_ids", v)}
+          />
           <TextField id="p-age" label="Recommended age" placeholder="e.g. 3–8 years" maxLength={40} value={basics.age_range} error={errors.age_range} onChange={(v) => setB("age_range", v)} />
           <TextAreaField id="p-short" label="Short description" rows={2} maxLength={300} hint="Shown near the price and in search results." value={basics.short_description} error={errors.short_description} onChange={(v) => setB("short_description", v)} />
           {aiEnabled ? <AiWriteButtons value={basics.short_description} onChange={(v) => setB("short_description", v.slice(0, 300))} productName={basics.name} only={["improve", "shorten", "malayalam"]} /> : null}
@@ -510,6 +519,64 @@ function ProductHeaderCard({
           {saveLabel}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** "Also show in": extra categories for the same product (e.g. 24″, 26″ and 27.5″ of one bicycle model). */
+function ExtraCategoriesField({
+  options,
+  names,
+  mainId,
+  value,
+  error,
+  onChange,
+}: {
+  options: { value: string; label: string }[];
+  names: Map<string, string>;
+  mainId: string;
+  value: string[];
+  error?: string;
+  onChange: (v: string[]) => void;
+}) {
+  const shown = value.filter((id) => id !== mainId);
+  const left = options.filter((o) => o.value !== mainId && !shown.includes(o.value));
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor="p-extra-cats" className="text-sm font-medium text-deep">Also show in categories</label>
+      <p className="text-xs text-muted-foreground">
+        Same product, more than one place — e.g. one bicycle in 24″, 26″ and 27.5″. Add the sizes and colours as variants below.
+      </p>
+      {shown.length ? (
+        <ul className="flex flex-wrap gap-2">
+          {shown.map((id) => (
+            <li key={id} className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-1 pr-1 pl-3 text-sm">
+              {names.get(id) ?? "Unknown category"}
+              <button
+                type="button"
+                onClick={() => onChange(shown.filter((x) => x !== id))}
+                className="grid size-6 place-items-center rounded-full hover:bg-muted"
+                aria-label={`Remove ${names.get(id) ?? "category"}`}
+              >
+                <X aria-hidden className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <select
+        id="p-extra-cats"
+        value=""
+        onChange={(e) => e.target.value && onChange([...shown, e.target.value])}
+        className={inputClass}
+        disabled={!left.length}
+      >
+        <option value="">{shown.length ? "+ Add another category" : "+ Add a category"}</option>
+        {left.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
     </div>
   );
 }

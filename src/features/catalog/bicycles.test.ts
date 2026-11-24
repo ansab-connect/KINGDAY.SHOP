@@ -71,6 +71,14 @@ describe("bicycle finder", () => {
     expect(young.unrated.map((x) => x.product.id)).toEqual(["ebike-b"]);
   });
 
+  it("matches a model listed in several sizes on the size that fits", () => {
+    const both = { ...product("duo", "kids-bicycles-12-inch"), alsoIn: ["cycles", "kids-bicycles", "kids-bicycles-16-inch"] };
+    const r = findBicycles(tree, [both], new Map(), { type: "kids-bicycles", age: 5, height: null, gender: null });
+    expect(r.exact.map((x) => [x.product.id, x.size?.inch])).toEqual([["duo", 16]]);
+    const tiny = findBicycles(tree, [both], new Map(), { type: "kids-bicycles", age: 2, height: null, gender: null });
+    expect(tiny.exact[0].size?.inch).toBe(12);
+  });
+
   it("reads and validates the query", () => {
     expect(parseFinder({ type: "kids-bicycles", age: "5", height: "300", gender: "x" }, tree)).toEqual({ type: "kids-bicycles", age: 5, height: null, gender: null });
     expect(parseFinder({ type: "nope", age: "5" }, tree)).toBeNull();

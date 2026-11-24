@@ -32,6 +32,8 @@ export type StoreProduct = {
   /** SKU of the default variant. */
   sku: string;
   category: CategoryRef;
+  /** Extra categories it also shows in, each with the ones above it (slugs). */
+  alsoIn?: string[];
   brand: BrandRef | null;
   /** Price of the default variant (paise). */
   mrp: number;
@@ -130,3 +132,9 @@ export type ProductFilters = {
   sort?: SortOption;
   page?: number;
 };
+
+/** Every category a product shows in: its main category's path plus any extra categories. */
+export function productCategorySlugs(p: Pick<StoreProduct, "category" | "alsoIn">): string[] {
+  const main = p.category.path ?? [p.category.slug, ...(p.category.parentSlug ? [p.category.parentSlug] : [])];
+  return p.alsoIn?.length ? [...new Set([...main, ...p.alsoIn])] : main;
+}

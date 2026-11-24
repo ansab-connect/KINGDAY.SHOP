@@ -1582,5 +1582,18 @@ await test("bicycles: shoppers read fits, only editors change them", async () =>
   await expectError(`update public.bicycle_fits set age_min = 9, age_max = 3 where category_id = $1`, [f.category_id], /check/);
 });
 
+console.log("Products in several categories (0037)");
+await test("product_categories: shoppers read, only product staff change", async () => {
+  await anon();
+  const cats = await rows(`select c.id from public.categories c join public.bicycle_fits f on f.category_id = c.id where f.kind = 'size' limit 2`);
+  await user(alice);
+  await expectError(`insert into public.product_categories (product_id, category_id) values ($1, $2)`, [productId, cats[0].id], /row-level security/);
+  await user(superAdmin);
+  for (const c of cats) await rows(`insert into public.product_categories (product_id, category_id) values ($1, $2)`, [productId, c.id]);
+  await expectError(`insert into public.product_categories (product_id, category_id) values ($1, $2)`, [productId, cats[0].id], /duplicate key/);
+  await anon();
+  assert((await rows(`select category_id from public.product_categories where product_id = $1`, [productId])).length === 2, "anon can't read extra categories");
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

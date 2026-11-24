@@ -1,4 +1,4 @@
-import type { StoreCategory, StoreProduct } from "./types";
+import { productCategorySlugs, type StoreCategory, type StoreProduct } from "./types";
 
 /**
  * "Find Your Perfect Bicycle": bicycle types › wheel sizes, each size with an age
@@ -156,9 +156,11 @@ export function findBicycles(tree: BicycleTree, products: StoreProduct[], fits: 
   const scored: FinderResult[] = [];
   const unrated: FinderResult[] = [];
   for (const p of products) {
-    const path = p.category.path ?? [p.category.slug];
-    if (!path.includes(type.slug)) continue;
-    const size = path.map((s) => sizeBySlug.get(s)).find(Boolean) ?? null;
+    const slugs = productCategorySlugs(p);
+    if (!slugs.includes(type.slug)) continue;
+    // A model listed in several sizes (24″, 26″, 27.5″) is matched on whichever size fits best.
+    const sizes = slugs.map((s) => sizeBySlug.get(s)).filter((s): s is BicycleSize => Boolean(s));
+    const size = sizes.length > 1 ? [...sizes].sort((a, b) => (distanceOf(a, q) ?? Infinity) - (distanceOf(b, q) ?? Infinity))[0] : sizes[0] ?? null;
     const own = fits.get(p.id);
     const hasOwn = Boolean(own && (own.ageMin != null || own.ageMax != null || own.heightMin != null || own.heightMax != null));
     const fit: FitRange = hasOwn ? own! : size ?? { ageMin: null, ageMax: null, heightMin: null, heightMax: null };
