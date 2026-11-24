@@ -53,7 +53,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .select(
         `id, name, slug, short_description, description, highlights, age_range, video_path, video_link, is_featured,
          seo_title, seo_description, published_at, created_at, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct,
-         category:categories(slug, name, parent:parent_id(slug)),
+         category:categories!category_id(slug, name, parent:parent_id(slug)),
          brand:brands(slug, name),
          product_variants(id, sku, name, options, option1, option2, specs, mrp, price, is_default, is_active, position, inventory(on_hand, reserved)),
          product_images(storage_path, alt, position, variant_id),

@@ -89,7 +89,7 @@ export const getAdminData = cache(async function getAdminData(): Promise<AdminDa
     supabase.from("profiles").select("id, full_name, phone, created_at, customer_code").order("created_at", { ascending: false }).limit(2000),
     supabase
       .from("product_variants")
-      .select("id, sku, name, price, mrp, product:products!inner(id, name, status, is_featured, category:categories(name), brand:brands(name)), inventory(on_hand, reorder_level)")
+      .select("id, sku, name, price, mrp, product:products!inner(id, name, status, is_featured, category:categories!category_id(name), brand:brands(name)), inventory(on_hand, reorder_level)")
       .order("sku"),
     supabase
       .from("stock_movements")

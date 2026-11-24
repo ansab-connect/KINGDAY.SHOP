@@ -108,7 +108,7 @@ export async function listCategories(): Promise<AdminCategory[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name, slug, parent_id, description, image_path, sort_order, is_active, seo_title, seo_description, products(count)")
+    .select("id, name, slug, parent_id, description, image_path, sort_order, is_active, seo_title, seo_description, products!category_id(count)")
     .order("sort_order")
     .order("name");
   if (error) fail("Loading categories", error);
@@ -147,7 +147,7 @@ export async function listProducts(
     .from("products")
     .select(
       `id, name, slug, status, is_featured, updated_at,
-       category:categories(name), brand:brands(name),
+       category:categories!category_id(name), brand:brands(name),
        product_variants(sku, mrp, price, is_default, is_active, inventory(on_hand, reserved)),
        product_images(storage_path, position)`,
     )
