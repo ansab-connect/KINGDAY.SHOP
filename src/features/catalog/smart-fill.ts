@@ -13,6 +13,12 @@ export type ProductFill = {
   brand_id: string;
   specifications: { name: string; value: string }[];
   variants: { name: string; colour: string; mrp: number; price: number }[];
+  /** Other size categories the product is also listed in (e.g. 26 Inch, 27.5 Inch). */
+  extra_category_ids: string[];
+  /** Price (and stock, when given) per size category, read only from the pasted text. */
+  size_prices: { category_id: string; mrp: number; price: number; stock: number | null }[];
+  /** Variant types with their values, e.g. Speed Type: Single Speed, Multi Speed. */
+  variant_types: { name: string; values: string[] }[];
   seo_title: string;
   seo_description: string;
   /** Key specs Smart fill looked for but did not find (shown as "Not provided"; never guessed). */
@@ -41,7 +47,7 @@ function addKeySpecs(text: string, specs: { name: string; value: string }[]): st
   return missing;
 }
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; parent_id?: string | null };
 
 const BULLET = /^\s*(?:[-*•●▪◦‣✓✔✅➤►»>]|\d{1,2}[.)])\s+/;
 const MONEY = String.raw`(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:\/-|rs\.?|inr)?`;
@@ -144,6 +150,99 @@ function findColours(lines: string[]): { colours: string[]; line: number } {
   return { colours: [], line: -1 };
 }
 
+const SIZE_RE = /\b(\d{1,2}(?:\.\d)?)\s*(?:"|″|''|inch(?:es)?\b|in\b|-inch\b)/i;
+const STOCK_RE = /\b(?:stock|qty|quantity|units?)\s*(?:is|:|-|=)?\s*(\d{1,5})\b/i;
+const VARIANT_LINE = /^\s*(speed(?:\s*type)?|gears?(?:\s*type)?|brake(?:\s*type)?|frame(?:\s*type)?|model|type|variant|battery(?:\s*option)?)s?\s*[:\-–]\s*(.+)$/i;
+
+/** "24 Inch | 18+ Years" → 24. */
+const inchOf = (name: string) => {
+  const m = name.match(/(\d{1,2}(?:\.\d)?)\s*(?:inch|in\b|"|″)/i);
+  return m ? Number(m[1]) : null;
+};
+
+/**
+ * Lines like `24" – MRP ₹15,999, Price ₹12,999, Stock 5` → a price per size category.
+ * Sizes are matched to categories named "<n> Inch", preferring the main category's siblings.
+ */
+function findSizePrices(lines: string[], categories: Option[], mainId: string) {
+  const main = categories.find((c) => c.id === mainId);
+  const out: { category_id: string; mrp: number; price: number; stock: number | null; line: number }[] = [];
+  for (const [i, l] of lines.entries()) {
+    const size = l.match(SIZE_RE);
+    if (!size || !/(?:₹|\brs\.?|\binr\b|\bmrp\b|\bprice\b)/i.test(l)) continue;
+    const inch = Number(size[1]);
+    const matches = categories.filter((c) => inchOf(c.name) === inch);
+    const cat =
+      matches.find((c) => c.id === mainId) ??
+      matches.find((c) => main && c.parent_id && (c.parent_id === main.id || c.parent_id === main.parent_id)) ??
+      matches[0];
+    if (!cat || out.some((o) => o.category_id === cat.id)) continue;
+    const rest = l.replace(size[0], " ");
+    const { mrp, price } = findPrices(rest);
+    if (!price) continue;
+    const stock = rest.match(STOCK_RE);
+    out.push({ category_id: cat.id, mrp, price, stock: stock ? Number(stock[1]) : null, line: i });
+  }
+  return out;
+}
+
+function findVariantTypes(lines: string[]) {
+  const out: { name: string; values: string[]; line: number }[] = [];
+  for (const [i, l] of lines.entries()) {
+    const m = l.match(VARIANT_LINE);
+    if (!m) continue;
+    const values = m[2]
+      .split(/\s*(?:,|\/|\||\bor\b|&)\s*/i)
+      .map((v) => titleCase(v.replace(/[.;]+$/, "").trim()))
+      .filter((v) => v && v.length <= 40);
+    if (values.length < 2) continue;
+    const raw = m[1].toLowerCase();
+    const name = /speed/.test(raw) ? "Speed Type" : /gear/.test(raw) ? "Gear Type" : /brake/.test(raw) ? "Brake Type" : /frame/.test(raw) ? "Frame Type" : /battery/.test(raw) ? "Battery" : titleCase(m[1]);
+    if (!out.some((o) => o.name === name)) out.push({ name, values: [...new Set(values)].slice(0, 12), line: i });
+  }
+  return out;
+}
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\u0D00-\u0D7F]+/g, " ").trim();
+const LABEL = /^(?:product\s*(?:name|title)|title|name|short\s*description|medium\s*description|long\s*description|description|overview|about(?:\s*this\s*product)?|key\s*features|features|highlights|specifications?|specs)\s*[:\-–]?\s*/i;
+
+/**
+ * Keep every field to its own content: drop labels ("Short description:"), the product name
+ * repeated at the start, sentences of the description already in the short description, and
+ * highlights that repeat the short description or each other.
+ */
+export function cleanFill(d: ProductFill): ProductFill {
+  const nameN = norm(d.name);
+  const stripName = (s: string) => {
+    let t = s.replace(LABEL, "").trim();
+    if (nameN && norm(t.slice(0, d.name.length + 3)).startsWith(nameN)) t = t.slice(d.name.length).replace(/^[\s:\-–,.|]+/, "");
+    return t.trim();
+  };
+  const short = stripName(d.short_description);
+  const shortSentences = new Set(sentenceSplit(short).map(norm).filter(Boolean));
+  const paragraphs = d.description
+    .split(/\n\s*\n/)
+    .map((para) => {
+      const t = stripName(para);
+      if (!t || norm(t) === nameN) return "";
+      return sentenceSplit(t).filter((x) => !shortSentences.has(norm(x)) && norm(x) !== nameN).join(" ");
+    })
+    .filter(Boolean);
+  const descSeen = new Set<string>();
+  const description = paragraphs.filter((x) => (descSeen.has(norm(x)) ? false : (descSeen.add(norm(x)), true))).join("\n\n");
+  const hlSeen = new Set<string>();
+  const highlights = d.highlights
+    .map((h) => h.replace(LABEL, "").trim())
+    .filter((h) => {
+      const k = norm(h.replace(/[.!]+$/, ""));
+      if (!k || k === nameN || hlSeen.has(k) || shortSentences.has(norm(h))) return false;
+      hlSeen.add(k);
+      return true;
+    });
+  const seo_description = d.seo_description ? stripName(d.seo_description) : "";
+  return { ...d, short_description: short, description, highlights, seo_description };
+}
+
 export function smartFill(raw: string, categories: Option[], brands: Option[]): ProductFill {
   const text = raw.replace(/\r\n?/g, "\n").replace(/\t/g, ": ").trim();
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -166,10 +265,27 @@ export function smartFill(raw: string, categories: Option[], brands: Option[]): 
 
   const { colours, line: colourLine } = findColours(lines);
   if (colourLine >= 0) used.add(colourLine);
+  const category_id = findCategory(`${name} ${text}`, categories);
+  const sizePrices = findSizePrices(lines, categories, category_id);
+  for (const sp of sizePrices) used.add(sp.line);
+  const variantTypes = findVariantTypes(lines);
+  for (const vt of variantTypes) used.add(vt.line);
 
+  let labelledShort = "";
   for (const [i, line] of lines.entries()) {
     if (used.has(i)) continue;
     const body = clean(line);
+    // "Short description: …" and "Description: …" lines go to their own fields, not specifications.
+    const shortLabel = body.match(/^(?:short\s*description|summary|tagline)\s*[:\-–]\s*(.+)$/i);
+    if (shortLabel) {
+      labelledShort = shortLabel[1].trim();
+      continue;
+    }
+    const proseLabel = body.match(/^(?:medium\s*description|long\s*description|description|overview|about(?:\s*this\s*product)?)\s*[:\-–]\s*(.+)$/i);
+    if (proseLabel) {
+      prose.push(proseLabel[1].trim());
+      continue;
+    }
     const kv = body.match(/^([A-Za-z][A-Za-z0-9 ()/&.'-]{1,40}?)\s*[:=]\s*(.{1,200})$/);
     if (kv && !SKIP_KEYS.test(kv[1].trim())) {
       specifications.push({ name: titleCase(kv[1].trim()).slice(0, 60), value: kv[2].trim().replace(/[.;]+$/, "").slice(0, 200) });
@@ -186,7 +302,7 @@ export function smartFill(raw: string, categories: Option[], brands: Option[]): 
 
   const description = prose.join("\n\n").slice(0, 10000);
   const sentences = sentenceSplit(prose.join(" "));
-  const short_description = cut(sentences.slice(0, 2).join(" "), 280);
+  const short_description = cut(labelledShort || sentences.slice(0, 2).join(" "), 280);
   if (!highlights.length && sentences.length > 3) {
     highlights.push(...sentences.slice(2, 7).map((s) => cut(s.replace(/[.!]+$/, ""), 120)));
   }
@@ -200,18 +316,24 @@ export function smartFill(raw: string, categories: Option[], brands: Option[]): 
       ? [{ name: "", colour: "", mrp, price }]
       : [];
 
-  return {
+  // With prices per size, the first size is the main category and the others are extra categories.
+  const sizeCats = sizePrices.map((sp) => sp.category_id);
+  const mainCategory = sizeCats.length >= 2 && !sizeCats.includes(category_id) ? sizeCats[0] : category_id;
+  return cleanFill({
     name: cut(name, 160),
     short_description,
     description,
     highlights: [...new Set(highlights)].slice(0, 12),
     age_range: findAge(text),
-    category_id: findCategory(`${name} ${text}`, categories),
+    category_id: mainCategory,
     brand_id: findBrand(text, brands),
     specifications: specifications.slice(0, 40),
     variants: variants.slice(0, 20),
+    extra_category_ids: sizeCats.filter((c) => c !== mainCategory),
+    size_prices: sizePrices.map(({ category_id: c, mrp: m, price: pr, stock }) => ({ category_id: c, mrp: m, price: pr, stock })),
+    variant_types: [...variantTypes.map(({ name: n, values }) => ({ name: n, values })), ...(colours.length >= 2 ? [{ name: "Colour", values: colours }] : [])],
     seo_title: cut(name, 60),
     seo_description: cut(short_description, 155),
     missing,
-  };
+  });
 }

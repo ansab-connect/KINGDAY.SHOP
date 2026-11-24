@@ -50,7 +50,10 @@ describe("smartFill", () => {
   });
 
   it("builds descriptions and SEO text within limits", () => {
-    expect(r.description).toContain("powerful ride-on jeep");
+    // The opening sentences go to the short description and are not repeated in the description.
+    expect(r.short_description).toContain("powerful ride-on jeep");
+    expect(r.description).not.toContain("powerful ride-on jeep");
+    expect(r.description).toContain("Built for smooth outdoor rides");
     expect(r.short_description.length).toBeLessThanOrEqual(280);
     expect(r.seo_title.length).toBeLessThanOrEqual(60);
     expect(r.seo_description.length).toBeLessThanOrEqual(155);
@@ -91,5 +94,44 @@ describe("smartFill key specs (Update 01 phase 14)", () => {
     const d = smartFill("Mini Tricycle\nA sturdy tricycle with a basket.", [], []);
     expect(d.specifications).toEqual([]);
     expect(d.missing).toEqual(expect.arrayContaining(["Battery", "Motor", "Weight capacity"]));
+  });
+});
+
+describe("smart fill: sizes, variant types and no repeats", () => {
+  const bikes = [
+    { id: "mens", name: "Men's Bicycles", parent_id: "cycles" },
+    { id: "m24", name: "24 Inch | 18+ Years", parent_id: "mens" },
+    { id: "m26", name: "26 Inch | 18+ Years", parent_id: "mens" },
+    { id: "m275", name: "27.5 Inch | 18+ Years", parent_id: "mens" },
+    { id: "k24", name: "24 Inch | 9-12 Years", parent_id: "kids" },
+  ];
+  const TEXT = `Hero Sprint MTB
+Short description: Hero Sprint MTB is a strong mountain bike for daily rides.
+Description: Hero Sprint MTB is a strong mountain bike for daily rides. It has a steel frame and disc brakes.
+Speed Type: Single Speed, Multi Speed
+24" - MRP ₹15,999, Price ₹12,999, Stock 4
+26 inch: MRP Rs. 16,999 Price Rs. 13,999 stock 2
+• Disc brakes
+• Disc brakes`;
+
+  it("reads a price and stock per size and lists the sizes as categories", () => {
+    const d = smartFill(TEXT, bikes, []);
+    expect(d.size_prices).toEqual([
+      { category_id: "m24", mrp: 15999, price: 12999, stock: 4 },
+      { category_id: "m26", mrp: 16999, price: 13999, stock: 2 },
+    ]);
+    expect(d.category_id).toBe("m24");
+    expect(d.extra_category_ids).toEqual(["m26"]);
+  });
+
+  it("reads variant types", () => {
+    expect(smartFill(TEXT, bikes, []).variant_types).toEqual([{ name: "Speed Type", values: ["Single Speed", "Multi Speed"] }]);
+  });
+
+  it("keeps each field free of labels, the name and repeated sentences", () => {
+    const d = smartFill(TEXT, bikes, []);
+    expect(d.description).not.toMatch(/Description:|strong mountain bike for daily rides/);
+    expect(d.description).toContain("steel frame");
+    expect(d.highlights).toEqual(["Disc brakes"]);
   });
 });

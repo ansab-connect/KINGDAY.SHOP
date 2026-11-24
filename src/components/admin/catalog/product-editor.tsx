@@ -13,6 +13,7 @@ import { DeleteButton } from "@/components/admin/catalog/delete-button";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { newVariantRow, nextKey, VariantEditor, type VariantRow } from "@/components/admin/catalog/variant-editor";
 import { valuesFromOptions } from "@/features/catalog/variant-types";
+import { applySizes, hasSizeType, isSizeType, removeSizes, sizeLabel, type SizeCategory } from "@/features/catalog/size-pricing";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
 import { deleteProduct, saveProduct } from "@/features/catalog/admin-actions";
 import type { ProductFill } from "@/features/catalog/smart-fill";
@@ -72,24 +73,31 @@ export function ProductEditor({
     video_link: product?.video_link ?? "",
   });
   const [highlights, setHighlights] = useState<string[]>(product?.highlights.length ? product.highlights : [""]);
-  const initialTypes = product
+  const savedTypes = product
     ? product.variant_types?.length
       ? product.variant_types
       : [product.option1_name, product.option1_name ? product.option2_name : null].filter((t): t is string => Boolean(t))
     : [];
+  // An old placeholder level where every variant is "Standard" adds nothing: drop it (saved on next save).
+  const placeholderTypes = savedTypes.filter(
+    (t) => product?.variants.length && product.variants.every((v) => /^standard$/i.test((valuesFromOptions(savedTypes, v.options)[t] ?? "").trim())),
+  );
+  const initialTypes = savedTypes.filter((t) => !placeholderTypes.includes(t));
   const [variantTypes, setVariantTypes] = useState<string[]>(initialTypes);
   const [variantsOn, setVariantsOn] = useState(initialTypes.length > 0);
   const [variants, setVariants] = useState<VariantRow[]>(() => {
     if (!product?.variants.length) return [newVariantRow({ is_default: true })];
     return product.variants.map((v) => {
-      const values = valuesFromOptions(initialTypes, v.options);
-      if (initialTypes[0] && !values[initialTypes[0]] && v.option1) values[initialTypes[0]] = v.option1;
-      if (initialTypes[1] && !values[initialTypes[1]] && v.option2) values[initialTypes[1]] = v.option2;
+      const values = valuesFromOptions(savedTypes, v.options);
+      if (savedTypes[0] && !values[savedTypes[0]] && v.option1) values[savedTypes[0]] = v.option1;
+      if (savedTypes[1] && !values[savedTypes[1]] && v.option2) values[savedTypes[1]] = v.option2;
+      const autoName = savedTypes.map((t) => values[t]).filter(Boolean).join(" · ");
+      for (const t of placeholderTypes) delete values[t];
       return newVariantRow({
         id: v.id,
         sku: v.sku,
         // Names the database built from the values stay "automatic".
-        name: v.name === "Default" || v.name === initialTypes.map((t) => values[t]).filter(Boolean).join(" · ") ? "" : v.name,
+        name: v.name === "Default" || v.name === autoName || /^standard$/i.test(v.name) ? "" : v.name,
         colour: v.options?.colour ?? "",
         values,
         specs: (v.specs ?? []).map((sp) => ({ key: nextKey(), ...sp })),
@@ -122,6 +130,42 @@ export function ProductEditor({
   }, [dirty, onDirtyChange]);
 
   const setB = <K extends keyof typeof basics>(k: K, val: (typeof basics)[K]) => setBasics((p) => ({ ...p, [k]: val }));
+
+  // ------------------------------------------------------------ Price/stock by size
+  // The main category plus "Also show in" categories are the sizes (24 Inch, 26 Inch, …).
+  const nameOf = (id: string) => categories.find((c) => c.id === id)?.name ?? "";
+  const sizesFor = (main: string, extras: string[]): SizeCategory[] =>
+    [...new Set([main, ...extras].filter(Boolean))].map((id) => ({ id, label: sizeLabel(nameOf(id)) || "Size" }));
+  const sizes = sizesFor(basics.category_id, basics.extra_category_ids);
+  const sizeOn = variantsOn && hasSizeType(variantTypes);
+  const savedDropped = (list: VariantRow[]) => list.filter((r) => r.id).length;
+
+  function setSizeVariation(on: boolean) {
+    if (on) {
+      const r = applySizes(variants, variantsOn ? variantTypes : [], sizes, (patch) => newVariantRow(patch));
+      setVariantTypes(r.types);
+      setVariants(r.rows.map((x, i) => (r.rows.some((y) => y.is_default) ? x : { ...x, is_default: i === 0 })));
+      setVariantsOn(true);
+      return;
+    }
+    const r = removeSizes(variants, variantTypes, sizes.map((x) => x.id));
+    if (savedDropped(r.dropped) && !window.confirm(`Turn off price by size? ${savedDropped(r.dropped)} saved size variant(s) will be hidden from the store when you save.`)) return;
+    setVariantTypes(r.types);
+    setVariants(r.rows.map((x, i) => (r.rows.some((y) => y.is_default) ? x : { ...x, is_default: i === 0 })));
+    if (!r.types.length) setVariantsOn(false);
+  }
+
+  /** Category changes keep the size variants in step while price by size is on. */
+  function changeCategories(main: string, extras: string[]) {
+    if (sizeOn) {
+      const next = sizesFor(main, extras);
+      const r = applySizes(variants, variantTypes, next, (patch) => newVariantRow(patch));
+      if (savedDropped(r.dropped) && !window.confirm(`Remove ${r.dropped.map((x) => x.values[variantTypes.find(isSizeType) ?? "Size"]).filter(Boolean).join(", ")}? Its saved variant(s) will be hidden from the store when you save.`)) return;
+      setVariantTypes(r.types);
+      setVariants(r.rows.map((x, i) => (r.rows.some((y) => y.is_default) ? x : { ...x, is_default: i === 0 })));
+    }
+    setBasics((p) => ({ ...p, category_id: main, extra_category_ids: extras }));
+  }
 
   // Every level, in tree order: "Cycles", "— Electric Cycles", "— — Women".
   const categoryOptions = treeOrder(categories.map((c) => ({ ...c, parentId: c.parent_id ?? null }))).map((c) => ({
@@ -222,26 +266,53 @@ export function ProductEditor({
       filled.push(`${d.specifications.length} specifications`);
     }
     let variantNote = "";
-    if (d.variants.length) {
+    // Categories: main from the fill (or the current one) plus any extra size categories.
+    const main = d.category_id || basics.category_id;
+    const extras = [...new Set([...basics.extra_category_ids, ...d.extra_category_ids])].filter((c) => c && c !== main);
+    if (d.extra_category_ids.length) {
+      setBasics((p) => ({ ...p, extra_category_ids: extras }));
+      filled.push(`${d.extra_category_ids.length} extra categor${d.extra_category_ids.length === 1 ? "y" : "ies"}`);
+    }
+    const bySize = d.size_prices.length >= 2;
+    if (d.variants.length || d.variant_types.length || bySize) {
       if (variants.every((v) => !v.id)) {
-        const colours = d.variants.some((v) => v.colour);
-        if (colours && !types.length) {
-          setVariantTypes(["Colour"]);
-          setVariantsOn(true);
+        const base = d.size_prices[0] ?? d.variants[0];
+        const money = (n: number | undefined) => (n ? String(n) : "");
+        let ts: string[] = [];
+        let rows: VariantRow[];
+        if (d.variant_types.length) {
+          // Every combination of the types, e.g. Single Speed • Red, Single Speed • Blue, …
+          ts = d.variant_types.map((vt) => vt.name.slice(0, 30));
+          const lists = d.variant_types.map((vt) => vt.values.map((v) => v.slice(0, 60)));
+          const combos = lists.reduce<string[][]>((acc, list) => acc.flatMap((x) => list.map((v) => [...x, v])), [[]]);
+          rows = combos.map((combo, i) => newVariantRow({ is_default: i === 0, values: Object.fromEntries(ts.map((t, j) => [t, combo[j]])), mrp: money(base?.mrp), price: money(base?.price) }));
+        } else if (d.variants.length) {
+          const colours = d.variants.some((v) => v.colour);
+          if (colours) ts = ["Colour"];
+          rows = d.variants.map((v, i) =>
+            newVariantRow({ is_default: i === 0, name: colours ? "" : v.name.slice(0, 120), colour: v.colour.slice(0, 40), values: colours ? { Colour: v.colour.slice(0, 60) } : {}, mrp: money(v.mrp), price: money(v.price) }),
+          );
+        } else {
+          rows = [newVariantRow({ is_default: true, mrp: money(base?.mrp), price: money(base?.price) })];
         }
-        setVariants(
-          d.variants.map((v, i) =>
-            newVariantRow({
-              is_default: i === 0,
-              name: colours ? "" : v.name.slice(0, 120),
-              colour: v.colour.slice(0, 40),
-              values: colours ? { Colour: v.colour.slice(0, 60) } : {},
-              mrp: v.mrp ? String(v.mrp) : "",
-              price: v.price ? String(v.price) : "",
-            }),
-          ),
-        );
-        filled.push(`${d.variants.length} variant${d.variants.length === 1 ? "" : "s"}`);
+        if (bySize) {
+          // Price/stock by size: one size per category, with the prices from the text.
+          const r = applySizes(rows, ts, sizesFor(main, extras), (patch) => newVariantRow(patch));
+          ts = r.types;
+          const sizeType = ts[0];
+          rows = r.rows.map((row) => {
+            const sp = d.size_prices.find((x) => sizeLabel(nameOf(x.category_id)).toLowerCase() === (row.values[sizeType] ?? "").toLowerCase());
+            if (!sp) return row;
+            const single = r.rows.filter((x) => x.values[sizeType] === row.values[sizeType]).length === 1;
+            return { ...row, mrp: money(sp.mrp || sp.price), price: money(sp.price), opening_stock: single && sp.stock != null ? String(sp.stock) : row.opening_stock };
+          });
+          rows = rows.map((row, i) => ({ ...row, is_default: i === 0 }));
+          filled.push(`prices for ${d.size_prices.length} sizes`);
+        }
+        setVariantTypes(ts);
+        setVariantsOn(ts.length > 0);
+        setVariants(rows);
+        filled.push(`${rows.length} variant${rows.length === 1 ? "" : "s"}`);
       } else {
         variantNote = " Existing variants were kept unchanged.";
       }
@@ -271,7 +342,7 @@ export function ProductEditor({
           pending={pending}
           saveLabel={product ? "Save Changes" : "Create product"}
         />
-        <AiFillPanel categories={categories.map((c) => ({ id: c.id, name: c.name }))} brands={brands} onFill={applyAi} aiEnabled={aiEnabled} />
+        <AiFillPanel categories={categories.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent_id ?? null }))} brands={brands} onFill={applyAi} aiEnabled={aiEnabled} />
         <FormStatus status={status} />
 
         <FormSection title="Basics">
@@ -296,7 +367,7 @@ export function ProductEditor({
             }}
           />
           <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField id="p-category" label="Category" required value={basics.category_id} error={errors.category_id} placeholder="Choose a category" options={categoryOptions} onChange={(v) => setB("category_id", v)} />
+            <SelectField id="p-category" label="Category" required value={basics.category_id} error={errors.category_id} placeholder="Choose a category" options={categoryOptions} onChange={(v) => changeCategories(v, basics.extra_category_ids)} />
             <SelectField id="p-brand" label="Brand" value={basics.brand_id} error={errors.brand_id} placeholder="No brand" options={brands.map((b) => ({ value: b.id, label: b.name }))} onChange={(v) => setB("brand_id", v)} />
           </div>
           <ExtraCategoriesField
@@ -305,8 +376,18 @@ export function ProductEditor({
             mainId={basics.category_id}
             value={basics.extra_category_ids}
             error={errors.extra_category_ids}
-            onChange={(v) => setB("extra_category_ids", v)}
+            onChange={(v) => changeCategories(basics.category_id, v)}
           />
+          {sizes.length >= 2 || sizeOn ? (
+            <SizePricing
+              on={sizeOn}
+              onToggle={setSizeVariation}
+              sizes={sizes}
+              sizeType={variantTypes.find(isSizeType) ?? "Size"}
+              rows={variants}
+              onRowsChange={setVariants}
+            />
+          ) : null}
           <TextField id="p-age" label="Recommended age" placeholder="e.g. 3–8 years" maxLength={40} value={basics.age_range} error={errors.age_range} onChange={(v) => setB("age_range", v)} />
           <TextAreaField id="p-short" label="Short description" rows={2} maxLength={300} hint="Shown near the price and in search results." value={basics.short_description} error={errors.short_description} onChange={(v) => setB("short_description", v)} />
           {aiEnabled ? <AiWriteButtons value={basics.short_description} onChange={(v) => setB("short_description", v.slice(0, 300))} productName={basics.name} only={["improve", "shorten", "malayalam"]} /> : null}
@@ -606,6 +687,89 @@ function ExtraCategoriesField({
         ))}
       </select>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * "Enable price/stock variation by size": one row per size category with its own MRP,
+ * selling price and stock. With other variant types (e.g. Speed Type) a size has several
+ * combinations: MRP and price here apply to all of them, stock is set per combination below.
+ */
+function SizePricing({
+  on,
+  onToggle,
+  sizes,
+  sizeType,
+  rows,
+  onRowsChange,
+}: {
+  on: boolean;
+  onToggle: (on: boolean) => void;
+  sizes: { id: string; label: string }[];
+  sizeType: string;
+  rows: VariantRow[];
+  onRowsChange: (rows: VariantRow[]) => void;
+}) {
+  const sameLabel = (a: string | undefined, b: string) => (a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
+  const set = (label: string, p: Partial<VariantRow>) => onRowsChange(rows.map((r) => (sameLabel(r.values[sizeType], label) ? { ...r, ...p } : r)));
+  const cell = "h-9 w-full min-w-0 rounded-md border bg-white px-2 text-base outline-none focus:border-royal sm:text-sm";
+  return (
+    <div className="rounded-xl border border-royal-100 bg-royal-50/40 p-3">
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <span>
+          <span className="block text-sm font-semibold text-deep">Enable price/stock variation by size</span>
+          <span className="block text-xs text-muted-foreground">
+            {on ? "Each size has its own MRP, selling price and stock, and shows that price in its category." : "Off: one price and stock for all the chosen size categories."}
+          </span>
+        </span>
+        <input type="checkbox" role="switch" checked={on} onChange={(e) => onToggle(e.target.checked)} className="peer sr-only" />
+        <span aria-hidden className="relative h-6 w-11 shrink-0 rounded-full bg-muted-foreground/30 transition-colors peer-checked:bg-royal after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-ring" />
+      </label>
+      {on ? (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[28rem] text-sm">
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="py-1 pr-2 font-medium">Size</th>
+                <th className="w-28 px-1 py-1 font-medium">MRP (₹)</th>
+                <th className="w-28 px-1 py-1 font-medium">Selling Price (₹)</th>
+                <th className="w-24 px-1 py-1 font-medium">Stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sizes.map((size) => {
+                const mine = rows.filter((r) => sameLabel(r.values[sizeType], size.label));
+                const first = mine[0];
+                return (
+                  <tr key={size.id} className="border-t border-royal-100">
+                    <td className="py-1.5 pr-2 font-semibold text-deep">{size.label}</td>
+                    <td className="px-1 py-1.5">
+                      <input inputMode="decimal" aria-label={`MRP for ${size.label}`} value={first?.mrp ?? ""} onChange={(e) => set(size.label, { mrp: e.target.value })} className={cell} />
+                    </td>
+                    <td className="px-1 py-1.5">
+                      <input inputMode="decimal" aria-label={`Selling price for ${size.label}`} value={first?.price ?? ""} onChange={(e) => set(size.label, { price: e.target.value })} className={cell} />
+                    </td>
+                    <td className="px-1 py-1.5">
+                      {mine.length === 1 ? (
+                        <input
+                          inputMode="numeric"
+                          aria-label={`Stock for ${size.label}`}
+                          value={first.opening_stock}
+                          onChange={(e) => set(size.label, { opening_stock: e.target.value.replace(/[^\d]/g, "") })}
+                          className={cell}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{mine.length} combinations, set below</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }

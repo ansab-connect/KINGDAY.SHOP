@@ -2,7 +2,6 @@
 
 import { createContext, Fragment, useContext, useMemo, useState } from "react";
 import {
-  AlertTriangle,
   Crown,
   GripVertical,
   ImagePlus,
@@ -139,30 +138,12 @@ export function VariantEditor({ categoryOptions = [], ...props }: Props) {
 }
 
 function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, rows, onRowsChange, optionTypes, errors, product, onSuggestSku }: Omit<Props, "categoryOptions">) {
-  const main = types[0] ?? "";
-  // Pending choices that have no combination yet: extra main values, and per main value
-  // the sub-variant types and values added before "Generate Combinations".
-  const [extraMains, setExtraMains] = useState<string[]>([]);
-  const [extraTypes, setExtraTypes] = useState<Record<string, string[]>>({});
-  const [extraValues, setExtraValues] = useState<Record<string, Record<string, string[]>>>({});
-  // Main values whose "Enable Multiple Sub-Variants" switch is on before any sub type is added.
-  const [subOn, setSubOn] = useState<Record<string, boolean>>({});
-  const mainValues = uniq([...rows.map((r) => r.values[main] ?? ""), ...extraMains]);
-  const [selected, setSelected] = useState<string>(mainValues[0] ?? "");
-  const current = mainValues.find((m) => same(m, selected)) ?? mainValues[0] ?? "";
-  const mk = (m: string) => m.trim().toLowerCase();
-
-  const inMain = (r: VariantRow, m: string) => same(r.values[main], m);
-  /** Sub-variant types used by a main value, in the product's type order. */
-  const subTypesFor = (m: string) =>
-    types.slice(1).filter((t) => rows.some((r) => inMain(r, m) && r.values[t]) || (extraTypes[mk(m)] ?? []).some((x) => same(x, t)));
-  const valuesFor = (m: string, t: string) =>
-    uniq([...rows.filter((r) => inMain(r, m)).map((r) => r.values[t] ?? ""), ...(extraValues[mk(m)]?.[t] ?? [])]);
+  // One flat level: every type (e.g. Speed Type, Colour) applies to every variant, and
+  // each combination of values is one variant. Values added but not yet in any
+  // combination wait here until "Generate Combinations".
+  const [pending, setPending] = useState<Record<string, string[]>>({});
+  const valuesOf = (t: string) => uniq([...rows.map((r) => r.values[t] ?? ""), ...(pending[t] ?? [])]);
   const indexOf = (key: string) => rows.findIndex((r) => r.key === key);
-  const rowError = (r: VariantRow) => {
-    const i = indexOf(r.key);
-    return ["values", "sku", "mrp", "price", "opening_stock", "stock_target", "name"].map((f) => errors[`variants.${i}.${f}`]).find(Boolean);
-  };
 
   const ensureDefault = (list: VariantRow[]) =>
     list.length && !list.some((r) => r.is_default && r.is_active) ? list.map((r, i) => ({ ...r, is_default: i === list.findIndex((x) => x.is_active) })) : list;
@@ -173,167 +154,97 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
     !list.some((r) => r.id) || window.confirm(`Remove ${what}? ${list.filter((r) => r.id).length} saved variant(s) will be hidden from the store when you save (kept for order history).`);
 
   // ------------------------------------------------------------ Generate combinations
-  const subTypes = current ? subTypesFor(current) : [];
-  const valueLists = subTypes.map((t) => valuesFor(current, t));
-  const blockedBy = subTypes.find((t, i) => valueLists[i].length === 0);
-  const plannedCombos = blockedBy ? [] : cartesian(valueLists);
-  const missingCombos = plannedCombos.filter((combo) => {
-    const values: Record<string, string> = { [main]: current };
-    subTypes.forEach((t, i) => (values[t] = combo[i]));
-    return !rows.some((r) => inMain(r, current) && comboKey([main, ...subTypes], r.values) === comboKey([main, ...subTypes], values));
-  });
-  const incomplete = rows.filter((r) => inMain(r, current) && subTypes.some((t) => !r.values[t])).length;
+  const lists = types.map(valuesOf);
+  const blockedBy = types.find((_, i) => !lists[i].length);
+  const toValues = (combo: string[]) => Object.fromEntries(types.map((t, i) => [t, combo[i]]));
+  const planned = types.length && !blockedBy ? cartesian(lists) : [];
+  const missing = planned.filter((c) => !rows.some((r) => comboKey(types, r.values) === comboKey(types, toValues(c))));
+  const incomplete = rows.filter((r) => types.some((t) => !(r.values[t] ?? "").trim())).length;
+
+  /** Rows in the order of the values (first type first), so the store lists them neatly. */
+  const ordered = (list: VariantRow[], ls = lists) => {
+    const pos = new Map(list.map((r, i) => [r.key, i]));
+    const rank = (r: VariantRow) => types.map((t, i) => ls[i].findIndex((x) => same(x, r.values[t])));
+    return [...list].sort((x, y) => {
+      const a = rank(x);
+      const b = rank(y);
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i];
+      return pos.get(x.key)! - pos.get(y.key)!;
+    });
+  };
 
   function generate() {
     if (blockedBy) return;
-    // Rows from before a sub type was added get its first value, then every missing combination is added.
-    let next = rows.map((r) => {
-      if (!inMain(r, current)) return r;
+    // Variants from before a type was added get its first value; then every missing combination is added.
+    const next = rows.map((r) => {
       const values = { ...r.values };
-      subTypes.forEach((t, i) => {
-        if (!values[t]) values[t] = valueLists[i][0];
+      types.forEach((t, i) => {
+        if (!(values[t] ?? "").trim()) values[t] = lists[i][0];
       });
       return { ...r, values };
     });
-    const template = next.find((r) => inMain(r, current)) ?? next[next.length - 1];
-    const lastIndex = next.reduce((last, r, i) => (inMain(r, current) ? i : last), next.length - 1);
-    const added: VariantRow[] = [];
-    const scope = [main, ...subTypes];
-    for (const combo of plannedCombos) {
-      const values: Record<string, string> = { [main]: current };
-      subTypes.forEach((t, i) => (values[t] = combo[i]));
-      if (![...next, ...added].some((r) => inMain(r, current) && comboKey(scope, r.values) === comboKey(scope, values))) {
-        added.push(newVariantRow({ values, mrp: template?.mrp ?? "", price: template?.price ?? "" }));
-      }
-    }
-    next = [...next.slice(0, lastIndex + 1), ...added, ...next.slice(lastIndex + 1)];
-    const { kept } = dedupe(next, types);
-    commit(kept);
+    const template = next[next.length - 1];
+    const added = planned
+      .map(toValues)
+      .filter((v) => !next.some((r) => comboKey(types, r.values) === comboKey(types, v)))
+      .map((values) => newVariantRow({ values, mrp: template?.mrp ?? "", price: template?.price ?? "" }));
+    const { kept } = dedupe([...next, ...added], types);
+    setPending({});
+    commit(ordered(kept));
   }
 
-  // ------------------------------------------------------------ Main values
-  function addMainValues(list: string[]) {
-    const fresh = uniq(list).filter((v) => !mainValues.some((m) => same(m, v)));
-    if (!fresh.length) return setSelected(list[0] ?? current);
-    // A main value starts as one combination; add sub-variants and generate to split it.
-    const template = rows[rows.length - 1];
-    // Variants still without a main value (e.g. the first variant) take the first new value.
-    const blank = rows.filter((r) => !(r.values[main] ?? "").trim());
-    const filled = rows.map((r) => (blank.includes(r) ? { ...r, values: { ...r.values, [main]: fresh[0] } } : r));
-    const rest = blank.length ? fresh.slice(1) : fresh;
-    commit([...filled, ...rest.map((value) => newVariantRow({ values: { [main]: value }, mrp: template?.mrp ?? "", price: template?.price ?? "" }))]);
-    setExtraMains((l) => l.filter((x) => !fresh.some((v) => same(x, v))));
-    setSelected(fresh[0]);
+  // ------------------------------------------------------------ Values
+  function addValues(t: string, list: string[]) {
+    const fresh = uniq(list).filter((v) => !valuesOf(t).some((x) => same(x, v)));
+    if (!fresh.length) return;
+    if (types.length === 1) {
+      // One type: each value is a variant right away. Variants without a value take the first one.
+      const template = rows[rows.length - 1];
+      const blank = rows.filter((r) => !(r.values[t] ?? "").trim());
+      const filled = rows.map((r) => (blank.includes(r) ? { ...r, values: { ...r.values, [t]: fresh[0] } } : r));
+      const rest = blank.length ? fresh.slice(1) : fresh;
+      commit([...filled, ...rest.map((value) => newVariantRow({ values: { [t]: value }, mrp: template?.mrp ?? "", price: template?.price ?? "" }))]);
+      return;
+    }
+    setPending((p) => ({ ...p, [t]: [...(p[t] ?? []), ...fresh] }));
   }
 
   function renameValue(t: string, from: string, to: string) {
     const v = to.trim().slice(0, 60);
     if (!v || same(from, v)) return;
-    const scope = t === main ? (r: VariantRow) => same(r.values[main], from) : (r: VariantRow) => inMain(r, current) && same(r.values[t], from);
-    const existing = t === main ? mainValues : valuesFor(current, t);
-    if (existing.some((x) => same(x, v))) return window.alert(`"${v}" is already used here.`);
-    onRowsChange(rows.map((r) => (scope(r) ? { ...r, values: { ...r.values, [t]: v } } : r)));
-    if (t === main) {
-      setExtraMains((l) => l.map((x) => (same(x, from) ? v : x)));
-      setExtraTypes((e) => renameKey(e, mk(from), mk(v)));
-      setExtraValues((e) => renameKey(e, mk(from), mk(v)));
-      if (same(current, from)) setSelected(v);
-    } else {
-      setExtraValues((e) => ({ ...e, [mk(current)]: { ...(e[mk(current)] ?? {}), [t]: (e[mk(current)]?.[t] ?? []).map((x) => (same(x, from) ? v : x)) } }));
-    }
-  }
-
-  /** Reorder a value: rows are re-sorted so the product page lists values in this order. */
-  function reorderValue(t: string, from: number, to: number) {
-    const list = moveItem(t === main ? mainValues : valuesFor(current, t), from, to);
-    const rank = (r: VariantRow) => list.findIndex((x) => same(x, r.values[t]));
-    if (t === main) {
-      const order = new Map(rows.map((r, n) => [r.key, n]));
-      onRowsChange([...rows].sort((a, b) => rank(a) - rank(b) || order.get(a.key)! - order.get(b.key)!));
-      setExtraMains((l) => list.filter((x) => l.some((y) => same(x, y))));
-    } else {
-      const mine = rows.filter((r) => inMain(r, current));
-      const order = new Map(mine.map((r, n) => [r.key, n]));
-      const sorted = [...mine].sort((a, b) => rank(a) - rank(b) || order.get(a.key)! - order.get(b.key)!);
-      let k = 0;
-      onRowsChange(rows.map((r) => (inMain(r, current) ? sorted[k++] : r)));
-      setExtraValues((e) => ({ ...e, [mk(current)]: { ...(e[mk(current)] ?? {}), [t]: list.filter((x) => (e[mk(current)]?.[t] ?? []).some((y) => same(x, y))) } }));
-    }
+    if (valuesOf(t).some((x) => same(x, v))) return window.alert(`"${v}" is already used here.`);
+    onRowsChange(rows.map((r) => (same(r.values[t], from) ? { ...r, values: { ...r.values, [t]: v } } : r)));
+    setPending((p) => ({ ...p, [t]: (p[t] ?? []).map((x) => (same(x, from) ? v : x)) }));
   }
 
   function removeValue(t: string, value: string) {
-    const doomed = rows.filter((r) => (t === main ? same(r.values[main], value) : inMain(r, current) && same(r.values[t], value)));
-    if (t === main && rows.length - doomed.length < 1) return window.alert("A product needs at least one variant.");
+    const doomed = rows.filter((r) => same(r.values[t], value));
+    setPending((p) => ({ ...p, [t]: (p[t] ?? []).filter((x) => !same(x, value)) }));
+    if (!doomed.length) return;
+    if (rows.length - doomed.length < 1) return window.alert("A product needs at least one variant.");
     if (!confirmRemoval(doomed, `${t} "${value}"`)) return;
-    if (t === main) {
-      setExtraMains((l) => l.filter((m) => !same(m, value)));
-      if (same(current, value)) setSelected(mainValues.find((m) => !same(m, value)) ?? "");
-    } else {
-      setExtraValues((e) => ({ ...e, [mk(current)]: { ...(e[mk(current)] ?? {}), [t]: (e[mk(current)]?.[t] ?? []).filter((v) => !same(v, value)) } }));
-    }
     commit(rows.filter((r) => !doomed.includes(r)));
   }
 
-  function addValues(t: string, list: string[]) {
-    const fresh = uniq(list).filter((v) => !valuesFor(current, t).some((x) => same(x, v)));
-    if (!fresh.length) return;
-    setExtraValues((e) => ({ ...e, [mk(current)]: { ...(e[mk(current)] ?? {}), [t]: [...(e[mk(current)]?.[t] ?? []), ...fresh] } }));
-  }
-
-  /** "Enable Multiple Sub-Variants" for the selected main value. Off = it is sold as one variant. */
-  function toggleSubVariants(on: boolean) {
-    if (on) return setSubOn((s) => ({ ...s, [mk(current)]: true }));
-    if (subTypes.length) {
-      const stripped = rows.map((r) => (inMain(r, current) ? { ...r, values: { [main]: r.values[main] } } : r));
-      const { kept, dropped } = dedupe(stripped, types);
-      if (!window.confirm(`Turn off sub-variants for ${current}? ${current} becomes a single variant${dropped.length ? ` and ${dropped.length} combination(s) are removed` : ""}.`)) return;
-      if (dropped.some((r) => r.id) && !confirmRemoval(dropped, `${dropped.length} combination(s)`)) return;
-      commit(kept);
-    }
-    setExtraTypes((e) => ({ ...e, [mk(current)]: [] }));
-    setExtraValues((e) => ({ ...e, [mk(current)]: {} }));
-    setSubOn((s) => ({ ...s, [mk(current)]: false }));
+  function reorderValue(t: string, from: number, to: number) {
+    const list = moveItem(valuesOf(t), from, to);
+    setPending((p) => ({ ...p, [t]: list.filter((x) => (p[t] ?? []).some((y) => same(x, y))) }));
+    onRowsChange(ordered(rows, types.map((x, i) => (x === t ? list : lists[i]))));
   }
 
   // ------------------------------------------------------------ Types
-  /** Add a type to the product (left panel) or, with `forMain`, a sub-variant to one main value. */
-  function addType(name: string, forMain?: string) {
+  function addType(name: string) {
     const t = name.trim().slice(0, 30);
-    if (!t) return;
-    const existing = types.find((x) => same(x, t));
-    if (!existing) {
-      if (types.length >= MAX_TYPES) return window.alert(`Up to ${MAX_TYPES} variant types.`);
-      if (!types.length) {
-        // First type: existing simple variants keep their colour / name as the main value.
-        // A blank variant gets no placeholder value: the first value the admin adds fills it.
-        onRowsChange(rows.map((r) => ({ ...r, values: { [t]: r.colour || (r.name !== "Default" ? r.name : "") } })));
-        setSelected(rows[0]?.colour || (rows[0]?.name !== "Default" ? rows[0]?.name : "") || "");
-      }
-      onTypesChange([...types, t]);
-    } else if (same(existing, main) && forMain) return;
-    if (forMain && types.length) {
-      const typeName = existing ?? t;
-      setExtraTypes((e) => ({ ...e, [mk(forMain)]: uniq([...(e[mk(forMain)] ?? []), typeName]) }));
+    if (!t || types.some((x) => same(x, t))) return;
+    if (types.length >= MAX_TYPES) return window.alert(`Up to ${MAX_TYPES} variant types.`);
+    if (!types.length) {
+      // First type: existing simple variants keep their colour / name as the value. A blank
+      // variant gets no placeholder ("Standard"): the first value added fills it.
+      onRowsChange(rows.map((r) => ({ ...r, values: { [t]: r.colour || (r.name !== "Default" ? r.name : "") } })));
     }
+    onTypesChange([...types, t]);
   }
 
-  /** Remove a sub-variant type from one main value (its combinations merge). */
-  function removeSubType(t: string) {
-    const stripped = rows.map((r) => {
-      if (!inMain(r, current) || !r.values[t]) return r;
-      const values = { ...r.values };
-      delete values[t];
-      return { ...r, values };
-    });
-    const { kept, dropped } = dedupe(stripped, types);
-    if (!window.confirm(`Remove ${t} from ${current}?${dropped.length ? ` ${dropped.length} combination(s) become duplicates and will be removed.` : ""}`)) return;
-    if (dropped.some((r) => r.id) && !confirmRemoval(dropped, `${dropped.length} combination(s)`)) return;
-    setExtraTypes((e) => ({ ...e, [mk(current)]: (e[mk(current)] ?? []).filter((x) => !same(x, t)) }));
-    setExtraValues((e) => ({ ...e, [mk(current)]: { ...(e[mk(current)] ?? {}), [t]: [] } }));
-    commit(kept);
-  }
-
-  /** Remove a type from the whole product. */
   function removeType(t: string) {
     const remaining = types.filter((x) => x !== t);
     const stripped = rows.map((r) => {
@@ -344,9 +255,9 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
     const { kept, dropped } = remaining.length ? dedupe(stripped, remaining) : { kept: stripped, dropped: [] as VariantRow[] };
     if (!window.confirm(`Remove the variant type "${t}" from this product?${dropped.length ? ` ${dropped.length} combination(s) become duplicates and will be removed.` : ""}`)) return;
     if (dropped.some((r) => r.id) && !confirmRemoval(dropped, `${dropped.length} combination(s)`)) return;
+    setPending((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== t)));
     commit(kept);
     onTypesChange(remaining);
-    if (t === main) setSelected("");
   }
 
   function renameType(from: string, to: string) {
@@ -361,42 +272,11 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
         return { ...r, values };
       }),
     );
-    setExtraTypes((e) => Object.fromEntries(Object.entries(e).map(([m, list]) => [m, list.map((x) => (x === from ? t : x))])));
-    setExtraValues((e) => Object.fromEntries(Object.entries(e).map(([m, byType]) => [m, renameKey(byType, from, t)])));
+    setPending((p) => renameKey(p, from, t));
   }
 
-  function reorderTypes(from: number, to: number) {
-    if ((from === 0 || to === 0) && !window.confirm(`Make "${types[from === 0 ? 1 : from]}" the main variant type? Customers choose it first.`)) return;
-    onTypesChange(moveItem(types, from, to));
-    if (from === 0 || to === 0) setSelected("");
-  }
-
-  /** Reorder the selected main value's sub-variant types (the product's type order changes to match). */
-  function reorderSubTypes(from: number, to: number) {
-    const order = moveItem(subTypes, from, to);
-    const moved = order[to];
-    const rest = types.filter((x) => x !== moved);
-    const after = order[to + 1];
-    rest.splice(after ? rest.indexOf(after) : rest.indexOf(order[to - 1]) + 1, 0, moved);
-    onTypesChange(rest);
-  }
-
-  const tableTypes = main ? [main, ...subTypes] : [];
-  const tableRows = main ? rows.filter((r) => inMain(r, current)) : rows;
-
-  /** Reorder combinations (the display order on the product page). */
-  function reorderCombos(from: number, to: number) {
-    const sorted = moveItem(tableRows, from, to);
-    let k = 0;
-    onRowsChange(rows.map((r) => (tableRows.includes(r) ? sorted[k++] : r)));
-  }
-
-  const subEnabled = subTypes.length > 0 || Boolean(subOn[mk(current)]);
-  // Several sub types with a single value each usually means values were added as types.
-  const lonelyTypes = subTypes.filter((t) => valuesFor(current, t).length === 1);
-  const typeSort = useDragSort(types.length, reorderTypes);
-  const mainSort = useDragSort(mainValues.length, (from, to) => reorderValue(main, from, to));
-  const subSort = useDragSort(subTypes.length, reorderSubTypes);
+  const typeSort = useDragSort(types.length, (from, to) => onTypesChange(moveItem(types, from, to)));
+  const reorderCombos = (from: number, to: number) => onRowsChange(moveItem(rows, from, to));
 
   return (
     <div className="flex flex-col gap-4">
@@ -424,12 +304,11 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
 
       {enabled ? (
         <div className="grid gap-4 xl:grid-cols-[17rem_1fr]">
-          {/* All variant types of this product */}
           <section className="rounded-2xl border bg-muted/20 p-3" aria-labelledby="vt-h">
             <h3 id="vt-h" className="mb-1 flex items-center gap-1.5 font-heading text-sm font-bold text-deep">
               Variant Types <span className="font-normal text-muted-foreground">(Attributes)</span>
             </h3>
-            <p className="mb-3 text-xs text-muted-foreground">A type is what customers choose (Size, Colour, Speed Type). The first is the main choice. Drag to reorder.</p>
+            <p className="mb-3 text-xs text-muted-foreground">What customers choose, e.g. Speed Type, Colour. Drag to reorder.</p>
             {types.length ? (
               <ul className="flex flex-col gap-1.5">
                 {types.map((t, i) => (
@@ -446,10 +325,10 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
                 ))}
               </ul>
             ) : (
-              <p className="rounded-lg bg-white p-3 text-xs text-muted-foreground">Add the first type: the main choice customers make (e.g. Wheel Size, Size, Voltage).</p>
+              <p className="rounded-lg bg-white p-3 text-xs text-muted-foreground">Add a type, e.g. Speed Type or Colour.</p>
             )}
             {types.length < MAX_TYPES ? (
-              <AddTypeButton label={types.length ? "Add Variant Type" : "Add Main Variant Type"} options={optionTypes.filter((o) => !types.some((t) => same(t, o)))} onAdd={(n) => addType(n)} />
+              <AddTypeButton label="Add Variant Type" options={optionTypes.filter((o) => !types.some((t) => same(t, o)))} onAdd={(n) => addType(n)} />
             ) : (
               <p className="mt-3 text-xs text-muted-foreground">Up to {MAX_TYPES} variant types.</p>
             )}
@@ -459,155 +338,60 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
             <h3 id="vv-h" className="mb-3 flex items-center gap-1.5 font-heading text-sm font-bold text-deep">
               Variant Values &amp; Combinations
             </h3>
-            {!main ? (
+            {!types.length ? (
               <p className="mb-3 text-sm text-muted-foreground">Add a variant type on the left to start.</p>
             ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label={main}>
-                  {mainValues.map((m, i) => {
-                    const count = rows.filter((r) => inMain(r, m)).length;
-                    const bad = rows.some((r) => inMain(r, m) && rowError(r));
-                    const on = same(m, current);
-                    return (
-                      <span
-                        key={m}
-                        {...mainSort.item(i)}
-                        className={cn(
-                          "inline-flex h-10 items-center rounded-lg border text-sm font-bold transition-colors",
-                          on ? "border-royal bg-royal text-white" : "bg-white text-deep hover:border-royal-200",
-                          bad && !on && "border-danger",
-                          sortableClass,
-                        )}
-                      >
-                        <button {...mainSort.handle(i, `${main} ${m}`)} className={cn("grid h-full w-6 place-items-center rounded-l-lg", on ? "text-white/70" : "text-muted-foreground")}>
-                          <GripVertical aria-hidden className="size-3.5" />
-                        </button>
-                        <button type="button" role="tab" aria-selected={on} onClick={() => setSelected(m)} className="inline-flex h-full items-center gap-2 pr-4">
-                          {m} <span className={cn("text-xs font-medium", on ? "text-white/80" : "text-muted-foreground")}>({count})</span>
-                        </button>
-                      </span>
-                    );
-                  })}
-                  <AddValueButton label={`Add ${main}`} onAdd={addMainValues} />
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {main} values. Add several at once with commas (e.g. 24&quot;, 26&quot;, 27.5&quot;). Drag <GripVertical aria-hidden className="inline size-3" /> to reorder.
-                </p>
-
-                {current ? (
-                  <div className="mt-4 rounded-xl border bg-muted/20 p-3">
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <p className="font-heading text-sm font-semibold text-deep">{current} – Variant Options</p>
-                      <span className="ml-auto flex items-center gap-1">
-                        <ValueTools label={`${main} ${current}`} value={current} onRename={(to) => renameValue(main, current, to)} onRemove={() => removeValue(main, current)} />
-                      </span>
-                    </div>
-
-                    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2.5">
-                      <span>
-                        <span className="block text-sm font-semibold text-deep">Enable Multiple Sub-Variants</span>
-                        <span className="block text-xs text-muted-foreground">Extra choices for {current} only, e.g. Colour, Speed Type, Brake Type.</span>
-                      </span>
-                      <input type="checkbox" role="switch" checked={subEnabled} onChange={(e) => toggleSubVariants(e.target.checked)} className="peer sr-only" />
-                      <span aria-hidden className="relative h-6 w-11 shrink-0 rounded-full bg-muted-foreground/30 transition-colors peer-checked:bg-royal after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-ring" />
-                    </label>
-
-                    {subEnabled ? (
-                      <div className="mt-3 flex flex-col gap-2">
-                        {subTypes.map((t, i) => (
-                          <SubTypeCard
-                            key={t}
-                            type={t}
-                            main={current}
-                            values={valuesFor(current, t)}
-                            item={subSort.item(i)}
-                            handle={subSort.handle(i, t)}
-                            onRenameType={(to) => renameType(t, to)}
-                            onRemoveType={() => removeSubType(t)}
-                            onAddValues={(list) => addValues(t, list)}
-                            onRenameValue={(v, to) => renameValue(t, v, to)}
-                            onRemoveValue={(v) => removeValue(t, v)}
-                            onReorderValues={(from, to) => reorderValue(t, from, to)}
-                          />
-                        ))}
-                        {lonelyTypes.length >= 2 ? (
-                          <p className="flex items-start gap-2 rounded-lg border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-gold-700">
-                            <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-                            <span>
-                              {lonelyTypes.map((t) => `"${t}"`).join(", ")} each have only one value. If they are choices of the same thing (e.g. Single Speed and Multi Speed), delete them and add <strong>one</strong> type (e.g. Speed Type) with those as its values.
-                            </span>
-                          </p>
-                        ) : null}
-                        <AddTypeButton
-                          label="Add Sub-Variant Type"
-                          compact
-                          placeholder="Type name, e.g. Speed Type"
-                          options={uniq([...types.slice(1), ...optionTypes]).filter((o) => !same(o, main) && !subTypes.some((t) => same(t, o)))}
-                          onAdd={(n) => addType(n, current)}
-                        />
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-xs text-muted-foreground">{current} is sold as one variant. Turn the switch on to add sub-variant types and values.</p>
-                    )}
-
-                    {subTypes.length ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-royal-100 bg-royal-50/50 px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={generate}
-                          disabled={Boolean(blockedBy) || (!missingCombos.length && !incomplete)}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-royal px-3 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-50"
-                        >
-                          <Wand2 aria-hidden className="size-4" /> Generate Combinations
-                        </button>
-                        <span className="text-xs text-muted-foreground">
-                          {blockedBy
-                            ? `Add at least one ${blockedBy} value first.`
-                            : missingCombos.length || incomplete
-                              ? `${missingCombos.length} new combination${missingCombos.length === 1 ? "" : "s"} will be added${incomplete ? `, ${incomplete} existing one${incomplete === 1 ? "" : "s"} completed` : ""}.`
-                              : `All ${plannedCombos.length} combinations exist. Disable the ones you don't sell.`}
-                        </span>
-                        {!blockedBy ? (
-                          <span className="ml-auto text-xs font-semibold text-royal">
-                            {current}: {plannedCombos.length} combination{plannedCombos.length === 1 ? "" : "s"} · Product total: {rows.length + missingCombos.length}
-                          </span>
-                        ) : null}
-                        {missingCombos.length ? (
-                          <div className="flex w-full flex-wrap gap-1.5" aria-label="Combinations to be added">
-                            {missingCombos.slice(0, 12).map((c) => (
-                              <span key={c.join("|")} className="rounded-md border border-royal-100 bg-white px-2 py-0.5 text-xs text-deep">
-                                {[current, ...c].join(" • ")}
-                              </span>
-                            ))}
-                            {missingCombos.length > 12 ? <span className="px-1 text-xs text-muted-foreground">+{missingCombos.length - 12} more</span> : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
+              <div className="flex flex-col gap-3">
+                {types.map((t) => (
+                  <TypeValues
+                    key={t}
+                    type={t}
+                    values={valuesOf(t)}
+                    onAdd={(list) => addValues(t, list)}
+                    onRename={(v, to) => renameValue(t, v, to)}
+                    onRemove={(v) => removeValue(t, v)}
+                    onReorder={(from, to) => reorderValue(t, from, to)}
+                  />
+                ))}
+                {types.length > 1 || missing.length || incomplete ? (
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border border-royal-100 bg-royal-50/50 px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={generate}
+                      disabled={Boolean(blockedBy) || (!missing.length && !incomplete)}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-royal px-3 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-50"
+                    >
+                      <Wand2 aria-hidden className="size-4" /> Generate Combinations
+                    </button>
+                    <span className="text-xs text-muted-foreground">
+                      {blockedBy
+                        ? `Add at least one ${blockedBy} value first.`
+                        : missing.length || incomplete
+                          ? `${missing.length} new combination${missing.length === 1 ? "" : "s"} will be added${incomplete ? `, ${incomplete} existing one${incomplete === 1 ? "" : "s"} completed` : ""}.`
+                          : `All ${planned.length} combinations exist. Disable the ones you don't sell.`}
+                    </span>
                   </div>
                 ) : null}
-              </>
+              </div>
             )}
 
-            {!main || current ? (
-              <CombinationsTable
-                title={main ? `Variant Combinations (${current})` : "Variants"}
-                rows={tableRows}
-                allRows={rows}
-                types={tableTypes}
-                main={main}
-                current={current}
-                commit={commit}
-                patch={patch}
-                confirmRemoval={confirmRemoval}
-                errors={errors}
-                indexOf={indexOf}
-                product={product}
-                onSuggestSku={onSuggestSku}
-                valuesFor={valuesFor}
-                onReorder={reorderCombos}
-              />
-            ) : null}
+            <CombinationsTable
+              title={types.length ? "Variant Combinations" : "Variants"}
+              rows={rows}
+              allRows={rows}
+              types={types}
+              main=""
+              current=""
+              commit={commit}
+              patch={patch}
+              confirmRemoval={confirmRemoval}
+              errors={errors}
+              indexOf={indexOf}
+              product={product}
+              onSuggestSku={onSuggestSku}
+              valuesFor={(_, t) => valuesOf(t)}
+              onReorder={reorderCombos}
+            />
           </section>
         </div>
       ) : (
@@ -625,18 +409,49 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
           indexOf={indexOf}
           product={product}
           onSuggestSku={onSuggestSku}
-          valuesFor={valuesFor}
+          valuesFor={() => []}
           onReorder={reorderCombos}
         />
       )}
 
       <p className="flex items-start gap-2 rounded-xl bg-royal-50/70 px-4 py-3 text-sm text-royal-800">
         <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
-        <span>
-          Variants are flexible and <strong>product dependent</strong>. Each {main || "main value"} can use its own sub-variants (e.g. Colour, Speed Type, Brake Type) and values. Every
-          combination has its own SKU, price, stock, images and status; disable the ones you don&apos;t sell.
-        </span>
+        <span>Each combination (e.g. Single Speed • Red) is one variant with its own SKU, price, stock and images. Disable the ones you don&apos;t sell.</span>
       </p>
+    </div>
+  );
+}
+
+/** One variant type's values as chips: add (comma separated), rename, remove, drag to reorder. */
+function TypeValues({
+  type,
+  values,
+  onAdd,
+  onRename,
+  onRemove,
+  onReorder,
+}: {
+  type: string;
+  values: string[];
+  onAdd: (list: string[]) => void;
+  onRename: (value: string, to: string) => void;
+  onRemove: (value: string) => void;
+  onReorder: (from: number, to: number) => void;
+}) {
+  const sort = useDragSort(values.length, onReorder);
+  const colour = isColourType(type);
+  return (
+    <div className="rounded-xl border bg-muted/20 p-3">
+      <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-deep">
+        <TypeIcon type={type} main={false} className="size-4 text-royal" /> {type}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {values.map((v, i) => (
+          <ValueChip key={v} value={v} swatch={colour ? swatchFor(v) : null} item={sort.item(i)} handle={sort.handle(i, v)} onRename={(to) => onRename(v, to)} onRemove={() => onRemove(v)} />
+        ))}
+        {!values.length ? <span className="text-xs text-danger">Add at least one value.</span> : null}
+        <AddValueButton label={`Add ${type}`} onAdd={onAdd} small />
+      </div>
     </div>
   );
 }
@@ -654,67 +469,6 @@ const splitValues = (text: string) =>
     .split(/[,\n]+/)
     .map((v) => v.trim().slice(0, 60))
     .filter(Boolean);
-
-/** One sub-variant type of a main value: its name, its values and the tools for both. */
-function SubTypeCard({
-  type,
-  main,
-  values,
-  item,
-  handle,
-  onRenameType,
-  onRemoveType,
-  onAddValues,
-  onRenameValue,
-  onRemoveValue,
-  onReorderValues,
-}: {
-  type: string;
-  main: string;
-  values: string[];
-  item: SortItem;
-  handle: SortHandle;
-  onRenameType: (to: string) => void;
-  onRemoveType: () => void;
-  onAddValues: (list: string[]) => void;
-  onRenameValue: (value: string, to: string) => void;
-  onRemoveValue: (value: string) => void;
-  onReorderValues: (from: number, to: number) => void;
-}) {
-  const valueSort = useDragSort(values.length, onReorderValues);
-  const colour = isColourType(type);
-  return (
-    <div {...item} className={cn("rounded-lg border bg-white p-2.5", sortableClass)}>
-      <div className="flex items-center gap-1.5">
-        <button {...handle} className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted">
-          <GripVertical aria-hidden className="size-4" />
-        </button>
-        <TypeIcon type={type} main={false} className="size-4 shrink-0 text-royal" />
-        <span className="text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">Type</span>
-        <InlineName value={type} maxLength={30} label={`Rename the type ${type}`} onSave={onRenameType} />
-        <button type="button" onClick={onRemoveType} aria-label={`Remove ${type} from ${main}`} className="ml-auto grid size-7 shrink-0 place-items-center rounded-md text-danger hover:bg-danger-soft">
-          <Trash2 className="size-3.5" />
-        </button>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 pl-1 sm:pl-9">
-        <span className="text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">Values</span>
-        {values.map((v, i) => (
-          <ValueChip
-            key={v}
-            value={v}
-            swatch={colour ? swatchFor(v) : null}
-            item={valueSort.item(i)}
-            handle={valueSort.handle(i, v)}
-            onRename={(to) => onRenameValue(v, to)}
-            onRemove={() => onRemoveValue(v)}
-          />
-        ))}
-        {!values.length ? <span className="text-xs text-danger">Add at least one value.</span> : null}
-        <AddValueButton label="Add Value" placeholder={colour ? "e.g. Red, Blue" : "e.g. Single Speed, Multi Speed"} onAdd={onAddValues} small />
-      </div>
-    </div>
-  );
-}
 
 /** Text that turns into an input when clicked; Enter or leaving the field saves. */
 function InlineName({ value, maxLength, label, onSave }: { value: string; maxLength: number; label: string; onSave: (to: string) => void }) {
@@ -758,6 +512,7 @@ function InlineName({ value, maxLength, label, onSave }: { value: string; maxLen
     </button>
   );
 }
+
 
 /** A value chip: drag handle, value, rename and remove. */
 function ValueChip({
@@ -997,7 +752,7 @@ function CombinationsTable({
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const others = types.slice(1);
+  const others = main ? types.slice(1) : types;
   const simple = !types.length;
   const pickedRows = rows.filter((r) => picked.has(r.key));
   const allPicked = rows.length > 0 && pickedRows.length === rows.length;
@@ -1027,7 +782,7 @@ function CombinationsTable({
           <button type="button" onClick={addSimple} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-royal-200 px-3 text-sm font-semibold text-royal hover:bg-royal-50">
             <Plus aria-hidden className="size-4" /> Add variant
           </button>
-        ) : others.length ? (
+        ) : others.length && (main || types.length > 1) ? (
           <button type="button" onClick={() => setAdding((a) => !a)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-royal-200 px-3 text-sm font-semibold text-royal hover:bg-royal-50">
             <Plus aria-hidden className="size-4" /> Add Combination
           </button>
@@ -1044,7 +799,7 @@ function CombinationsTable({
           exists={(values) => allRows.some((r) => comboKey(types, r.values) === comboKey(types, values))}
           onAdd={(values) => {
             const template = rows[0] ?? allRows[allRows.length - 1];
-            const at = allRows.reduce((last, r, i) => (same(r.values[main], current) ? i : last), allRows.length - 1);
+            const at = main ? allRows.reduce((last, r, i) => (same(r.values[main], current) ? i : last), allRows.length - 1) : allRows.length - 1;
             commit([...allRows.slice(0, at + 1), newVariantRow({ values, mrp: template?.mrp ?? "", price: template?.price ?? "" }), ...allRows.slice(at + 1)]);
             setAdding(false);
           }}
@@ -1143,12 +898,12 @@ function AddCombination({
   onCancel: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(others.map((t) => [t, valuesFor(current, t)[0] ?? ""])));
-  const full: Record<string, string> = { [main]: current, ...values };
+  const full: Record<string, string> = main ? { [main]: current, ...values } : values;
   const missing = others.some((t) => !values[t]?.trim());
   const duplicate = !missing && exists(full);
   return (
     <div className="mb-3 flex flex-wrap items-end gap-2 rounded-xl border border-royal-200 bg-royal-50/40 p-3">
-      <span className="h-9 rounded-lg bg-royal px-3 text-sm leading-9 font-bold text-white">{current}</span>
+      {main ? <span className="h-9 rounded-lg bg-royal px-3 text-sm leading-9 font-bold text-white">{current}</span> : null}
       {others.map((t) => (
         <label key={t} className="flex flex-col gap-1 text-xs">
           <span className="font-medium text-muted-foreground">{t}</span>

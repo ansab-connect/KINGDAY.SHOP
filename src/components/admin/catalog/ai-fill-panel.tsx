@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react";
 import { Bot, Check, ChevronDown, ExternalLink, Loader2, Sparkles, X } from "lucide-react";
 import { aiProductAssistAction } from "@/features/ai/product-assist";
-import { smartFill, type ProductFill } from "@/features/catalog/smart-fill";
+import { cleanFill, smartFill, type ProductFill } from "@/features/catalog/smart-fill";
 import { cn } from "@/lib/utils";
 
-type FieldKey = "name" | "category_id" | "brand_id" | "age_range" | "short_description" | "description" | "highlights" | "specifications" | "variants" | "seo";
+type FieldKey = "name" | "category_id" | "brand_id" | "age_range" | "short_description" | "description" | "highlights" | "specifications" | "variants" | "seo" | "extra_categories" | "size_prices" | "variant_types";
 
 /**
  * Smart fill (free, runs in the browser, no AI service): paste the product text, review
@@ -19,7 +19,7 @@ export function AiFillPanel({
   onFill,
   aiEnabled = false,
 }: {
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string; parent_id?: string | null }[];
   brands: { id: string; name: string }[];
   onFill: (data: ProductFill) => string;
   /** Gemini key configured on the server: show "Search with AI". */
@@ -63,12 +63,17 @@ export function AiFillPanel({
         highlights: a.key_features.length ? a.key_features : local.highlights,
         specifications: a.specifications.length ? a.specifications : local.specifications,
         variants: local.variants,
+        extra_category_ids: [...new Set([...local.extra_category_ids, ...a.extra_categories.map((n) => idOf(categories, n)).filter(Boolean)])],
+        size_prices: local.size_prices.length
+          ? local.size_prices
+          : a.size_prices.map((sp) => ({ category_id: idOf(categories, sp.category), mrp: sp.mrp || sp.price, price: sp.price, stock: sp.stock })).filter((sp) => sp.category_id),
+        variant_types: a.variant_types.length ? a.variant_types : local.variant_types,
         seo_title: a.seo_title || local.seo_title,
         seo_description: a.seo_description || local.seo_description,
         missing: [...new Set([...a.not_verified, ...local.missing.filter((m) => !a.specifications.some((s) => s.name.toLowerCase() === m.toLowerCase()))])],
       };
       setExtra({ sources: a.sources, conflicts: a.conflicts, notVerified: a.not_verified });
-      review(d);
+      review(cleanFill(d));
     });
   }
 
@@ -86,6 +91,9 @@ export function AiFillPanel({
       specifications: d.specifications.length > 0,
       variants: d.variants.length > 0,
       seo: Boolean(d.seo_title || d.seo_description),
+      extra_categories: d.extra_category_ids.length > 0,
+      size_prices: d.size_prices.length > 0,
+      variant_types: d.variant_types.length > 0,
     });
   }
 
@@ -105,6 +113,9 @@ export function AiFillPanel({
       variants: p("variants") ? draft.variants : [],
       seo_title: p("seo") ? draft.seo_title : "",
       seo_description: p("seo") ? draft.seo_description : "",
+      extra_category_ids: p("extra_categories") ? draft.extra_category_ids : [],
+      size_prices: p("size_prices") ? draft.size_prices : [],
+      variant_types: p("variant_types") ? draft.variant_types : [],
     };
     setStatus({ kind: "ok", text: onFill(chosen) });
     setDraft(null);
@@ -127,6 +138,15 @@ export function AiFillPanel({
             .map((v) => [v.colour || v.name, v.price ? `₹${v.price.toLocaleString("en-IN")}` : "", v.mrp ? `MRP ₹${v.mrp.toLocaleString("en-IN")}` : ""].filter(Boolean).join(" "))
             .join(" · "),
         },
+        { key: "extra_categories", label: "Also show in categories", value: draft.extra_category_ids.map((id) => nameOf(categories, id)).join(" · ") },
+        {
+          key: "size_prices",
+          label: "Price & stock by size (from your text)",
+          value: draft.size_prices
+            .map((sp) => [nameOf(categories, sp.category_id).split("|")[0].trim(), `₹${sp.price.toLocaleString("en-IN")}`, sp.mrp > sp.price ? `MRP ₹${sp.mrp.toLocaleString("en-IN")}` : "", sp.stock != null ? `stock ${sp.stock}` : ""].filter(Boolean).join(" "))
+            .join(" · "),
+        },
+        { key: "variant_types", label: "Variant types", value: draft.variant_types.map((vt) => `${vt.name}: ${vt.values.join(", ")}`).join(" · ") },
         { key: "seo", label: "Search listing (SEO)", value: draft.seo_title },
       ]
     : [];

@@ -23,6 +23,15 @@ const reply = z.object({
   seo_title: z.string().max(70).catch(""),
   seo_description: z.string().max(170).catch(""),
   keywords: z.array(z.string().max(40)).max(15).catch([]),
+  /** Other size categories (exact names from the list) the product is also sold in. */
+  extra_categories: z.array(z.string().max(120)).max(20).catch([]),
+  /** Price per size, ONLY when written in the owner's text. */
+  size_prices: z
+    .array(z.object({ category: z.string().max(120), mrp: z.coerce.number().min(0).max(10000000).catch(0), price: z.coerce.number().min(0).max(10000000).catch(0), stock: z.coerce.number().int().min(0).max(100000).nullable().catch(null) }))
+    .max(20)
+    .catch([]),
+  /** Variant types and values written in the owner's text, e.g. Speed Type: Single Speed, Multi Speed. */
+  variant_types: z.array(z.object({ name: z.string().max(30), values: z.array(z.string().max(40)).max(12) })).max(4).catch([]),
   not_verified: z.array(z.string().max(80)).max(20).catch([]),
   conflicts: z.array(z.string().max(200)).max(10).catch([]),
 });
@@ -50,14 +59,17 @@ export async function aiProductAssistAction(input: { text: string; categories: s
     "Rules:",
     "- Never invent a specification. If you cannot confirm it, leave it out and list its name in not_verified.",
     "- If sources disagree, say so in conflicts (e.g. 'Battery: 12V 7Ah on maker site, 12V 4.5Ah on seller page').",
-    "- Never give prices, MRP, stock, SKU or purchase cost.",
+    "- Never take prices, MRP, stock, SKU or purchase cost from the web. Only size_prices may hold prices and stock, and ONLY when they are written in the shop owner's text.",
+    "- Sizes: if the text lists several wheel sizes (e.g. 24\", 26\", 27.5\"), put the main one in category and the rest in extra_categories, using exact category names from the list.",
+    "- variant_types: only real customer choices written in the text (e.g. Speed Type: Single Speed, Multi Speed; Colour: Red, Blue). Never put sizes here when they are categories.",
+    "- No repetition between fields: short_description must not repeat the product name or any heading; description must not repeat the short description or the name; key_features must not repeat sentences from short_description; drop labels such as 'Short description:', 'Key features:'.",
     "- Write for Indian parents, simple English, no exaggeration, no competitor names.",
     `- category must be exactly one of: ${categories.join(" | ") || "(none)"} (or empty).`,
     `- brand must be exactly one of: ${brands.slice(0, 80).join(" | ") || "(none)"} (or empty).`,
     "- Prefer these specification names when relevant: Battery, Motor, Weight capacity, Dimensions, Charging time, Max speed, Remote control, Material, Age group.",
     "Reply with ONLY a JSON object with keys: name, category, brand, short_description (max 280 chars), description (2-4 short paragraphs),",
     "key_features (string[]), specifications ({name,value}[]), age_group, seo_title (max 60), seo_description (max 155), keywords (string[]),",
-    "not_verified (string[]), conflicts (string[]).",
+    "not_verified (string[]), conflicts (string[]), extra_categories (string[]), size_prices ({category,mrp,price,stock}[]), variant_types ({name,values}[]).",
   ].join("\n");
 
   const ask = `Product information from the shop owner:\n\n${text}`;
@@ -93,6 +105,10 @@ export async function aiProductAssistAction(input: { text: string; categories: s
     draft: {
       ...d,
       category: categories.includes(d.category) ? d.category : "",
+      extra_categories: d.extra_categories.filter((c) => categories.includes(c) && c !== d.category),
+      // Prices only when the owner's text has them (a model can't invent a number that isn't there).
+      size_prices: d.size_prices.filter((sp) => categories.includes(sp.category) && sp.price > 0 && text.replace(/[,\s]/g, "").includes(String(Math.round(sp.price)))),
+      variant_types: d.variant_types.filter((vt) => vt.name.trim() && vt.values.filter((v) => v.trim()).length >= 2),
       brand: brands.includes(d.brand) ? d.brand : "",
       age_group: UNKNOWN.test(d.age_group.trim()) ? "" : d.age_group,
       key_features: d.key_features.filter((f) => f.trim() && !pricey.test(f)),
