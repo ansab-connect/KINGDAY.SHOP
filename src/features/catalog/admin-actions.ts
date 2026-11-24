@@ -7,6 +7,7 @@ import { assertCan } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { CATALOG_TAG } from "./cache-tags";
+import { GALLERY_MAX, planGallery, poolFolder, poolPaths, POOL_MAX_FILES, unusedPoolPaths } from "./image-pool";
 import {
   brandInputSchema,
   categoryInputSchema,
@@ -244,9 +245,10 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
       : dbError(error, "product");
   }
   if (!count) return { ok: false, error: "Product not found or not allowed." };
-  if (images?.length) {
-    await supabase.storage.from("product-images").remove(images.map((i) => i.storage_path as string));
-  }
+  // The product is gone: remove its gallery files and anything left in its temporary pool.
+  const { data: poolFiles } = await supabase.storage.from("product-images").list(poolFolder(id), { limit: POOL_MAX_FILES });
+  const files = [...new Set([...(images ?? []).map((i) => i.storage_path as string), ...poolPaths(id, (poolFiles ?? []).map((f) => f.name))])];
+  if (files.length) await supabase.storage.from("product-images").remove(files);
   updateTag(CATALOG_TAG);
   return { ok: true, data: undefined, message: "Product deleted." };
 }
@@ -316,9 +318,10 @@ export async function deleteProductImage(imageId: string): Promise<ActionResult>
   if (denied) return denied;
   if (!idSchema.safeParse(imageId).success) return { ok: false, error: "Invalid image." };
   const supabase = await createClient();
-  const { data, error } = await supabase.from("product_images").delete().eq("id", imageId).select("storage_path").maybeSingle();
+  // Removes the image from this gallery only. The file stays in the product's temporary
+  // gallery (it may still be used by other variants); "Remove Unused" deletes it later.
+  const { error } = await supabase.from("product_images").delete().eq("id", imageId);
   if (error) return dbError(error, "image");
-  if (data?.storage_path) await supabase.storage.from("product-images").remove([data.storage_path as string]);
   updateTag(CATALOG_TAG);
   return { ok: true, data: undefined };
 }
@@ -333,4 +336,89 @@ export async function reorderProductImages(productId: string, imageIds: string[]
   if (error) return dbError(error, "image");
   updateTag(CATALOG_TAG);
   return { ok: true, data: undefined };
+}
+
+// ---------------------------------------------------------------- Temporary image gallery
+export type PoolImage = { path: string; createdAt: string | null };
+
+/** Every image file uploaded for the product (assigned or not). */
+export async function getImagePool(productId: string): Promise<ActionResult<PoolImage[]>> {
+  const denied = await guard("products", ["create", "edit"]);
+  if (denied) return denied;
+  if (!idSchema.safeParse(productId).success) return { ok: false, error: "Invalid product." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from("product-images")
+    .list(poolFolder(productId), { limit: POOL_MAX_FILES, sortBy: { column: "created_at", order: "asc" } });
+  if (error) return { ok: false, error: "Couldn't load the temporary images." };
+  const created = new Map((data ?? []).map((f) => [f.name, (f.created_at as string | null) ?? null]));
+  return { ok: true, data: poolPaths(productId, (data ?? []).map((f) => f.name)).map((path) => ({ path, createdAt: created.get(path.split("/").pop()!) ?? null })) };
+}
+
+/**
+ * Set a variant's images (or the shared images with variantId null) to exactly these
+ * pool files, in this order. Images taken off the variant stay in the pool.
+ */
+export async function assignVariantImages(input: { productId: string; variantId: string | null; paths: string[]; alt: string }): Promise<ActionResult> {
+  const denied = await guard("products", ["create", "edit"]);
+  if (denied) return denied;
+  const parsed = z
+    .object({ productId: idSchema, variantId: idSchema.nullable(), paths: z.array(z.string()).max(GALLERY_MAX, `Choose at most ${GALLERY_MAX} images.`), alt: z.string().max(200) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid selection." };
+  const { productId, variantId, paths, alt } = parsed.data;
+  const pathOk = productImagePathSchema(productId);
+  if (!paths.every((p) => pathOk.safeParse(p).success)) return { ok: false, error: "Invalid image." };
+
+  const supabase = await createClient();
+  if (variantId) {
+    const { data: v } = await supabase.from("product_variants").select("id").eq("product_id", productId).eq("id", variantId).maybeSingle();
+    if (!v) return { ok: false, error: "That variant doesn't belong to this product. Save the product first." };
+  }
+  let q = supabase.from("product_images").select("id, storage_path").eq("product_id", productId);
+  q = variantId ? q.eq("variant_id", variantId) : q.is("variant_id", null);
+  const { data: current, error: readErr } = await q;
+  if (readErr) return dbError(readErr, "image");
+
+  const plan = planGallery((current ?? []) as { id: string; storage_path: string }[], paths);
+  if (plan.remove.length) {
+    const { error } = await supabase.from("product_images").delete().in("id", plan.remove);
+    if (error) return dbError(error, "image");
+  }
+  const newIds = new Map<string, string>();
+  if (plan.add.length) {
+    const { data: inserted, error } = await supabase
+      .from("product_images")
+      .insert(plan.add.map((storage_path, i) => ({ product_id: productId, variant_id: variantId, storage_path, alt: alt.slice(0, 200), position: 100 + i })))
+      .select("id, storage_path");
+    if (error) return dbError(error, "image");
+    for (const r of (inserted ?? []) as { id: string; storage_path: string }[]) newIds.set(r.storage_path, r.id);
+  }
+  const order = plan.wanted.map((p) => plan.existingIdFor(p) ?? newIds.get(p)).filter((x): x is string => Boolean(x));
+  if (order.length) {
+    const { error } = await supabase.rpc("reorder_product_images", { p_product_id: productId, p_image_ids: order });
+    if (error) return dbError(error, "image");
+  }
+  updateTag(CATALOG_TAG);
+  return { ok: true, data: undefined, message: plan.wanted.length ? `${plan.wanted.length} image${plan.wanted.length === 1 ? "" : "s"} assigned.` : "Images removed from this variant." };
+}
+
+/** Delete pool files that no gallery uses. Assigned files (in any product) are never touched. */
+export async function removeUnusedPoolImages(productId: string): Promise<ActionResult<{ removed: number }>> {
+  const denied = await guard("products", ["edit"]);
+  if (denied) return denied;
+  if (!idSchema.safeParse(productId).success) return { ok: false, error: "Invalid product." };
+  const supabase = await createClient();
+  const { data: files, error: listErr } = await supabase.storage.from("product-images").list(poolFolder(productId), { limit: POOL_MAX_FILES });
+  if (listErr) return { ok: false, error: "Couldn't load the temporary images." };
+  const paths = poolPaths(productId, (files ?? []).map((f) => f.name));
+  if (!paths.length) return { ok: true, data: { removed: 0 }, message: "No temporary images." };
+  // Re-read usage right before deleting, across all products, so nothing assigned is removed.
+  const { data: used, error: usedErr } = await supabase.from("product_images").select("storage_path").like("storage_path", `${poolFolder(productId)}/%`);
+  if (usedErr) return { ok: false, error: "Couldn't check which images are in use. Nothing was deleted." };
+  const doomed = unusedPoolPaths(paths, ((used ?? []) as { storage_path: string }[]).map((r) => r.storage_path));
+  if (!doomed.length) return { ok: true, data: { removed: 0 }, message: "Every image is assigned. Nothing to remove." };
+  const { error } = await supabase.storage.from("product-images").remove(doomed);
+  if (error) return { ok: false, error: "Couldn't remove the images. Please try again." };
+  return { ok: true, data: { removed: doomed.length }, message: `Removed ${doomed.length} unused image${doomed.length === 1 ? "" : "s"}.` };
 }

@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { moveItem, sortableClass, useDragSort } from "@/components/admin/catalog/drag-sort";
+import { SelectImagesButton } from "@/components/admin/catalog/image-pool";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { inputClass } from "@/components/admin/form/fields";
 import type { AdminProductImage } from "@/features/catalog/admin-repo";
@@ -200,7 +201,11 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
     if (!fresh.length) return setSelected(list[0] ?? current);
     // A main value starts as one combination; add sub-variants and generate to split it.
     const template = rows[rows.length - 1];
-    commit([...rows, ...fresh.map((value) => newVariantRow({ values: { [main]: value }, mrp: template?.mrp ?? "", price: template?.price ?? "" }))]);
+    // Variants still without a main value (e.g. the first variant) take the first new value.
+    const blank = rows.filter((r) => !(r.values[main] ?? "").trim());
+    const filled = rows.map((r) => (blank.includes(r) ? { ...r, values: { ...r.values, [main]: fresh[0] } } : r));
+    const rest = blank.length ? fresh.slice(1) : fresh;
+    commit([...filled, ...rest.map((value) => newVariantRow({ values: { [main]: value }, mrp: template?.mrp ?? "", price: template?.price ?? "" }))]);
     setExtraMains((l) => l.filter((x) => !fresh.some((v) => same(x, v))));
     setSelected(fresh[0]);
   }
@@ -284,8 +289,9 @@ export function VariantEditor({ enabled, onEnabledChange, types, onTypesChange, 
       if (types.length >= MAX_TYPES) return window.alert(`Up to ${MAX_TYPES} variant types.`);
       if (!types.length) {
         // First type: existing simple variants keep their colour / name as the main value.
-        onRowsChange(rows.map((r) => ({ ...r, values: { [t]: r.colour || (r.name !== "Default" ? r.name : "") || "Standard" } })));
-        setSelected(rows[0]?.colour || rows[0]?.name || "Standard");
+        // A blank variant gets no placeholder value: the first value the admin adds fills it.
+        onRowsChange(rows.map((r) => ({ ...r, values: { [t]: r.colour || (r.name !== "Default" ? r.name : "") } })));
+        setSelected(rows[0]?.colour || (rows[0]?.name !== "Default" ? rows[0]?.name : "") || "");
       }
       onTypesChange([...types, t]);
     } else if (same(existing, main) && forMain) return;
@@ -1224,6 +1230,9 @@ function ComboRow({
               <ImagePlus className="size-4 text-royal-300" />
             )}
           </button>
+          <span className={cn("mt-0.5 block text-center text-[0.65rem] font-semibold", ownImages.length ? "text-royal" : "text-muted-foreground")}>
+            {ownImages.length ? `${ownImages.length} img` : "No img"}
+          </span>
         </td>
         <td className="px-2 py-2">
           {simple ? (
@@ -1316,7 +1325,10 @@ function ComboRow({
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-sm font-medium text-deep">Images for {label}</p>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-deep">Images for {label}</p>
+                  {product && v.id ? <SelectImagesButton variantId={v.id} label={label} /> : null}
+                </div>
                 {product && v.id ? (
                   <ProductImages
                     key={`${v.id}-${ownImages.map((x) => x.id).join(",")}`}

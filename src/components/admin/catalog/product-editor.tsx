@@ -2,12 +2,13 @@
 
 import { parseSocialVideo } from "@/lib/social-video";
 import { treeOrder } from "@/features/catalog/category-tree";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Film, ImageIcon, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { AiFillPanel } from "@/components/admin/catalog/ai-fill-panel";
 import { AiWriteButtons } from "@/components/admin/catalog/ai-write-buttons";
+import { ImagePoolProvider, SelectImagesButton, TemporaryImageGallery } from "@/components/admin/catalog/image-pool";
 import { DeleteButton } from "@/components/admin/catalog/delete-button";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { newVariantRow, nextKey, VariantEditor, type VariantRow } from "@/components/admin/catalog/variant-editor";
@@ -248,10 +249,16 @@ export function ProductEditor({
       : "No details were recognised. Put the name on the first line, specs as \"Name: value\" and features as bullet points.";
   }
 
+  // Saved variant id → its label, shown on images in the temporary gallery.
+  const variantLabels = useMemo(() => {
+    const ts = variantsOn ? variantTypes : [];
+    return new Map(variants.filter((v) => v.id).map((v) => [v.id!, (ts.length ? ts.map((t) => v.values[t]).filter(Boolean).join(" • ") : v.colour || v.name) || "Variant"]));
+  }, [variants, variantsOn, variantTypes]);
+
   const videoUrl = publicStorageUrl("product-videos", basics.video_path);
   const linkVideo = parseSocialVideo(basics.video_link);
 
-  return (
+  const form = (
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_20rem]" noValidate>
       <div className="flex min-w-0 flex-col gap-6">
         <ProductHeaderCard
@@ -314,6 +321,17 @@ export function ProductEditor({
           {aiEnabled ? <AiWriteButtons value={basics.description} onChange={(v) => setB("description", v.slice(0, mediumMax))} productName={basics.name} /> : null}
         </FormSection>
 
+        <FormSection
+          title="Temporary Bulk Image Upload"
+          description="Upload all photos at once, then open each variant and press “Select Images”. One image can be used by several variants. When done, remove the images you didn't use."
+        >
+          {product ? (
+            <TemporaryImageGallery />
+          ) : (
+            <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then upload images.</p>
+          )}
+        </FormSection>
+
         <FormSection title="Variants, pricing & SKUs" description="Each variant (or each combination, e.g. Size + Colour) has its own SKU, price, stock, specifications and images.">
           <VariantEditor
             enabled={variantsOn}
@@ -340,6 +358,7 @@ export function ProductEditor({
           title={types.length ? "Shared images" : "Images"}
           description={types.length ? "Optional. Shown only for variants that have no images of their own. Add images per variant above." : undefined}
         >
+          {product ? <SelectImagesButton variantId={null} label="shared images" className="w-fit" /> : null}
           {product ? (
             <ProductImages
               key={product.images.filter((i) => !i.variant_id).map((i) => i.id).join(",")}
@@ -473,6 +492,13 @@ export function ProductEditor({
         {product && canDelete ? <DeleteButton label="product" redirectTo="/admin/products" onDelete={() => deleteProduct(product.id)} /> : null}
       </aside>
     </form>
+  );
+  return product ? (
+    <ImagePoolProvider productId={product.id} productName={basics.name} images={product.images} variantLabels={variantLabels}>
+      {form}
+    </ImagePoolProvider>
+  ) : (
+    form
   );
 }
 
