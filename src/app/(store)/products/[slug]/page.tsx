@@ -109,7 +109,10 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
 
         <VariantSelectionProvider variants={product.variants} defaultVariantId={product.defaultVariantId}>
         <div className="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-14">
-          <VariantGallery sharedImages={product.sharedImages} video={product.video} social={social} categorySlug={product.category.slug} name={product.name} />
+          {/* Laptop/desktop: the photos stay in view while the details column scrolls (no blank area). */}
+          <div className="min-w-0 lg:sticky lg:top-28 lg:self-start">
+            <VariantGallery sharedImages={product.sharedImages} video={product.video} social={social} categorySlug={product.category.slug} name={product.name} />
+          </div>
 
           <div className="lg:pt-2">
             {product.brand ? <p className="text-xs font-semibold tracking-[0.16em] text-gold-600 uppercase">{product.brand.name}</p> : null}

@@ -5,7 +5,7 @@ import { treeOrder } from "@/features/catalog/category-tree";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Film, ImageIcon, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { Copy, Film, ImageIcon, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { AiFillPanel } from "@/components/admin/catalog/ai-fill-panel";
 import { AiWriteButtons } from "@/components/admin/catalog/ai-write-buttons";
 import { ImagePoolProvider, SelectImagesButton, TemporaryImageGallery } from "@/components/admin/catalog/image-pool";
@@ -15,7 +15,7 @@ import { newVariantRow, nextKey, VariantEditor, type VariantRow } from "@/compon
 import { valuesFromOptions } from "@/features/catalog/variant-types";
 import { applySizes, hasSizeType, isSizeType, removeSizes, sizeLabel, type SizeCategory } from "@/features/catalog/size-pricing";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
-import { deleteProduct, saveProduct } from "@/features/catalog/admin-actions";
+import { deleteProduct, duplicateProduct, saveProduct } from "@/features/catalog/admin-actions";
 import type { ProductFill } from "@/features/catalog/smart-fill";
 import type { AdminProduct } from "@/features/catalog/admin-repo";
 import { paiseToRupees, slugify } from "@/features/catalog/schemas";
@@ -573,6 +573,7 @@ export function ProductEditor({
         {product?.status === "active" ? (
           <Link href={`/products/${product.slug}`} target="_blank" className="text-center text-sm font-medium text-royal hover:underline">View in store ↗</Link>
         ) : null}
+        {product ? <DuplicateButton productId={product.id} dirty={dirty} /> : null}
         {product && canDelete ? <DeleteButton label="product" redirectTo="/admin/products" onDelete={() => deleteProduct(product.id)} /> : null}
       </aside>
     </form>
@@ -770,6 +771,35 @@ function SizePricing({
           </table>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Copy this product into a new draft and open it. */
+function DuplicateButton({ productId, dirty }: { productId: string; dirty: boolean }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          if (!window.confirm(dirty ? "You have unsaved changes. The copy is made from the last SAVED version. Continue?" : "Make a copy of this product as a new draft?")) return;
+          setError(null);
+          start(async () => {
+            const r = await duplicateProduct(productId);
+            if (!r.ok) return setError(r.error);
+            router.push(`/admin/products/${r.data.id}`);
+          });
+        }}
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-royal-200 px-4 text-sm font-semibold text-royal hover:bg-royal-50 disabled:opacity-60"
+      >
+        {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Copy aria-hidden className="size-4" />}
+        {pending ? "Copying…" : "Duplicate product"}
+      </button>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
     </div>
   );
 }

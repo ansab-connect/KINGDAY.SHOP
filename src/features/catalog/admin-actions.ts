@@ -6,12 +6,15 @@ import type { Action, Module } from "@/features/auth/permissions";
 import { assertCan } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { getProductForEdit } from "./admin-repo";
 import { CATALOG_TAG } from "./cache-tags";
+import { valuesFromOptions } from "./variant-types";
 import { GALLERY_MAX, planGallery, poolFolder, poolPaths, POOL_MAX_FILES, unusedPoolPaths } from "./image-pool";
 import {
   brandInputSchema,
   categoryInputSchema,
   issuesToFieldErrors,
+  paiseToRupees,
   productImagePathSchema,
   productInputSchema,
   toSaveProductPayload,
@@ -432,4 +435,113 @@ export async function removeUnusedPoolImages(productId: string): Promise<ActionR
   const { error } = await supabase.storage.from("product-images").remove(doomed);
   if (error) return { ok: false, error: "Couldn't remove the images. Please try again." };
   return { ok: true, data: { removed: doomed.length }, message: `Removed ${doomed.length} unused image${doomed.length === 1 ? "" : "s"}.` };
+}
+
+// ---------------------------------------------------------------- Duplicate
+/**
+ * Copy a product into a new DRAFT: details, variants (new SKUs, stock 0), categories,
+ * per-variant categories and photos (copied files, so deleting one product never
+ * breaks the other). The admin edits the copy and makes it Active when ready.
+ */
+export async function duplicateProduct(id: string): Promise<ActionResult<{ id: string }>> {
+  const denied = await guard("products", ["create"]);
+  if (denied) return denied;
+  if (!idSchema.safeParse(id).success) return { ok: false, error: "Invalid product." };
+  const src = await getProductForEdit(id).catch(() => null);
+  if (!src) return { ok: false, error: "Product not found." };
+  const supabase = await createClient();
+
+  // Free URL slug: name-copy, name-copy-2, …
+  const baseSlug = `${src.slug}`.slice(0, 70).replace(/-+$/, "") + "-copy";
+  const { data: slugRows } = await supabase.from("products").select("slug").like("slug", `${baseSlug}%`);
+  const takenSlugs = new Set(((slugRows ?? []) as { slug: string }[]).map((r) => r.slug));
+  let slug = baseSlug;
+  for (let n = 2; takenSlugs.has(slug); n++) slug = `${baseSlug}-${n}`;
+
+  // Free SKUs: SKU-C, SKU-C2, … (max 40 characters).
+  const { data: skuRows } = await supabase.from("product_variants").select("sku").limit(20000);
+  const takenSkus = new Set(((skuRows ?? []) as { sku: string }[]).map((r) => r.sku));
+  const newSku = (sku: string) => {
+    for (let n = 1; n < 1000; n++) {
+      const tail = n === 1 ? "-C" : `-C${n}`;
+      const cand = `${sku.slice(0, 40 - tail.length)}${tail}`;
+      if (!takenSkus.has(cand)) {
+        takenSkus.add(cand);
+        return cand;
+      }
+    }
+    return sku;
+  };
+
+  const types = src.variant_types?.length ? src.variant_types : [src.option1_name, src.option1_name ? src.option2_name : null].filter((t): t is string => Boolean(t));
+  const skuMap = new Map<string, string>();
+  const input = {
+    name: `${src.name} (Copy)`.slice(0, 160),
+    slug,
+    category_id: src.category_id,
+    extra_category_ids: src.extra_category_ids,
+    brand_id: src.brand_id ?? "",
+    short_description: src.short_description ?? "",
+    description: src.description ?? "",
+    highlights: src.highlights,
+    age_range: src.age_range ?? "",
+    video_path: src.video_path ?? "",
+    video_link: src.video_link ?? "",
+    status: "draft" as const,
+    is_featured: false,
+    prepaid_discount_pct: src.prepaid_discount_pct,
+    cod_discount_pct: src.cod_discount_pct,
+    seo_title: src.seo_title ?? "",
+    seo_description: src.seo_description ?? "",
+    variant_types: types,
+    attributes: src.attributes,
+    variants: src.variants.map((v) => {
+      const values = valuesFromOptions(types, v.options);
+      if (types[0] && !values[types[0]] && v.option1) values[types[0]] = v.option1;
+      if (types[1] && !values[types[1]] && v.option2) values[types[1]] = v.option2;
+      const sku = newSku(v.sku);
+      skuMap.set(v.id, sku);
+      const auto = types.map((t) => values[t]).filter(Boolean).join(" · ");
+      return {
+        sku,
+        name: types.length ? (v.name === auto ? "" : v.name) : v.name,
+        colour: v.options?.colour ?? "",
+        values: types.length ? values : undefined,
+        specs: v.specs ?? [],
+        mrp: paiseToRupees(v.mrp),
+        price: paiseToRupees(v.price),
+        opening_stock: 0,
+        is_active: v.is_active,
+        is_default: v.is_default,
+        category_id: v.category_id ?? "",
+      };
+    }),
+  };
+  const saved = await saveProduct(input);
+  if (!saved.ok) return { ok: false, error: `Couldn't copy: ${saved.error}` };
+  const newId = saved.data.id;
+
+  // Photos: copy each file into the new product's folder and recreate its gallery rows.
+  if (src.images.length) {
+    const { data: newVariants } = await supabase.from("product_variants").select("id, sku").eq("product_id", newId);
+    const idBySku = new Map(((newVariants ?? []) as { id: string; sku: string }[]).map((v) => [v.sku, v.id]));
+    const copied = new Map<string, string>();
+    const rows: { product_id: string; variant_id: string | null; storage_path: string; alt: string; position: number }[] = [];
+    for (const img of src.images) {
+      let to = copied.get(img.storage_path);
+      if (!to) {
+        const ext = img.storage_path.split(".").pop() ?? "webp";
+        to = `products/${newId}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage.from("product-images").copy(img.storage_path, to);
+        if (error) continue;
+        copied.set(img.storage_path, to);
+      }
+      const variantId = img.variant_id ? (idBySku.get(skuMap.get(img.variant_id) ?? "") ?? null) : null;
+      if (img.variant_id && !variantId) continue;
+      rows.push({ product_id: newId, variant_id: variantId, storage_path: to, alt: img.alt, position: img.position });
+    }
+    if (rows.length) await supabase.from("product_images").insert(rows);
+  }
+  updateTag(CATALOG_TAG);
+  return { ok: true, data: { id: newId }, message: "Copy created as a draft. Check the name, SKUs, stock and photos, then make it Active." };
 }

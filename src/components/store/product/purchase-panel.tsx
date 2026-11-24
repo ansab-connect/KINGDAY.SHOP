@@ -209,12 +209,12 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
           type="button"
           disabled={out}
           onClick={() => buy("online")}
-          className="flex min-h-16 w-full flex-col items-center justify-center rounded-2xl bg-royal px-6 py-3 text-white shadow-[0_14px_34px_-14px_rgb(75_0_130/0.8)] ring-2 ring-gold/70 transition-colors hover:bg-royal-800 focus-visible:ring-4 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="buy-now-shine relative flex min-h-16 w-full flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-r from-gold-400 via-amber-400 to-orange-500 px-6 py-3 text-deep shadow-[0_14px_34px_-12px_rgb(234_88_12/0.65)] ring-2 ring-white/60 transition-[filter,transform] hover:brightness-105 active:scale-[0.99] focus-visible:ring-4 focus-visible:ring-royal focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span className="flex items-center gap-2 text-base font-extrabold tracking-wide uppercase">
-            <Zap aria-hidden className="size-5 text-gold" /> <L en="Buy now" ml="ഇപ്പോൾ വാങ്ങൂ" /> · <span className="text-gold tabular">{formatPaise(prepaid.total)}</span>
+            <Zap aria-hidden className="size-5 fill-deep text-deep" /> <L en="Buy now" ml="ഇപ്പോൾ വാങ്ങൂ" /> · <span className="tabular">{formatPaise(prepaid.total)}</span>
           </span>
-          <span className="mt-0.5 text-xs text-white/80">
+          <span className="mt-0.5 text-xs font-medium text-deep/80">
             {[prepaid.discount ? `Save ${formatPaise(prepaid.discount)}` : null, prepaid.shipping ? null : "Free delivery", "UPI · Cards · Net banking"].filter(Boolean).join(" · ")}
           </span>
         </button>
@@ -278,9 +278,9 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
       {/* Sticky mobile Buy Now (above the bottom menu) once the main button scrolls away. */}
       {!out && !buyVisible ? (
         <div className="fixed inset-x-0 bottom-[4.25rem] z-40 border-t bg-white/95 px-4 py-2.5 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.25)] backdrop-blur lg:hidden">
-          <button type="button" onClick={() => buy("online")} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-royal text-sm font-extrabold tracking-wide text-white uppercase ring-2 ring-gold/70">
-            <Zap aria-hidden className="size-4 text-gold" /> Buy now · <span className="text-gold tabular">{formatPaise(prepaid.total)}</span>
-            {prepaid.discount ? <span className="rounded-full bg-gold px-2 py-0.5 text-[0.65rem] text-deep normal-case">Save {formatPaise(prepaid.discount)}</span> : null}
+          <button type="button" onClick={() => buy("online")} className="buy-now-shine relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-gold-400 via-amber-400 to-orange-500 text-sm font-extrabold tracking-wide text-deep uppercase shadow-[0_10px_24px_-12px_rgb(234_88_12/0.7)]">
+            <Zap aria-hidden className="size-4 fill-deep text-deep" /> Buy now · <span className="tabular">{formatPaise(prepaid.total)}</span>
+            {prepaid.discount ? <span className="rounded-full bg-deep px-2 py-0.5 text-[0.65rem] text-gold normal-case">Save {formatPaise(prepaid.discount)}</span> : null}
           </button>
         </div>
       ) : null}
