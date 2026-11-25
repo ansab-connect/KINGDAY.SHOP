@@ -11,7 +11,8 @@ export const isGeminiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 // Override with GEMINI_MODEL in Vercel (e.g. a larger model) if needed.
 const model = () => process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
 
-export type GeminiMessage = { role: "user" | "model"; text: string };
+/** images: inline photos (base64) sent with the text, e.g. a supplier bill to read. */
+export type GeminiMessage = { role: "user" | "model"; text: string; images?: { mimeType: string; data: string }[] };
 export type GeminiSource = { title: string; url: string };
 export type GeminiResult = { ok: true; text: string; sources: GeminiSource[] } | { ok: false; error: "not_configured" | "limit" | "failed" };
 
@@ -31,7 +32,7 @@ export async function geminiGenerate(opts: {
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: opts.system }] },
-        contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
+        contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }, ...(m.images ?? []).map((i) => ({ inline_data: { mime_type: i.mimeType, data: i.data } }))] })),
         ...(opts.search ? { tools: [{ google_search: {} }] } : {}),
         generationConfig: { temperature: opts.temperature ?? 0.2, maxOutputTokens: opts.maxTokens ?? 2048 },
       }),

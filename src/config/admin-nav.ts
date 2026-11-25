@@ -1,5 +1,7 @@
 import {
   BarChart3,
+  ClipboardList,
+  Wallet,
   Bike,
   Bot,
   Camera,
@@ -68,6 +70,7 @@ export const adminNav: AdminNavGroup[] = [
       { title: "Bicycles", href: "/admin/bicycles", icon: Bike, module: "categories" },
       { title: "Brands", href: "/admin/brands", icon: Tag, module: "brands", phase: 5 },
       { title: "Inventory", href: "/admin/inventory", icon: Boxes, module: "inventory", phase: 6 },
+      { title: "Purchases", href: "/admin/purchases", icon: ClipboardList, module: "purchases" },
     ],
   },
   {
@@ -75,6 +78,7 @@ export const adminNav: AdminNavGroup[] = [
     items: [
       { title: "Orders", href: "/admin/orders", icon: ShoppingBag, module: "orders", phase: 9 },
       { title: "Billing", href: "/admin/billing", icon: ReceiptText, module: "orders" },
+      { title: "Expenses", href: "/admin/expenses", icon: Wallet, module: "expenses" },
       { title: "Customers", href: "/admin/customers", icon: Users, module: "customers", phase: 7 },
       { title: "Coupons", href: "/admin/coupons", icon: TicketPercent, module: "coupons", phase: 8 },
       { title: "Promotions", href: "/admin/promotions", icon: Megaphone, module: "customers" },

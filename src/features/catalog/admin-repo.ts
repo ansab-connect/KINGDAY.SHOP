@@ -74,6 +74,8 @@ export type AdminProduct = {
   is_featured: boolean;
   seo_title: string | null;
   seo_description: string | null;
+  gst_rate: number | null;
+  hsn_code: string | null;
   option1_name: string | null;
   option2_name: string | null;
   /** Ordered variant types; the first is the main type. */
@@ -200,7 +202,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
     .from("products")
     .select(
       `id, name, slug, category_id, brand_id, short_description, description, highlights, age_range, video_path,
-       status, is_featured, seo_title, seo_description, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct, video_link,
+       status, is_featured, seo_title, seo_description, gst_rate, hsn_code, option1_name, option2_name, variant_types, prepaid_discount_pct, cod_discount_pct, video_link,
        product_variants(id, sku, name, options, option1, option2, specs, mrp, price, weight_grams, is_default, is_active, position, inventory(on_hand, reserved)),
        product_attributes(name, value, position),
        product_images(id, storage_path, alt, position, variant_id)`,
@@ -225,6 +227,7 @@ export async function getProductForEdit(id: string): Promise<AdminProduct | null
     ...d,
     extra_category_ids: catRows.filter((r) => !r.variant_id && r.category_id !== d.category_id).map((r) => r.category_id),
     prepaid_discount_pct: Number(d.prepaid_discount_pct) || 0,
+    gst_rate: d.gst_rate === null || d.gst_rate === undefined ? null : Number(d.gst_rate),
     cod_discount_pct: Number(d.cod_discount_pct) || 0,
     video_url: publicStorageUrl("product-videos", d.video_path),
     variants: [...d.product_variants]

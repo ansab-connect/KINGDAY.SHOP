@@ -6,7 +6,7 @@ import { aiProductAssistAction } from "@/features/ai/product-assist";
 import { cleanFill, smartFill, type ProductFill } from "@/features/catalog/smart-fill";
 import { cn } from "@/lib/utils";
 
-type FieldKey = "name" | "category_id" | "brand_id" | "age_range" | "short_description" | "description" | "highlights" | "specifications" | "variants" | "seo" | "extra_categories" | "size_prices" | "variant_types";
+type FieldKey = "name" | "category_id" | "brand_id" | "age_range" | "short_description" | "description" | "highlights" | "specifications" | "variants" | "seo" | "extra_categories" | "size_prices" | "variant_types" | "tax";
 
 /**
  * Smart fill (free, runs in the browser, no AI service): paste the product text, review
@@ -68,6 +68,8 @@ export function AiFillPanel({
           ? local.size_prices
           : a.size_prices.map((sp) => ({ category_id: idOf(categories, sp.category), mrp: sp.mrp || sp.price, price: sp.price, stock: sp.stock })).filter((sp) => sp.category_id),
         variant_types: a.variant_types.length ? a.variant_types : local.variant_types,
+        gst_rate: a.gst_rate ?? local.gst_rate,
+        hsn_code: a.hsn_code || local.hsn_code,
         seo_title: a.seo_title || local.seo_title,
         seo_description: a.seo_description || local.seo_description,
         missing: [...new Set([...a.not_verified, ...local.missing.filter((m) => !a.specifications.some((s) => s.name.toLowerCase() === m.toLowerCase()))])],
@@ -94,6 +96,7 @@ export function AiFillPanel({
       extra_categories: d.extra_category_ids.length > 0,
       size_prices: d.size_prices.length > 0,
       variant_types: d.variant_types.length > 0,
+      tax: d.gst_rate !== null || Boolean(d.hsn_code),
     });
   }
 
@@ -116,6 +119,8 @@ export function AiFillPanel({
       extra_category_ids: p("extra_categories") ? draft.extra_category_ids : [],
       size_prices: p("size_prices") ? draft.size_prices : [],
       variant_types: p("variant_types") ? draft.variant_types : [],
+      gst_rate: p("tax") ? draft.gst_rate : null,
+      hsn_code: p("tax") ? draft.hsn_code : "",
     };
     setStatus({ kind: "ok", text: onFill(chosen) });
     setDraft(null);
@@ -147,6 +152,7 @@ export function AiFillPanel({
             .join(" · "),
         },
         { key: "variant_types", label: "Variant types", value: draft.variant_types.map((vt) => `${vt.name}: ${vt.values.join(", ")}`).join(" · ") },
+        { key: "tax", label: "GST / HSN (from your text)", value: [draft.gst_rate !== null ? `GST ${draft.gst_rate}%` : "", draft.hsn_code ? `HSN ${draft.hsn_code}` : ""].filter(Boolean).join(" · ") },
         { key: "seo", label: "Search listing (SEO)", value: draft.seo_title },
       ]
     : [];

@@ -1,12 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Loader2, Plus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  assignBicycleProduct,
   reorderBicycleCategories,
   saveBicycleSize,
   saveBicycleType,
@@ -212,8 +212,7 @@ function NewType() {
 }
 
 // ---------------------------------------------------------------- Products
-function ProductRow({ product, options, bicycleIds }: { product: Product; options: { id: string; label: string }[]; bicycleIds: Set<string> }) {
-  const [target, setTarget] = useState(product.categoryId && bicycleIds.has(product.categoryId) ? product.categoryId : "");
+function ProductRow({ product, bicycleIds }: { product: Product; bicycleIds: Set<string> }) {
   const [open, setOpen] = useState(false);
   const [fit, setFit] = useState({ ageMin: str(product.fit?.ageMin), ageMax: str(product.fit?.ageMax), heightMin: str(product.fit?.heightMin), heightMax: str(product.fit?.heightMax), note: product.fit?.note ?? "" });
   const mover = useSaver();
@@ -231,13 +230,6 @@ function ProductRow({ product, options, bicycleIds }: { product: Product; option
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select aria-label={`Bicycle category for ${product.name}`} className={cn(inputCls, "w-64")} value={target} onChange={(e) => setTarget(e.target.value)}>
-            <option value="">Choose type › wheel size…</option>
-            {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-          <Button type="button" size="sm" variant="outline" disabled={mover.pending || !target || target === product.categoryId} onClick={() => mover.run(() => assignBicycleProduct(product.id, target))}>
-            {mover.pending ? <Loader2 className="animate-spin" /> : null} Assign
-          </Button>
           {inBicycles ? (
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen((o) => !o)} aria-expanded={open}>Model fit</Button>
           ) : null}
@@ -270,34 +262,23 @@ function ProductRow({ product, options, bicycleIds }: { product: Product; option
 
 function Products({ data }: { data: ManagerData }) {
   const [q, setQ] = useState("");
-  const [onlyBikes, setOnlyBikes] = useState(true);
-  const { options, bicycleIds } = useMemo(() => {
-    const opts: { id: string; label: string }[] = [];
-    for (const t of data.types) {
-      opts.push({ id: t.id, label: `${t.name} (no size yet)` });
-      for (const s of t.sizes) opts.push({ id: s.id, label: `${t.name} › ${s.name}${s.active ? "" : " (hidden)"}` });
-    }
-    return { options: opts, bicycleIds: new Set([data.root.id, ...opts.map((o) => o.id)]) };
-  }, [data]);
+  const bicycleIds = useMemo(() => new Set([data.root.id, ...data.types.flatMap((t) => [t.id, ...t.sizes.map((s) => s.id)])]), [data]);
   const list = data.products.filter(
-    (p) => (!onlyBikes || (p.categoryId && bicycleIds.has(p.categoryId))) && p.name.toLowerCase().includes(q.trim().toLowerCase()),
+    (p) => Boolean(p.categoryId && bicycleIds.has(p.categoryId)) && p.name.toLowerCase().includes(q.trim().toLowerCase()),
   );
   return (
     <Card className="py-0 shadow-card">
       <CardHeader className="flex flex-col gap-3 border-b py-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle className="text-base">Assign products</CardTitle>
-        <div className="flex flex-wrap items-center gap-3">
-          <input aria-label="Search products" className={cn(inputCls, "w-56")} placeholder="Search products…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" className="size-4 accent-royal" checked={onlyBikes} onChange={(e) => setOnlyBikes(e.target.checked)} /> Only bicycles
-          </label>
-        </div>
+        <CardTitle className="text-base">Model fit (age / height per bicycle)</CardTitle>
+        <input aria-label="Search bicycles" className={cn(inputCls, "w-56")} placeholder="Search bicycles…" value={q} onChange={(e) => setQ(e.target.value)} />
       </CardHeader>
       <CardContent className="px-0">
-        <p className="px-4 pt-3 text-xs text-muted-foreground">Each product sits in one category, so moving it never duplicates it. Untick “Only bicycles” to bring in other products.</p>
+        <p className="px-4 pt-3 text-xs text-muted-foreground">
+          To put bicycles into a wheel size, open <Link href="/admin/categories" className="font-medium text-royal hover:underline">Categories</Link> → the size → <strong>Products in this category</strong>. Here you can set a model&apos;s own age/height range (e.g. electric bicycles).
+        </p>
         {list.length ? (
           <ul className="mt-2">
-            {list.map((p) => <ProductRow key={`${p.id}-${p.categoryId}`} product={p} options={options} bicycleIds={bicycleIds} />)}
+            {list.map((p) => <ProductRow key={`${p.id}-${p.categoryId}`} product={p} bicycleIds={bicycleIds} />)}
           </ul>
         ) : (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">No products here yet.</p>

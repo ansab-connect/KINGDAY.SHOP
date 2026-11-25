@@ -167,7 +167,7 @@ export async function saveProduct(input: unknown): Promise<ActionResult<{ id: st
   if (error) return dbError(error, "product");
   const { error: discountError } = await supabase
     .from("products")
-    .update({ prepaid_discount_pct: parsed.data.prepaid_discount_pct, cod_discount_pct: parsed.data.cod_discount_pct, video_link: parsed.data.video_link })
+    .update({ prepaid_discount_pct: parsed.data.prepaid_discount_pct, cod_discount_pct: parsed.data.cod_discount_pct, video_link: parsed.data.video_link, gst_rate: parsed.data.gst_rate, hsn_code: parsed.data.hsn_code })
     .eq("id", data as string);
   if (discountError) return dbError(discountError, "product");
 
@@ -493,6 +493,8 @@ export async function duplicateProduct(id: string): Promise<ActionResult<{ id: s
     cod_discount_pct: src.cod_discount_pct,
     seo_title: src.seo_title ?? "",
     seo_description: src.seo_description ?? "",
+    gst_rate: src.gst_rate,
+    hsn_code: src.hsn_code ?? "",
     variant_types: types,
     attributes: src.attributes,
     variants: src.variants.map((v) => {
@@ -544,4 +546,38 @@ export async function duplicateProduct(id: string): Promise<ActionResult<{ id: s
   }
   updateTag(CATALOG_TAG);
   return { ok: true, data: { id: newId }, message: "Copy created as a draft. Check the name, SKUs, stock and photos, then make it Active." };
+}
+
+// ---------------------------------------------------------------- Category ⇄ products
+/**
+ * Categories page "Assign products": the products also show in this category (extra
+ * category, product_categories). Their main category doesn't change.
+ */
+export async function assignProductsToCategory(categoryId: string, productIds: string[]): Promise<ActionResult<{ added: number }>> {
+  const denied = await guard("products", ["edit"]);
+  if (denied) return denied;
+  const parsed = z.object({ categoryId: idSchema, productIds: z.array(idSchema).min(1).max(500) }).safeParse({ categoryId, productIds });
+  if (!parsed.success) return { ok: false, error: "Choose at least one product." };
+  const supabase = await createClient();
+  const { data: mains } = await supabase.from("products").select("id").in("id", parsed.data.productIds).eq("category_id", categoryId);
+  const isMain = new Set(((mains ?? []) as { id: string }[]).map((p) => p.id));
+  const rows = [...new Set(parsed.data.productIds)].filter((p) => !isMain.has(p)).map((product_id) => ({ product_id, category_id: categoryId }));
+  if (rows.length) {
+    const { error } = await supabase.from("product_categories").upsert(rows, { onConflict: "product_id,category_id", ignoreDuplicates: true });
+    if (error) return dbError(error, "category");
+  }
+  updateTag(CATALOG_TAG);
+  return { ok: true, data: { added: rows.length }, message: `${rows.length} product${rows.length === 1 ? "" : "s"} added to this category.` };
+}
+
+/** Take a product out of a category it was added to (its main category stays). */
+export async function removeProductFromCategory(categoryId: string, productId: string): Promise<ActionResult> {
+  const denied = await guard("products", ["edit"]);
+  if (denied) return denied;
+  if (!idSchema.safeParse(categoryId).success || !idSchema.safeParse(productId).success) return { ok: false, error: "Invalid product." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("product_categories").delete().eq("product_id", productId).eq("category_id", categoryId);
+  if (error) return dbError(error, "category");
+  updateTag(CATALOG_TAG);
+  return { ok: true, data: undefined };
 }

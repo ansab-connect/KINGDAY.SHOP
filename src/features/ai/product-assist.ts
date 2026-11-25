@@ -32,6 +32,9 @@ const reply = z.object({
     .catch([]),
   /** Variant types and values written in the owner's text, e.g. Speed Type: Single Speed, Multi Speed. */
   variant_types: z.array(z.object({ name: z.string().max(30), values: z.array(z.string().max(40)).max(12) })).max(4).catch([]),
+  /** Only when written in the owner's text. */
+  gst_rate: z.coerce.number().nullable().catch(null),
+  hsn_code: z.string().max(10).catch(""),
   not_verified: z.array(z.string().max(80)).max(20).catch([]),
   conflicts: z.array(z.string().max(200)).max(10).catch([]),
 });
@@ -69,7 +72,8 @@ export async function aiProductAssistAction(input: { text: string; categories: s
     "- Prefer these specification names when relevant: Battery, Motor, Weight capacity, Dimensions, Charging time, Max speed, Remote control, Material, Age group.",
     "Reply with ONLY a JSON object with keys: name, category, brand, short_description (max 280 chars), description (2-4 short paragraphs),",
     "key_features (string[]), specifications ({name,value}[]), age_group, seo_title (max 60), seo_description (max 155), keywords (string[]),",
-    "not_verified (string[]), conflicts (string[]), extra_categories (string[]), size_prices ({category,mrp,price,stock}[]), variant_types ({name,values}[]).",
+    "not_verified (string[]), conflicts (string[]), extra_categories (string[]), size_prices ({category,mrp,price,stock}[]), variant_types ({name,values}[]), gst_rate (number or null), hsn_code (string).",
+    "- gst_rate and hsn_code: ONLY when written in the owner's text; otherwise null and \"\".",
   ].join("\n");
 
   const ask = `Product information from the shop owner:\n\n${text}`;
@@ -108,6 +112,8 @@ export async function aiProductAssistAction(input: { text: string; categories: s
       extra_categories: d.extra_categories.filter((c) => categories.includes(c) && c !== d.category),
       // Prices only when the owner's text has them (a model can't invent a number that isn't there).
       size_prices: d.size_prices.filter((sp) => categories.includes(sp.category) && sp.price > 0 && text.replace(/[,\s]/g, "").includes(String(Math.round(sp.price)))),
+      gst_rate: d.gst_rate !== null && [0, 0.25, 3, 5, 12, 18, 28].includes(d.gst_rate) && /gst|tax/i.test(text) ? d.gst_rate : null,
+      hsn_code: /^[0-9]{4,8}$/.test(d.hsn_code.trim()) && text.includes(d.hsn_code.trim()) ? d.hsn_code.trim() : "",
       variant_types: d.variant_types.filter((vt) => vt.name.trim() && vt.values.filter((v) => v.trim()).length >= 2),
       brand: brands.includes(d.brand) ? d.brand : "",
       age_group: UNKNOWN.test(d.age_group.trim()) ? "" : d.age_group,

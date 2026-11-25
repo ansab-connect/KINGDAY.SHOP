@@ -15,7 +15,8 @@ import { newVariantRow, nextKey, VariantEditor, type VariantRow } from "@/compon
 import { valuesFromOptions } from "@/features/catalog/variant-types";
 import { applySizes, hasSizeType, isSizeType, removeSizes, sizeLabel, type SizeCategory } from "@/features/catalog/size-pricing";
 import { FormSection, FormStatus, inputClass, SelectField, SwitchField, TextAreaField, TextField } from "@/components/admin/form/fields";
-import { deleteProduct, duplicateProduct, saveProduct } from "@/features/catalog/admin-actions";
+import { deleteProduct, duplicateProduct, getImagePool, removeUnusedPoolImages, saveProduct } from "@/features/catalog/admin-actions";
+import { POOL_REFRESH_EVENT } from "@/components/admin/catalog/image-pool";
 import type { ProductFill } from "@/features/catalog/smart-fill";
 import type { AdminProduct } from "@/features/catalog/admin-repo";
 import { paiseToRupees, slugify } from "@/features/catalog/schemas";
@@ -68,6 +69,8 @@ export function ProductEditor({
     prepaid_discount_pct: String(product?.prepaid_discount_pct ?? 0),
     cod_discount_pct: String(product?.cod_discount_pct ?? 0),
     seo_title: product?.seo_title ?? "",
+    gst_rate: product?.gst_rate === null || product?.gst_rate === undefined ? "" : String(product.gst_rate),
+    hsn_code: product?.hsn_code ?? "",
     seo_description: product?.seo_description ?? "",
     video_path: product?.video_path ?? null,
     video_link: product?.video_link ?? "",
@@ -198,6 +201,21 @@ export function ProductEditor({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     start(async () => {
+      // Temporary gallery: photos not assigned to any variant (or the shared images) are
+      // deleted automatically when the product is saved. Ask first, so nothing is lost by mistake.
+      let cleanUp = false;
+      if (product) {
+        const pool = await getImagePool(product.id);
+        const assigned = new Set(product.images.map((i) => i.storage_path));
+        const unused = pool.ok ? pool.data.filter((f) => !assigned.has(f.path)).length : 0;
+        if (unused) {
+          const go = window.confirm(
+            `${unused} photo${unused === 1 ? " is" : "s are"} in the temporary gallery but not selected for any variant. ${unused === 1 ? "It" : "They"} will be deleted when you save.\n\nOK = save and delete ${unused === 1 ? "it" : "them"}.\nCancel = go back and use “Select Images” first.`,
+          );
+          if (!go) return;
+          cleanUp = true;
+        }
+      }
       const r = await saveProduct({
         ...basics,
         id: product?.id ?? null,
@@ -222,6 +240,10 @@ export function ProductEditor({
           is_default: v.is_default,
         })),
       });
+      if (r.ok && cleanUp && product) {
+        await removeUnusedPoolImages(product.id);
+        window.dispatchEvent(new Event(POOL_REFRESH_EVENT));
+      }
       if (r.ok) {
         setErrors({});
         setStatus({ kind: "success", text: product ? (r.message ?? "Product saved.") : "Product created. You can now add images." });
@@ -253,6 +275,8 @@ export function ProductEditor({
       put("short_description", d.short_description.slice(0, 300), "short description");
       put("description", d.description.slice(0, 10000), "description");
       put("seo_title", d.seo_title.slice(0, 70), "SEO title");
+      if (d.gst_rate !== null) put("gst_rate", String(d.gst_rate), "GST");
+      put("hsn_code", d.hsn_code, "HSN");
       put("seo_description", d.seo_description.slice(0, 170), "SEO description");
       if (d.name && !slugTouched) next.slug = slugify(d.name);
       return next;
@@ -345,203 +369,264 @@ export function ProductEditor({
         <AiFillPanel categories={categories.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent_id ?? null }))} brands={brands} onFill={applyAi} aiEnabled={aiEnabled} />
         <FormStatus status={status} />
 
-        <FormSection title="Basics">
-          <TextField
-            id="p-name"
-            label="Product name"
-            required
-            maxLength={160}
-            value={basics.name}
-            error={errors.name}
-            onChange={(name) => setBasics((p) => ({ ...p, name, slug: slugTouched ? p.slug : slugify(name) }))}
-          />
-          <TextField
-            id="p-slug"
-            label="URL slug"
-            value={basics.slug}
-            error={errors.slug}
-            hint={`www.kingday.in/products/${basics.slug || "…"}`}
-            onChange={(slug) => {
-              setSlugTouched(true);
-              setB("slug", slug);
-            }}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField id="p-category" label="Category" required value={basics.category_id} error={errors.category_id} placeholder="Choose a category" options={categoryOptions} onChange={(v) => changeCategories(v, basics.extra_category_ids)} />
-            <SelectField id="p-brand" label="Brand" value={basics.brand_id} error={errors.brand_id} placeholder="No brand" options={brands.map((b) => ({ value: b.id, label: b.name }))} onChange={(v) => setB("brand_id", v)} />
-          </div>
-          <ExtraCategoriesField
-            options={categoryOptions}
-            names={new Map(categories.map((c) => [c.id, c.name]))}
-            mainId={basics.category_id}
-            value={basics.extra_category_ids}
-            error={errors.extra_category_ids}
-            onChange={(v) => changeCategories(basics.category_id, v)}
-          />
-          {sizes.length >= 2 || sizeOn ? (
-            <SizePricing
-              on={sizeOn}
-              onToggle={setSizeVariation}
-              sizes={sizes}
-              sizeType={variantTypes.find(isSizeType) ?? "Size"}
-              rows={variants}
-              onRowsChange={setVariants}
+        <div id="sec-basic" className="scroll-mt-24">
+          <FormSection title="1. Basic info" description="What the product is called and who makes it.">
+            <TextField
+              id="p-name"
+              label="Product name"
+              required
+              maxLength={160}
+              value={basics.name}
+              error={errors.name}
+              onChange={(name) => setBasics((p) => ({ ...p, name, slug: slugTouched ? p.slug : slugify(name) }))}
             />
-          ) : null}
-          <TextField id="p-age" label="Recommended age" placeholder="e.g. 3–8 years" maxLength={40} value={basics.age_range} error={errors.age_range} onChange={(v) => setB("age_range", v)} />
-          <TextAreaField id="p-short" label="Short description" rows={2} maxLength={300} hint="Shown near the price and in search results." value={basics.short_description} error={errors.short_description} onChange={(v) => setB("short_description", v)} />
-          {aiEnabled ? <AiWriteButtons value={basics.short_description} onChange={(v) => setB("short_description", v.slice(0, 300))} productName={basics.name} only={["improve", "shorten", "malayalam"]} /> : null}
-          <TextAreaField
-            id="p-desc"
-            label="Medium description"
-            rows={5}
-            maxLength={mediumMax}
-            hint="2–4 short paragraphs (about 100–250 words). Shown in the Description section of the product page."
-            value={basics.description}
-            error={errors.description}
-            onChange={(v) => setB("description", v)}
-          />
-          {aiEnabled ? <AiWriteButtons value={basics.description} onChange={(v) => setB("description", v.slice(0, mediumMax))} productName={basics.name} /> : null}
-        </FormSection>
-
-        <FormSection
-          title="Temporary Bulk Image Upload"
-          description="Upload all photos at once, then open each variant and press “Select Images”. One image can be used by several variants. When done, remove the images you didn't use."
-        >
-          {product ? (
-            <TemporaryImageGallery />
-          ) : (
-            <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then upload images.</p>
-          )}
-        </FormSection>
-
-        <FormSection title="Variants, pricing & SKUs" description="Each variant (or each combination, e.g. Size + Colour) has its own SKU, price, stock, specifications and images.">
-          <VariantEditor
-            enabled={variantsOn}
-            onEnabledChange={(on) => {
-              setVariantsOn(on);
-              if (!on) {
-                // Each combination stays as a simple variant, named after its values.
-                setVariants((rows) => rows.map((r) => ({ ...r, colour: r.colour || variantTypes.map((t) => r.values[t]).filter(Boolean).join(" · ") })));
-                setVariantTypes([]);
-              }
-            }}
-            types={variantTypes}
-            onTypesChange={setVariantTypes}
-            rows={variants}
-            onRowsChange={setVariants}
-            optionTypes={optionTypes}
-            errors={errors}
-            product={product ? { id: product.id, name: basics.name, images: product.images } : null}
-            onSuggestSku={suggestSku}
-            categoryOptions={categoryOptions}
-          />
-        </FormSection>
-
-        <FormSection
-          title={types.length ? "Shared images" : "Images"}
-          description={types.length ? "Optional. Shown only for variants that have no images of their own. Add images per variant above." : undefined}
-        >
-          {product ? <SelectImagesButton variantId={null} label="shared images" className="w-fit" /> : null}
-          {product ? (
-            <ProductImages
-              key={product.images.filter((i) => !i.variant_id).map((i) => i.id).join(",")}
-              productId={product.id}
-              productName={basics.name}
-              images={product.images}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SelectField id="p-brand" label="Brand" value={basics.brand_id} error={errors.brand_id} placeholder="No brand" options={brands.map((b) => ({ value: b.id, label: b.name }))} onChange={(v) => setB("brand_id", v)} />
+              <TextField id="p-age" label="Recommended age" placeholder="e.g. 3–8 years" maxLength={40} value={basics.age_range} error={errors.age_range} onChange={(v) => setB("age_range", v)} />
+            </div>
+            <TextField
+              id="p-slug"
+              label="URL slug"
+              value={basics.slug}
+              error={errors.slug}
+              hint={`www.kingday.in/products/${basics.slug || "…"}`}
+              onChange={(slug) => {
+                setSlugTouched(true);
+                setB("slug", slug);
+              }}
             />
-          ) : (
-            <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then add images.</p>
-          )}
-        </FormSection>
-        <details className="group rounded-2xl border bg-white">
-          <summary className="cursor-pointer list-none px-5 py-4 font-heading text-base font-semibold text-deep">More details (optional): highlights, specifications, video, search listing</summary>
-          <div className="flex flex-col gap-6 border-t p-4 sm:p-5">
-        <FormSection title="Highlights" description="Short selling points shown as a checklist.">
-          {highlights.map((h, i) => (
-            <div key={i} className="flex gap-2">
-              <label htmlFor={`p-hl-${i}`} className="sr-only">Highlight {i + 1}</label>
-              <input id={`p-hl-${i}`} value={h} maxLength={120} placeholder="e.g. Parental remote control" onChange={(e) => setHighlights((list) => list.map((x, j) => (j === i ? e.target.value : x)))} className={inputClass} />
-              <button type="button" aria-label="Remove highlight" onClick={() => setHighlights((list) => (list.length > 1 ? list.filter((_, j) => j !== i) : [""]))} className="grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
-                <X className="size-4" />
-              </button>
-            </div>
-          ))}
-          {highlights.length < 12 ? (
-            <button type="button" onClick={() => setHighlights((l) => [...l, ""])} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-royal hover:underline">
-              <Plus aria-hidden className="size-4" /> Add highlight
-            </button>
-          ) : null}
-          {errors.highlights ? <p className="text-xs text-danger">{errors.highlights}</p> : null}
-        </FormSection>
-        <FormSection title="Specifications" description="Shown as a table on the product page.">
-          {attributes.map((a, i) => (
-            <div key={a.key} className="grid grid-cols-[1fr_1.4fr_auto] gap-2">
-              <label htmlFor={`a-name-${i}`} className="sr-only">Specification name</label>
-              <input id={`a-name-${i}`} value={a.name} placeholder="e.g. Battery" maxLength={60} aria-invalid={Boolean(errors[`attributes.${i}.name`])} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, name: e.target.value } : x)))} className={inputClass} />
-              <label htmlFor={`a-value-${i}`} className="sr-only">Specification value</label>
-              <input id={`a-value-${i}`} value={a.value} placeholder="e.g. 12V 7Ah" maxLength={200} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, value: e.target.value } : x)))} className={inputClass} />
-              <button type="button" aria-label="Remove specification" onClick={() => setAttributes((l) => (l.length > 1 ? l.filter((x) => x.key !== a.key) : [{ key: nextKey(), name: "", value: "" }]))} className="grid size-10 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
-                <X className="size-4" />
-              </button>
-            </div>
-          ))}
-          <button type="button" onClick={() => setAttributes((l) => [...l, { key: nextKey(), name: "", value: "" }])} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-royal hover:underline">
-            <Plus aria-hidden className="size-4" /> Add specification
-          </button>
-        </FormSection>
-        <FormSection title="Instagram / YouTube video" description="Optional. Paste the reel or video link; it shows in the product photos with its cover image.">
-          <TextField
-            id="p-video-link"
-            label="Video link"
-            placeholder="https://www.instagram.com/reel/... or https://youtu.be/..."
-            maxLength={300}
-            value={basics.video_link}
-            error={errors.video_link ?? (basics.video_link && !linkVideo ? "Paste an Instagram reel or YouTube video link." : undefined)}
-            onChange={(v) => setB("video_link", v.trim())}
-          />
-          {linkVideo ? (
-            <a href={linkVideo.url} target="_blank" rel="noopener noreferrer" className="flex w-fit items-center gap-3 rounded-xl border p-2 pr-4 text-sm font-medium text-deep hover:bg-muted">
-              {linkVideo.kind === "youtube" ? (
-                // eslint-disable-next-line @next/next/no-img-element -- YouTube cover preview
-                <img src={linkVideo.thumb} alt="" className="h-14 w-20 rounded-lg object-cover" />
-              ) : (
-                <span className="grid h-14 w-20 place-items-center rounded-lg bg-gradient-to-br from-[#f58529] via-[#dd2a7b] to-[#8134af] text-xs font-bold text-white">Reel</span>
-              )}
-              {linkVideo.kind === "youtube" ? "YouTube video found" : "Instagram reel found"} · open
-            </a>
-          ) : null}
-        </FormSection>
-        <FormSection title="Product video" description="Optional. MP4 or WebM, up to 50 MB.">
-          {product ? (
-            <div className="flex flex-col gap-3">
-              {videoUrl ? <video src={videoUrl} controls preload="metadata" className="aspect-video w-full max-w-md rounded-xl bg-deep" /> : null}
-              <div className="flex flex-wrap gap-2">
-                <input id="p-video" type="file" accept="video/mp4,video/webm" className="sr-only" disabled={videoBusy || !isSupabaseConfigured} onChange={(e) => e.target.files?.[0] && uploadVideo(e.target.files[0])} />
-                <label htmlFor="p-video" aria-disabled={videoBusy || !isSupabaseConfigured} className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-medium text-deep hover:bg-muted aria-disabled:cursor-not-allowed aria-disabled:opacity-50">
-                  {videoBusy ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Film aria-hidden className="size-4" />}
-                  {basics.video_path ? "Replace video" : "Upload video"}
-                </label>
-                {basics.video_path ? (
-                  <button type="button" onClick={() => setB("video_path", null)} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-danger hover:bg-danger-soft">
-                    <Trash2 aria-hidden className="size-4" /> Remove
-                  </button>
+          </FormSection>
+        </div>
+
+        <div id="sec-categories" className="scroll-mt-24">
+          <FormSection title="2. Categories" description="Where the product shows in the store. Add more categories to list it in several places (e.g. 24″, 26″, 27.5″).">
+            <SelectField id="p-category" label="Main category" required value={basics.category_id} error={errors.category_id} placeholder="Choose a category" options={categoryOptions} onChange={(v) => changeCategories(v, basics.extra_category_ids)} />
+            <ExtraCategoriesField
+              options={categoryOptions}
+              names={new Map(categories.map((c) => [c.id, c.name]))}
+              mainId={basics.category_id}
+              value={basics.extra_category_ids}
+              error={errors.extra_category_ids}
+              onChange={(v) => changeCategories(basics.category_id, v)}
+            />
+            {sizes.length >= 2 || sizeOn ? (
+              <SizePricing
+                on={sizeOn}
+                onToggle={setSizeVariation}
+                sizes={sizes}
+                sizeType={variantTypes.find(isSizeType) ?? "Size"}
+                rows={variants}
+                onRowsChange={setVariants}
+              />
+            ) : null}
+          </FormSection>
+        </div>
+
+        <div id="sec-photos" className="scroll-mt-24">
+          <FormSection
+            title="3. Photos & video"
+            description="Upload all photos at once, then give each variant its photos with “Select Images” (in section 4). Main photos show when a variant has none. Photos you don't select are deleted automatically when you save."
+          >
+            {product ? (
+              <>
+                <TemporaryImageGallery />
+                <div className="mt-2 border-t pt-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-deep">Main product photos</p>
+                    <SelectImagesButton variantId={null} label="main product photos" className="w-fit" />
+                  </div>
+                  <ProductImages
+                    key={product.images.filter((i) => !i.variant_id).map((i) => i.id).join(",")}
+                    productId={product.id}
+                    productName={basics.name}
+                    images={product.images}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first (Create product), then add photos.</p>
+            )}
+            <div className="mt-2 grid gap-4 border-t pt-4 lg:grid-cols-2">
+              <div className="flex flex-col gap-3">
+                <TextField
+                  id="p-video-link"
+                  label="Instagram / YouTube video link (optional)"
+                  placeholder="https://www.instagram.com/reel/... or https://youtu.be/..."
+                  maxLength={300}
+                  value={basics.video_link}
+                  error={errors.video_link ?? (basics.video_link && !linkVideo ? "Paste an Instagram reel or YouTube video link." : undefined)}
+                  onChange={(v) => setB("video_link", v.trim())}
+                />
+                {linkVideo ? (
+                  <a href={linkVideo.url} target="_blank" rel="noopener noreferrer" className="flex w-fit items-center gap-3 rounded-xl border p-2 pr-4 text-sm font-medium text-deep hover:bg-muted">
+                    {linkVideo.kind === "youtube" ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- YouTube cover preview
+                      <img src={linkVideo.thumb} alt="" className="h-14 w-20 rounded-lg object-cover" />
+                    ) : (
+                      <span className="grid h-14 w-20 place-items-center rounded-lg bg-gradient-to-br from-[#f58529] via-[#dd2a7b] to-[#8134af] text-xs font-bold text-white">Reel</span>
+                    )}
+                    {linkVideo.kind === "youtube" ? "YouTube video found" : "Instagram reel found"} · open
+                  </a>
                 ) : null}
               </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium text-deep">Product video file (optional, MP4/WebM up to 50 MB)</p>
+                {product ? (
+                  <div className="flex flex-col gap-3">
+                    {videoUrl ? <video src={videoUrl} controls preload="metadata" className="aspect-video w-full max-w-md rounded-xl bg-deep" /> : null}
+                    <div className="flex flex-wrap gap-2">
+                      <input id="p-video" type="file" accept="video/mp4,video/webm" className="sr-only" disabled={videoBusy || !isSupabaseConfigured} onChange={(e) => e.target.files?.[0] && uploadVideo(e.target.files[0])} />
+                      <label htmlFor="p-video" aria-disabled={videoBusy || !isSupabaseConfigured} className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-medium text-deep hover:bg-muted aria-disabled:cursor-not-allowed aria-disabled:opacity-50">
+                        {videoBusy ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Film aria-hidden className="size-4" />}
+                        {basics.video_path ? "Replace video" : "Upload video"}
+                      </label>
+                      {basics.video_path ? (
+                        <button type="button" onClick={() => setB("video_path", null)} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-danger hover:bg-danger-soft">
+                          <Trash2 aria-hidden className="size-4" /> Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first.</p>
+                )}
+              </div>
             </div>
-          ) : (
-            <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">Save the product first, then add a video.</p>
-          )}
-        </FormSection>
-        <FormSection title="Search engine listing" description="Optional. Defaults to the product name and short description.">
-          <TextField id="p-seo-title" label="SEO title" maxLength={70} value={basics.seo_title} error={errors.seo_title} onChange={(v) => setB("seo_title", v)} />
-          <TextAreaField id="p-seo-desc" label="SEO description" rows={2} maxLength={170} value={basics.seo_description} error={errors.seo_description} onChange={(v) => setB("seo_description", v)} />
-        </FormSection>
-          </div>
-        </details>
+          </FormSection>
+        </div>
+
+        <div id="sec-variants" className="scroll-mt-24">
+          <FormSection title="4. Variants, price & stock" description="Each variant (e.g. Single Speed • Red) has its own SKU, MRP, selling price, stock and photos. Stock can also be added later through Purchases.">
+            <VariantEditor
+              enabled={variantsOn}
+              onEnabledChange={(on) => {
+                setVariantsOn(on);
+                if (!on) {
+                  // Each combination stays as a simple variant, named after its values.
+                  setVariants((rows) => rows.map((r) => ({ ...r, colour: r.colour || variantTypes.map((t) => r.values[t]).filter(Boolean).join(" · ") })));
+                  setVariantTypes([]);
+                }
+              }}
+              types={variantTypes}
+              onTypesChange={setVariantTypes}
+              rows={variants}
+              onRowsChange={setVariants}
+              optionTypes={optionTypes}
+              errors={errors}
+              product={product ? { id: product.id, name: basics.name, images: product.images } : null}
+              onSuggestSku={suggestSku}
+              categoryOptions={categoryOptions}
+            />
+          </FormSection>
+        </div>
+
+        <div id="sec-tax" className="scroll-mt-24">
+          <FormSection title="5. Tax (GST)" description="Selling prices include GST. These are used to show the GST part on bills and in reports. Optional; publishing doesn't need them.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SelectField
+                id="p-gst"
+                label="GST rate"
+                value={basics.gst_rate}
+                error={errors.gst_rate}
+                placeholder="Not set"
+                options={[0, 5, 12, 18, 28, 3, 0.25].map((r) => ({ value: String(r), label: `${r}%` }))}
+                onChange={(v) => setB("gst_rate", v)}
+              />
+              <TextField id="p-hsn" label="HSN code" placeholder="e.g. 87120010 (bicycles)" maxLength={8} inputMode="numeric" value={basics.hsn_code} error={errors.hsn_code} onChange={(v) => setB("hsn_code", v.replace(/[^\d]/g, ""))} />
+            </div>
+            {basics.gst_rate && Number(variants.find((v) => v.is_default)?.price ?? variants[0]?.price) > 0 ? (
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                {(() => {
+                  const price = Number(variants.find((v) => v.is_default)?.price ?? variants[0]?.price);
+                  const rate = Number(basics.gst_rate);
+                  const gst = price - price / (1 + rate / 100);
+                  return `At ₹${price.toLocaleString("en-IN")}: price before GST ₹${(price - gst).toLocaleString("en-IN", { maximumFractionDigits: 2 })} + GST ₹${gst.toLocaleString("en-IN", { maximumFractionDigits: 2 })} (${rate}%).`;
+                })()}
+              </p>
+            ) : null}
+          </FormSection>
+        </div>
+
+        <div id="sec-description" className="scroll-mt-24">
+          <FormSection title="6. Description" description="What customers read on the product page. Each part should say something new (no repeats).">
+            <TextAreaField id="p-short" label="Short description" rows={2} maxLength={300} hint="1–2 sentences, shown near the price and in search results." value={basics.short_description} error={errors.short_description} onChange={(v) => setB("short_description", v)} />
+            {aiEnabled ? <AiWriteButtons value={basics.short_description} onChange={(v) => setB("short_description", v.slice(0, 300))} productName={basics.name} only={["improve", "shorten", "malayalam"]} /> : null}
+            <TextAreaField
+              id="p-desc"
+              label="Medium description"
+              rows={5}
+              maxLength={mediumMax}
+              hint="2–4 short paragraphs (about 100–250 words). Shown in the Description section of the product page."
+              value={basics.description}
+              error={errors.description}
+              onChange={(v) => setB("description", v)}
+            />
+            {aiEnabled ? <AiWriteButtons value={basics.description} onChange={(v) => setB("description", v.slice(0, mediumMax))} productName={basics.name} /> : null}
+            <div className="flex flex-col gap-2 border-t pt-4">
+              <p className="text-sm font-medium text-deep">Highlights <span className="font-normal text-muted-foreground">(short selling points, shown as a checklist)</span></p>
+              {highlights.map((h, i) => (
+                <div key={i} className="flex gap-2">
+                  <label htmlFor={`p-hl-${i}`} className="sr-only">Highlight {i + 1}</label>
+                  <input id={`p-hl-${i}`} value={h} maxLength={120} placeholder="e.g. Parental remote control" onChange={(e) => setHighlights((list) => list.map((x, j) => (j === i ? e.target.value : x)))} className={inputClass} />
+                  <button type="button" aria-label="Remove highlight" onClick={() => setHighlights((list) => (list.length > 1 ? list.filter((_, j) => j !== i) : [""]))} className="grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))}
+              {highlights.length < 12 ? (
+                <button type="button" onClick={() => setHighlights((l) => [...l, ""])} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-royal hover:underline">
+                  <Plus aria-hidden className="size-4" /> Add highlight
+                </button>
+              ) : null}
+              {errors.highlights ? <p className="text-xs text-danger">{errors.highlights}</p> : null}
+            </div>
+            <div className="flex flex-col gap-2 border-t pt-4">
+              <p className="text-sm font-medium text-deep">Specifications <span className="font-normal text-muted-foreground">(shown as a table)</span></p>
+              {attributes.map((a, i) => (
+                <div key={a.key} className="grid grid-cols-[1fr_1.4fr_auto] gap-2">
+                  <label htmlFor={`a-name-${i}`} className="sr-only">Specification name</label>
+                  <input id={`a-name-${i}`} value={a.name} placeholder="e.g. Battery" maxLength={60} aria-invalid={Boolean(errors[`attributes.${i}.name`])} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, name: e.target.value } : x)))} className={inputClass} />
+                  <label htmlFor={`a-value-${i}`} className="sr-only">Specification value</label>
+                  <input id={`a-value-${i}`} value={a.value} placeholder="e.g. 12V 7Ah" maxLength={200} onChange={(e) => setAttributes((l) => l.map((x) => (x.key === a.key ? { ...x, value: e.target.value } : x)))} className={inputClass} />
+                  <button type="button" aria-label="Remove specification" onClick={() => setAttributes((l) => (l.length > 1 ? l.filter((x) => x.key !== a.key) : [{ key: nextKey(), name: "", value: "" }]))} className="grid size-10 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setAttributes((l) => [...l, { key: nextKey(), name: "", value: "" }])} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-royal hover:underline">
+                <Plus aria-hidden className="size-4" /> Add specification
+              </button>
+            </div>
+          </FormSection>
+        </div>
+
+        <div id="sec-seo" className="scroll-mt-24">
+          <FormSection title="7. Search listing (Google)" description="Optional. Leave empty to use the product name and short description.">
+            <TextField id="p-seo-title" label="SEO title" maxLength={70} value={basics.seo_title} error={errors.seo_title} onChange={(v) => setB("seo_title", v)} />
+            <TextAreaField id="p-seo-desc" label="SEO description" rows={2} maxLength={170} value={basics.seo_description} error={errors.seo_description} onChange={(v) => setB("seo_description", v)} />
+          </FormSection>
+        </div>
       </div>
 
       <aside className="flex flex-col gap-6 xl:sticky xl:top-24 xl:self-start">
+        <SectionNav
+          items={[
+            { id: "sec-basic", label: "Basic info", done: Boolean(basics.name.trim()) },
+            { id: "sec-categories", label: "Categories", done: Boolean(basics.category_id) },
+            { id: "sec-photos", label: "Photos & video", done: Boolean(product?.images.length) },
+            { id: "sec-variants", label: "Variants, price & stock", done: variants.every((v) => v.sku && Number(v.price) > 0) },
+            { id: "sec-tax", label: "Tax (GST)", done: Boolean(basics.gst_rate && basics.hsn_code) },
+            { id: "sec-description", label: "Description", done: Boolean(basics.short_description.trim()) },
+            { id: "sec-seo", label: "Search listing", done: Boolean(basics.seo_title || basics.short_description) },
+          ]}
+          errorIds={[
+            ...(errors.name || errors.slug || errors.brand_id ? ["sec-basic"] : []),
+            ...(errors.category_id || errors.extra_category_ids ? ["sec-categories"] : []),
+            ...(Object.keys(errors).some((k) => k.startsWith("variants") || k.startsWith("variant_types")) ? ["sec-variants"] : []),
+            ...(errors.gst_rate || errors.hsn_code ? ["sec-tax"] : []),
+            ...(errors.short_description || errors.description || errors.highlights ? ["sec-description"] : []),
+          ]}
+        />
         <FormSection title="Status">
           <SelectField
             id="p-status"
@@ -801,5 +886,37 @@ function DuplicateButton({ productId, dirty }: { productId: string; dirty: boole
       </button>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
     </div>
+  );
+}
+
+/** Right-hand list of the form's sections: jump to one; ✓ when filled, ! when it has an error. */
+function SectionNav({ items, errorIds }: { items: { id: string; label: string; done: boolean }[]; errorIds: string[] }) {
+  return (
+    <nav aria-label="Form sections" className="hidden rounded-2xl border bg-white p-3 shadow-card xl:block">
+      <p className="px-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Sections</p>
+      <ol className="flex flex-col">
+        {items.map((it, i) => {
+          const bad = errorIds.includes(it.id);
+          return (
+            <li key={it.id}>
+              <a href={`#${it.id}`} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-deep hover:bg-royal-50">
+                <span
+                  className={
+                    bad
+                      ? "grid size-5 place-items-center rounded-full bg-danger text-[0.65rem] font-bold text-white"
+                      : it.done
+                        ? "grid size-5 place-items-center rounded-full bg-success text-[0.65rem] font-bold text-white"
+                        : "grid size-5 place-items-center rounded-full border text-[0.65rem] font-semibold text-muted-foreground"
+                  }
+                >
+                  {bad ? "!" : it.done ? "✓" : i + 1}
+                </span>
+                {it.label}
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }

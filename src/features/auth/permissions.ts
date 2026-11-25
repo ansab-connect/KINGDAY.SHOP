@@ -27,6 +27,8 @@ export const MODULES = [
   { key: "spare_parts", label: "Spare Parts" },
   { key: "billing", label: "Service Billing" },
   { key: "password_resets", label: "Password Resets" },
+  { key: "purchases", label: "Purchases" },
+  { key: "expenses", label: "Expenses" },
 ] as const;
 
 export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export"] as const;
@@ -60,6 +62,7 @@ export const ROLE_DEFAULTS: Record<string, Permissions> = {
     analytics: ["view"],
     reports: ["view"],
     spare_parts: ["view"],
+    purchases: ["view", "create"],
   },
   service_staff: { service: ["view", "edit"], spare_parts: ["view"] },
 };

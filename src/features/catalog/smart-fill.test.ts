@@ -135,3 +135,11 @@ Speed Type: Single Speed, Multi Speed
     expect(d.highlights).toEqual(["Disc brakes"]);
   });
 });
+
+describe("smart fill: tax", () => {
+  it("reads GST % and HSN code only when written", () => {
+    const d = smartFill("Hero Sprint\nGST: 12%\nHSN Code: 87120010", [], []);
+    expect([d.gst_rate, d.hsn_code]).toEqual([12, "87120010"]);
+    expect(smartFill("Hero Sprint\nA good bike.", [], []).gst_rate).toBeNull();
+  });
+});

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from "next/navigation";
 import { Dialog } from "radix-ui";
 import { Check, Eye, ImagePlus, Images, Loader2, Trash2, X } from "lucide-react";
-import { assignVariantImages, getImagePool, removeUnusedPoolImages, type PoolImage } from "@/features/catalog/admin-actions";
+import { assignVariantImages, getImagePool, type PoolImage } from "@/features/catalog/admin-actions";
 import type { AdminProductImage } from "@/features/catalog/admin-repo";
 import { GALLERY_MAX } from "@/features/catalog/image-pool";
 import { ACCEPTED_IMAGE_TYPES, optimizeImage, randomFileId } from "@/lib/image-optimize";
@@ -30,6 +30,9 @@ type Pool = {
   galleryOf: (variantId: string | null) => AdminProductImage[];
   refresh: () => Promise<void>;
 };
+
+/** Fired after the editor removed unused photos, so the gallery reloads. */
+export const POOL_REFRESH_EVENT = "kd-image-pool-refresh";
 
 const PoolContext = createContext<Pool | null>(null);
 export const useImagePool = () => useContext(PoolContext);
@@ -66,8 +69,13 @@ export function ImagePoolProvider({
       if (r.ok) setFiles(r.data);
       setLoading(false);
     });
+    const reload = () => {
+      getImagePool(productId).then((r) => live && r.ok && setFiles(r.data));
+    };
+    window.addEventListener(POOL_REFRESH_EVENT, reload);
     return () => {
       live = false;
+      window.removeEventListener(POOL_REFRESH_EVENT, reload);
     };
   }, [productId]);
 
@@ -97,12 +105,10 @@ export function ImagePoolProvider({
 /** The "Temporary Bulk Image Upload" section. */
 export function TemporaryImageGallery() {
   const pool = useImagePool();
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [pending, start] = useTransition();
   if (!pool) return null;
   const { files, usage, loading, productId } = pool;
   const unused = files.filter((f) => !usage.has(f.path));
@@ -136,17 +142,6 @@ export function TemporaryImageGallery() {
     );
   }
 
-  function cleanUp() {
-    if (!unused.length) return;
-    if (!window.confirm(`Delete ${unused.length} unused image${unused.length === 1 ? "" : "s"}? Images assigned to a variant or the shared gallery are kept.`)) return;
-    start(async () => {
-      const r = await removeUnusedPoolImages(productId);
-      setNote(r.ok ? { kind: "success", text: r.message ?? "Done." } : { kind: "error", text: r.error });
-      await pool!.refresh();
-      router.refresh();
-    });
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -173,15 +168,11 @@ export function TemporaryImageGallery() {
         <span className="text-sm text-muted-foreground">
           {files.length} image{files.length === 1 ? "" : "s"} · {unused.length} not assigned
         </span>
-        <button
-          type="button"
-          onClick={cleanUp}
-          disabled={!unused.length || pending}
-          className="ml-auto inline-flex h-10 items-center gap-2 rounded-lg border border-danger/40 px-3 text-sm font-semibold text-danger hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Trash2 aria-hidden className="size-4" />}
-          Remove Unused Temporary Images
-        </button>
+        {unused.length ? (
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-gold-50 px-3 py-2 text-xs font-medium text-gold-700">
+            <Trash2 aria-hidden className="size-3.5" /> Not selected photos are deleted automatically when you save
+          </span>
+        ) : null}
       </div>
       {note ? <p role="status" className={cn("rounded-lg px-3 py-2 text-sm", note.kind === "error" ? "bg-danger-soft text-danger" : "bg-success-soft text-success")}>{note.text}</p> : null}
 

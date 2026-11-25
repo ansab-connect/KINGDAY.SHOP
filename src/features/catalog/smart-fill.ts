@@ -19,6 +19,9 @@ export type ProductFill = {
   size_prices: { category_id: string; mrp: number; price: number; stock: number | null }[];
   /** Variant types with their values, e.g. Speed Type: Single Speed, Multi Speed. */
   variant_types: { name: string; values: string[] }[];
+  /** GST % and HSN code, only when written in the text. */
+  gst_rate: number | null;
+  hsn_code: string;
   seo_title: string;
   seo_description: string;
   /** Key specs Smart fill looked for but did not find (shown as "Not provided"; never guessed). */
@@ -330,6 +333,12 @@ export function smartFill(raw: string, categories: Option[], brands: Option[]): 
     specifications: specifications.slice(0, 40),
     variants: variants.slice(0, 20),
     extra_category_ids: sizeCats.filter((c) => c !== mainCategory),
+    gst_rate: (() => {
+      const m = text.match(/\b(?:gst|igst|tax)\s*(?:rate)?\s*(?:@|:|-|=)?\s*(\d{1,2}(?:\.\d{1,2})?)\s*%/i);
+      const r = m ? Number(m[1]) : NaN;
+      return [0, 0.25, 3, 5, 12, 18, 28].includes(r) ? r : null;
+    })(),
+    hsn_code: text.match(/\bhsn(?:\s*code)?\s*(?:no\.?)?\s*[:\-=]?\s*(\d{4,8})\b/i)?.[1] ?? "",
     size_prices: sizePrices.map(({ category_id: c, mrp: m, price: pr, stock }) => ({ category_id: c, mrp: m, price: pr, stock })),
     variant_types: [...variantTypes.map(({ name: n, values }) => ({ name: n, values })), ...(colours.length >= 2 ? [{ name: "Colour", values: colours }] : [])],
     seo_title: cut(name, 60),

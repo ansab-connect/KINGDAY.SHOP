@@ -573,8 +573,9 @@ await test("only public settings are visible to customers", async () => {
   const keys = (await rows(`select key from public.store_settings`)).map((r) => r.key);
   assert(keys.includes("store.name") && !keys.includes("checkout.cod_max_order_value"), `anon keys ${keys}`);
 });
-await test("suppliers are admin-only", async () => {
-  await user(staff);
+await test("suppliers: customers can't add them; admins can", async () => {
+  // Staff who record purchases may add suppliers since 0039 (purchases.create).
+  await user(alice);
   await expectError(`insert into public.suppliers (name) values ('Acme Toys')`, [], /row-level security/);
   await user(superAdmin);
   await db.query(`insert into public.suppliers (name) values ('Acme Toys')`);
@@ -1604,6 +1605,47 @@ await test("product_categories: a category can point at one variant of the produ
   await anon();
   const [r] = await rows(`select variant_id from public.product_categories where product_id = $1 and category_id = $2`, [productId, pc.category_id]);
   assert(r.variant_id === v.id, "anon can't read the variant link");
+});
+
+console.log("Tax, purchases and expenses (0039)");
+await test("products take a GST rate and HSN code; bad values are refused", async () => {
+  await user(superAdmin);
+  assert((await rows(`update public.products set gst_rate = 12, hsn_code = '87120010' where id = $1 returning id`, [productId])).length === 1, "gst not saved");
+  await expectError(`update public.products set gst_rate = 7 where id = $1`, [productId], /check/);
+  await expectError(`update public.products set hsn_code = 'AB12' where id = $1`, [productId], /check/);
+});
+await test("a purchase bill adds stock and computes totals", async () => {
+  await user(superAdmin);
+  const before = (await rows(`select on_hand from public.inventory where variant_id = $1`, [variantId]))[0].on_hand;
+  const [{ record_purchase_bill: billId }] = await rows(`select public.record_purchase_bill($1::jsonb)`, [
+    JSON.stringify({ supplier_name: "Hero Distributors", supplier_bill_no: "INV-77", items: [
+      { variant_id: variantId, description: "Test Jeep Red", quantity: 3, unit_cost_paise: 1000000, gst_rate: 12 },
+      { description: "Packing material", quantity: 1, unit_cost_paise: 50000, gst_rate: 18 },
+    ] }),
+  ]);
+  const after = (await rows(`select on_hand from public.inventory where variant_id = $1`, [variantId]))[0].on_hand;
+  assert(after === before + 3, `stock ${before} -> ${after}`);
+  const [b] = await rows(`select subtotal_paise, tax_paise, total_paise, bill_number from public.purchase_bills where id = $1`, [billId]);
+  assert(Number(b.subtotal_paise) === 3050000 && Number(b.tax_paise) === 369000 && Number(b.total_paise) === 3419000, JSON.stringify(b));
+  assert(/^PB\d{6}$/.test(b.bill_number), b.bill_number);
+  const mv = await rows(`select type, quantity from public.stock_movements where reference_id = $1`, [billId]);
+  assert(mv.length === 1 && mv[0].type === "purchase" && mv[0].quantity === 3, JSON.stringify(mv));
+});
+await test("staff can record purchases; customers cannot; bills can't be inserted directly", async () => {
+  await user(staff);
+  const ok = await rows(`select public.record_purchase_bill($1::jsonb) id`, [JSON.stringify({ supplier_name: "Local", items: [{ variant_id: variantId, description: "x", quantity: 1, unit_cost_paise: 100 }] })]);
+  assert(ok.length === 1, "staff could not record");
+  await expectError(`insert into public.purchase_bills (supplier_name) values ('Sneaky')`, [], /row-level security/);
+  await user(alice);
+  await expectError(`select public.record_purchase_bill($1::jsonb)`, [JSON.stringify({ supplier_name: "X", items: [{ description: "x", quantity: 1, unit_cost_paise: 1 }] })], /not authorized/);
+});
+await test("expenses: admin records them, staff can't see them", async () => {
+  await user(superAdmin);
+  assert((await rows(`insert into public.expenses (category, amount_paise, payment_mode, note) values ('Electricity', 250000, 'upi', 'KSEB') returning id`)).length === 1, "admin cannot add");
+  await expectError(`insert into public.expenses (category, amount_paise) values ('Rent', 0)`, [], /check/);
+  await user(staff);
+  assert((await rows(`select id from public.expenses`)).length === 0, "staff can see expenses");
+  await expectError(`insert into public.expenses (category, amount_paise) values ('Rent', 100)`, [], /row-level security/);
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

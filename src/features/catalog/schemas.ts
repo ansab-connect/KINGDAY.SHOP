@@ -187,6 +187,19 @@ export const productInputSchema = z
     cod_discount_pct: z.coerce.number().min(0, "Use 0–50%.").max(50, "Use 0–50%.").multipleOf(0.01).default(0),
     seo_title: optionalText(70),
     seo_description: optionalText(170),
+    /** GST % included in the selling price (empty = not set). */
+    gst_rate: z
+      .union([z.literal(""), z.null(), z.coerce.number()])
+      .optional()
+      .transform((v) => (v === "" || v === null || v === undefined ? null : v))
+      .refine((v) => v === null || [0, 0.25, 3, 5, 12, 18, 28].includes(v), "Choose a GST rate."),
+    /** HSN code (4–8 digits), for GST bills. */
+    hsn_code: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => v || null)
+      .refine((v) => v === null || /^[0-9]{4,8}$/.test(v), "HSN code is 4–8 digits."),
     /** Main variant type, e.g. "Size". Empty = simple variants. */
     option1_name: optionalText(30),
     /** Sub variant type under each main value, e.g. "Colour". */
