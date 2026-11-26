@@ -26,8 +26,15 @@ const NEXT: Record<string, Step[]> = {
     { status: "started", en: "Start service directly", ml: "സർവീസ് തുടങ്ങുക", secondary: true },
   ],
   inspection_started: [{ status: "inspection_completed", en: "Inspection completed", ml: "പരിശോധന പൂർത്തിയായി" }],
-  inspection_completed: [{ status: "started", en: "Start service", ml: "സർവീസ് തുടങ്ങുക" }],
-  started: [{ status: "completed", en: "Service completed", ml: "സർവീസ് പൂർത്തിയായി" }],
+  inspection_completed: [
+    { status: "started", en: "Start service", ml: "സർവീസ് തുടങ്ങുക" },
+    { status: "awaiting_parts", en: "Waiting for parts", ml: "പാർട്സിനായി കാത്തിരിക്കുന്നു", secondary: true },
+  ],
+  started: [
+    { status: "completed", en: "Service completed", ml: "സർവീസ് പൂർത്തിയായി" },
+    { status: "awaiting_parts", en: "Waiting for parts", ml: "പാർട്സിനായി കാത്തിരിക്കുന്നു", secondary: true },
+  ],
+  awaiting_parts: [{ status: "started", en: "Parts arrived — resume work", ml: "പാർട്സ് എത്തി — ജോലി തുടരുക" }],
   completed: [{ status: "ready_for_delivery", en: "Ready for delivery", ml: "ഡെലിവറിക്ക് തയ്യാർ" }],
   invoiced: [{ status: "ready_for_delivery", en: "Ready for delivery", ml: "ഡെലിവറിക്ക് തയ്യാർ" }],
 };

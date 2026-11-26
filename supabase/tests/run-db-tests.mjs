@@ -69,6 +69,9 @@ for (const file of migrations) {
 }
 await db.exec(readFileSync(join(root, "seed.sql"), "utf8"));
 console.log("  applied seed.sql\n");
+// The older service tests below use the pre-0040 catalog (repair/battery/installation, kids cycle).
+await db.exec(`update public.service_types set is_active = true where slug in ('repair', 'battery', 'installation', 'general_service');
+  update public.service_categories set is_active = true where slug = 'cycle';`);
 
 // Fixtures (as superuser, i.e. like the SQL editor)
 const [superAdmin, staff, alice, bob] = (
@@ -1646,6 +1649,181 @@ await test("expenses: admin records them, staff can't see them", async () => {
   await user(staff);
   assert((await rows(`select id from public.expenses`)).length === 0, "staff can see expenses");
   await expectError(`insert into public.expenses (category, amount_paise) values ('Rent', 100)`, [], /row-level security/);
+});
+
+console.log("Service Management & BEST FIT operations (0040)");
+let bf, bfCode, centreId, preId, woFirst, bfInvoice;
+const bfBooking = (over = {}) => JSON.stringify({
+  customer_name: "Alice", mobile: "+91 98765 43210", category: "electric-cycle", service_type: "paid",
+  service_mode: "home", complaint: "Brakes squeak", address: "Feroke, Kozhikode", ...over,
+});
+await test("bookings: new types/categories, one booking per client key, centre mode needs a centre", async () => {
+  await asSuperuser();
+  await db.query(`update public.service_bookings set status = 'cancelled' where customer_id = $1 and status not in ('completed','invoiced','cancelled','ready_for_delivery')`, [alice]);
+  const key = "11111111-2222-3333-4444-555555555555";
+  await user(alice);
+  bfCode = (await rows(`select public.create_service_booking($1::jsonb) c`, [bfBooking({ client_key: key })]))[0].c;
+  const again = (await rows(`select public.create_service_booking($1::jsonb) c`, [bfBooking({ client_key: key })]))[0].c;
+  assert(again === bfCode, "duplicate submission created a second booking");
+  await expectError(`select public.create_service_booking($1::jsonb)`, [bfBooking({ service_type: "motor" })], /service type/i);
+  await expectError(`select public.create_service_booking($1::jsonb)`, [bfBooking({ service_mode: "centre", address: "" })], /service centre/i);
+  await user(admin2);
+  centreId = (await rows(`insert into public.service_centres (name, address, working_hours) values ('Feroke Point', 'Main Road, Feroke', '9am–6pm') returning id`))[0].id;
+  await user(alice);
+  const c = (await rows(`select public.create_service_booking($1::jsonb) c`, [bfBooking({ service_mode: "centre", service_centre_id: centreId, address: "" })]))[0].c;
+  await asSuperuser();
+  const [b] = await rows(`select id, category_label, service_type_label, product_name, service_mode from public.service_bookings where booking_code = $1`, [bfCode]);
+  bf = b.id;
+  assert(b.category_label === "Electric Cycle" && b.service_type_label === "Paid Service (Out-of-Warranty)" && b.product_name === null, JSON.stringify(b));
+  assert((await rows(`select service_centre_id from public.service_bookings where booking_code = $1`, [c]))[0].service_centre_id === centreId, "centre not saved");
+  await user(alice);
+  await db.query(`select public.cancel_my_service_booking(id) from public.service_bookings where booking_code = $1`, [c]);
+});
+await test("inspection slabs: one rate for the whole distance, gaps fall to the lower slab, no overlaps", async () => {
+  await user(admin2);
+  const p = async (km) => (await rows(`select public.preview_inspection_charge($1) v`, [km]))[0].v;
+  assert((await p(35)).charge_paise === 29750, "35 km should be ₹297.50");
+  assert((await p(30.5)).slab === "S1" && (await p(150)).charge_paise === 105000, "gap / top slab wrong");
+  await expectError(`insert into public.inspection_slabs (code, min_km, max_km, rate_paise) values ('X', 50, 70, 900)`, [], /overlaps/);
+  await user(svc);
+  await expectError(`insert into public.inspection_slabs (code, min_km, rate_paise, is_active) values ('Y', 500, 1, false)`, [], /row-level security/);
+});
+await test("distance: estimate kept, verified distance needs a reason to change, pre-invoice snapshots the slab", async () => {
+  await user(admin2);
+  await db.query(`select public.set_estimated_distance($1, 33.4, 'osrm')`, [bf]);
+  await db.query(`select public.set_estimated_distance($1, 40, 'osrm')`, [bf]);
+  await expectError(`select public.create_inspection_pre_invoice($1)`, [bf], /verify/i);
+  await db.query(`select public.set_verified_distance($1, 36, null)`, [bf]);
+  await expectError(`select public.set_verified_distance($1, 35, '')`, [bf], /reason/);
+  await db.query(`select public.set_verified_distance($1, 35, 'Odometer reading')`, [bf]);
+  const num = (await rows(`select public.create_inspection_pre_invoice($1) n`, [bf]))[0].n;
+  assert(/^KD-PI-\d{6}$/.test(num), num);
+  const [pi] = await rows(`select id, slab_code, rate_paise, charge_paise, total_paise from public.inspection_pre_invoices where invoice_number = $1`, [num]);
+  preId = pi.id;
+  assert(pi.slab_code === "S2" && pi.rate_paise === 850 && pi.charge_paise === 29750, JSON.stringify(pi));
+  await expectError(`select public.set_verified_distance($1, 20, 'typo')`, [bf], /void the inspection/);
+  await expectError(`select public.create_inspection_pre_invoice($1)`, [bf], /already exists/);
+  await asSuperuser();
+  const [d] = await rows(`select estimated_distance_km::float e, verified_distance_km::float v from public.service_bookings where id = $1`, [bf]);
+  assert(d.e === 33.4 && d.v === 35, JSON.stringify(d));
+  assert((await rows(`select 1 from public.service_distance_history where booking_id = $1`, [bf])).length === 4, "history incomplete");
+  await user(alice);
+  assert((await rows(`select 1 from public.inspection_pre_invoices where id = $1`, [preId])).length === 1, "customer can't see own pre-invoice");
+  await user(bob);
+  assert((await rows(`select 1 from public.inspection_pre_invoices`)).length === 0, "bob sees alice's pre-invoice");
+});
+await test("customer payments: pre-invoice paid in full once, no overpayment", async () => {
+  await user(admin2);
+  await expectError(`select public.record_service_payment($1::jsonb)`, [JSON.stringify({ pre_invoice_id: preId, amount_paise: 30000, method: "cash" })], /more than the balance/);
+  await db.query(`select public.record_service_payment($1::jsonb)`, [JSON.stringify({ pre_invoice_id: preId, amount_paise: 29750, method: "upi", reference: "UPI123" })]);
+  await asSuperuser();
+  assert((await rows(`select payment_status from public.inspection_pre_invoices where id = $1`, [preId]))[0].payment_status === "paid", "not paid");
+  await user(admin2);
+  await expectError(`select public.void_inspection_pre_invoice($1, 'test')`, [preId], /only unpaid/);
+});
+await test("work orders: schedule, reassign keeps history, technician accepts and works the job", async () => {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  await user(admin2);
+  woFirst = (await rows(`select public.assign_work_order($1::jsonb) n`, [JSON.stringify({ booking_id: bf, technician_id: svc, scheduled_date: tomorrow, scheduled_slot: "morning" })]))[0].n;
+  await asSuperuser();
+  assert((await rows(`select status from public.service_bookings where id = $1`, [bf]))[0].status === "scheduled", "booking not scheduled");
+  await user(admin2);
+  const second = (await rows(`select public.assign_work_order($1::jsonb) n`, [JSON.stringify({ booking_id: bf, technician_id: svc2 })]))[0].n;
+  await asSuperuser();
+  const wos = await rows(`select work_order_number n, status, technician_id t from public.work_orders where booking_id = $1 order by created_at`, [bf]);
+  assert(wos.length === 2 && wos[0].status === "reassigned" && wos[1].n === second && wos[1].t === svc2, JSON.stringify(wos));
+  await user(svc);
+  assert((await rows(`select 1 from public.service_bookings where id = $1`, [bf])).length === 0, "old technician still sees the job");
+  await user(svc2);
+  await db.query(`select public.respond_service_job($1, true)`, [bf]);
+  for (const s of ["on_the_way", "reached", "inspection_started", "inspection_completed", "awaiting_parts", "started"]) await db.query(`select public.advance_service_job($1, $2)`, [bf, s]);
+  await db.query(`select public.set_replaced_part($1, $2, 1)`, [bf, battery]);
+  await db.query(`select public.advance_service_job($1, 'completed')`, [bf]);
+  await asSuperuser();
+  assert((await rows(`select status from public.work_orders where work_order_number = $1`, [second]))[0].status === "completed", "work order did not follow the booking");
+});
+await test("commission rules: totals must be 100%, no overlaps, technicians can't read them", async () => {
+  await user(admin2);
+  const bad = { section: "service", technician_id: svc2, shares: [{ beneficiary: "company", percent: 50 }, { beneficiary: "assigned_technician", percent: 40 }] };
+  await expectError(`select public.save_commission_rule($1::jsonb)`, [JSON.stringify(bad)], /exactly 100/);
+  const good = { section: "service", technician_id: svc2, effective_from: "2026-01-01", shares: [{ beneficiary: "company", percent: 50 }, { beneficiary: "assigned_technician", percent: 20 }, { beneficiary: "user", user_id: staff, percent: 30 }] };
+  await db.query(`select public.save_commission_rule($1::jsonb)`, [JSON.stringify(good)]);
+  await expectError(`select public.save_commission_rule($1::jsonb)`, [JSON.stringify(good)], /another active/);
+  await user(svc2);
+  assert((await rows(`select 1 from public.commission_rules`)).length === 0, "technician can read commission rules");
+});
+await test("earnings: each section split on its own base, finalised once, invoice locked afterwards", async () => {
+  await user(svc2);
+  bfInvoice = (await rows(`select public.save_service_invoice($1, $2::jsonb) n`, [bf, JSON.stringify({ basic_charge: 0, labour_charge: 100000, discount: 0, tax_percent: 18, items: [] })]))[0].n;
+  await user(admin2);
+  await db.query(`select public.save_service_invoice($1, $2::jsonb)`, [bf, JSON.stringify({ basic_charge: 0, labour_charge: 100000, discount: 0, tax_percent: 18, items: [], approve: true })]);
+  const invId = (await rows(`select id from public.service_invoices where booking_id = $1`, [bf]))[0].id;
+  bfInvoice = invId;
+  const prev = (await rows(`select public.preview_service_earnings($1) v`, [invId]))[0].v.allocations;
+  const amt = (s, k, u) => prev.find((a) => a.section === s && a.beneficiary === k && (u === undefined || a.user_id === u))?.amount_paise;
+  assert(amt("inspection", "company") === 20825 && amt("inspection", "user", svc2) === 8925, "inspection split " + JSON.stringify(prev));
+  assert(amt("service", "company") === 50000 && amt("service", "user", svc2) === 20000 && amt("service", "user", staff) === 30000, "service split " + JSON.stringify(prev));
+  assert(amt("parts", "company") === 150000 && !prev.some((a) => a.section === "parts" && a.beneficiary === "user"), "parts must stay with the company while disabled");
+  const n = (await rows(`select public.finalize_service_earnings($1) n`, [invId]))[0].n;
+  assert(n === 2, `expected 2 earnings invoices, got ${n}`);
+  await expectError(`select public.finalize_service_earnings($1)`, [invId], /already finalised/);
+  await expectError(`select public.save_service_invoice($1, $2::jsonb)`, [bf, JSON.stringify({ basic_charge: 0, labour_charge: 999, discount: 0, tax_percent: 18, items: [], approve: true })], /finalised/);
+  await user(svc2);
+  const mine = await rows(`select inspection_paise, service_paise, parts_paise, total_paise, status from public.technician_invoices`);
+  assert(mine.length === 1 && mine[0].total_paise === 28925 && mine[0].status === "pending_claim", JSON.stringify(mine));
+  assert((await rows(`select 1 from public.commission_allocations`)).length === 0, "technician sees allocations");
+});
+await test("claims: only the beneficiary, only once; wallet credit, payouts limited to available", async () => {
+  await user(svc2);
+  const ti = (await rows(`select id from public.technician_invoices`))[0].id;
+  await user(svc);
+  await expectError(`select public.claim_technician_invoice($1)`, [ti], /not assigned to you/);
+  await user(svc2);
+  const ref = (await rows(`select public.claim_technician_invoice($1) r`, [ti]))[0].r;
+  assert(/^KD-CL-\d{6}$/.test(ref), ref);
+  await expectError(`select public.claim_technician_invoice($1)`, [ti], /already claimed/);
+  let w = (await rows(`select public.wallet_summary() w`))[0].w;
+  assert(w.available === 28925 && w.claimed === 28925 && w.pending_claims === 0, JSON.stringify(w));
+  await expectError(`select public.wallet_summary($1)`, [staff], /not authorized/);
+  await user(admin2);
+  await expectError(`select public.record_staff_payout($1::jsonb)`, [JSON.stringify({ user_id: svc2, amount_paise: 30000, method: "upi" })], /more than the available/);
+  await db.query(`select public.record_staff_payout($1::jsonb)`, [JSON.stringify({ user_id: svc2, amount_paise: 20000, method: "upi", reference: "TXN1" })]);
+  w = (await rows(`select public.wallet_summary($1) w`, [svc2]))[0].w;
+  assert(w.available === 8925 && w.paid === 20000, JSON.stringify(w));
+  await user(staff);
+  const st = await rows(`select total_paise from public.technician_invoices`);
+  assert(st.length === 1 && st[0].total_paise === 30000, "other beneficiary sees only their share: " + JSON.stringify(st));
+});
+await test("reversal: claimed earnings are taken back, invoice can be finalised again", async () => {
+  await user(admin2);
+  await db.query(`select public.reverse_service_earnings($1, 'Labour charge was wrong')`, [bfInvoice]);
+  const w = (await rows(`select public.wallet_summary($1) w`, [svc2]))[0].w;
+  assert(w.available === -20000 && w.reversed === 28925, JSON.stringify(w));
+  assert((await rows(`select public.finalize_service_earnings($1) n`, [bfInvoice]))[0].n === 2, "could not finalise again");
+});
+await test("reclaims: no duplicates, partial approval, paid once, never self-reviewed", async () => {
+  await user(svc2);
+  const r = { category: "fuel", amount_paise: 50000, description: "Fuel to Feroke", booking_id: bf, expense_date: "2026-11-20", submit: true };
+  const num = (await rows(`select public.save_reclaim($1::jsonb) n`, [JSON.stringify(r)]))[0].n;
+  await expectError(`select public.save_reclaim($1::jsonb)`, [JSON.stringify(r)], /already claimed/);
+  const id = (await rows(`select id from public.service_reclaims where reclaim_number = $1`, [num]))[0].id;
+  await expectError(`select public.review_reclaim($1, 'approved')`, [id], /not authorized/);
+  await user(admin2);
+  await expectError(`select public.review_reclaim($1, 'partially_approved', 60000)`, [id], /below the claimed/);
+  await db.query(`select public.review_reclaim($1, 'partially_approved', 30000, 'Receipt shows ₹300')`, [id]);
+  await db.query(`select public.mark_reclaim_paid($1, 'cash')`, [id]);
+  await expectError(`select public.mark_reclaim_paid($1, 'cash')`, [id], /only approved/);
+});
+await test("technician payment slabs and accounts summary use stored records only", async () => {
+  await user(admin2);
+  await db.query(`insert into public.technician_payment_slabs (name, mode, per_km_paise) values ('Per km', 'per_km', 500)`);
+  await expectError(`insert into public.technician_payment_slabs (name, mode, per_km_paise) values ('Dup', 'per_km', 400)`, [], /overlaps/);
+  const s = (await rows(`select public.accounts_summary('2026-01-01', '2027-12-31') s`))[0].s;
+  assert(Number(s.inspection_revenue) >= 29750 && Number(s.service_revenue) >= 100000 && Number(s.parts_sales) >= 150000, JSON.stringify(s));
+  assert(Number(s.net_operating_result) === Number(s.total_revenue) - Number(s.total_expenses), "net mismatch");
+  await expectError(`insert into public.service_charge_settings (amount_paise, technician_pct, company_pct, is_active) values (30000, 70, 20, false)`, [], /check/);
+  await user(svc2);
+  await expectError(`select public.accounts_summary('2026-01-01', '2026-12-31')`, [], /not authorized/);
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

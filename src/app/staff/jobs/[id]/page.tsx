@@ -59,7 +59,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
         {b.latitude != null && b.longitude != null ? (
           <a href={directionsLink(b.latitude, b.longitude)} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 rounded-xl border bg-white py-3 text-xs font-semibold text-deep"><Navigation aria-hidden className="size-5 text-royal" /> <L en="Navigate" ml="വഴി" /></a>
         ) : (
-          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address)}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 rounded-xl border bg-white py-3 text-xs font-semibold text-deep"><MapPin aria-hidden className="size-5 text-royal" /> <L en="Find address" ml="വിലാസം" /></a>
+          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address ?? "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 rounded-xl border bg-white py-3 text-xs font-semibold text-deep"><MapPin aria-hidden className="size-5 text-royal" /> <L en="Find address" ml="വിലാസം" /></a>
         )}
       </div>
 
@@ -72,7 +72,8 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
       <Card title={<L en="Job details" ml="ജോലി വിവരങ്ങൾ" />}>
         <dl className="grid gap-2 text-sm">
           {[
-            ["Product", `${categoryLabel(b.category)} · ${b.product_name}`],
+            ["Product", `${b.category_label ?? categoryLabel(b.category)}${b.product_name ? ` · ${b.product_name}` : ""}`],
+            ["Service", `${b.service_type_label ?? ""} · ${b.service_mode === "centre" ? "At service centre" : "Home visit"}`],
             ["Bought", b.purchase_source === "kingday" ? `KING DAY${b.purchase_details ? ` (${b.purchase_details})` : ""}` : "Elsewhere"],
             ["Mobile", b.mobile],
             ["Address", b.address],

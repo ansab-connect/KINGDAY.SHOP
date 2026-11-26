@@ -32,6 +32,10 @@ async function Bookings() {
     eventsByBooking.set(e.booking_id, [...(eventsByBooking.get(e.booking_id) ?? []), e]);
   }
   const invoices = new Map(((invRows ?? []) as { id: string; booking_id: string; invoice_number: string }[]).map((i) => [i.booking_id, i]));
+  const { data: preRows } = bookings.length
+    ? await supabase.from("inspection_pre_invoices").select("id, booking_id, invoice_number").eq("status", "issued").in("booking_id", bookings.map((b) => b.id))
+    : { data: [] };
+  const pres = new Map(((preRows ?? []) as { id: string; booking_id: string; invoice_number: string }[]).map((i) => [i.booking_id, i]));
   return (
     <AccountShell active="/account/service" title="Service bookings">
       <div className="mb-5">
@@ -50,8 +54,8 @@ async function Bookings() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-mono text-sm font-bold text-royal">{b.booking_code}</p>
-                  <p className="mt-1 font-semibold text-deep">{b.product_name}</p>
-                  <p className="text-xs text-muted-foreground">{categoryLabel(b.category)} · Booked {formatDate(new Date(b.created_at))} · Preferred {preferredDateText(b.preferred_date)}</p>
+                  <p className="mt-1 font-semibold text-deep">{b.product_name ?? b.category_label ?? categoryLabel(b.category)}</p>
+                  <p className="text-xs text-muted-foreground">{b.service_type_label ?? categoryLabel(b.category)} · Booked {formatDate(new Date(b.created_at))} · Preferred {preferredDateText(b.preferred_date)}</p>
                 </div>
                 <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", b.status === "cancelled" ? "bg-muted text-muted-foreground" : ["completed", "invoiced", "ready_for_delivery"].includes(b.status) ? "bg-success-soft text-success" : "bg-royal-50 text-royal")}>
                   {statusLabel(b.status)}
@@ -75,6 +79,11 @@ async function Bookings() {
                     ))}
                   </ol>
                 </details>
+              ) : null}
+              {pres.get(b.id) ? (
+                <Link href={`/service-invoice/pre/${pres.get(b.id)!.id}`} className="mt-3 mr-2 inline-flex h-9 items-center rounded-full border px-4 text-sm font-semibold text-royal hover:bg-royal-50">
+                  <L en={`Inspection pre-invoice ${pres.get(b.id)!.invoice_number}`} ml="പരിശോധന പ്രീ-ഇൻവോയ്സ്" />
+                </Link>
               ) : null}
               {invoices.get(b.id) ? (
                 <Link href={`/service-invoice/${invoices.get(b.id)!.id}`} className="mt-3 inline-flex h-9 items-center rounded-full border px-4 text-sm font-semibold text-royal hover:bg-royal-50">

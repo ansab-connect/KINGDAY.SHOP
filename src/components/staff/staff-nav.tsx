@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, IndianRupee, LayoutDashboard, LayoutGrid, LogOut, UserRound, Wrench, type LucideIcon } from "lucide-react";
+import { ClipboardList, IndianRupee, LayoutDashboard, LayoutGrid, LogOut, Receipt, Route, UserRound, Wallet, Wrench, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { L } from "@/components/i18n/lang";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
@@ -14,8 +14,9 @@ type Item = { href: string; en: string; ml: string; icon: LucideIcon };
 const ITEMS: Item[] = [
   { href: "/staff", en: "Dashboard", ml: "ഡാഷ്ബോർഡ്", icon: LayoutDashboard },
   { href: "/staff/tasks", en: "Tasks", ml: "ജോലികൾ", icon: ClipboardList },
-  { href: "/staff/salary", en: "Salary", ml: "ശമ്പളം", icon: IndianRupee },
+  { href: "/staff/earnings", en: "Earnings", ml: "വരുമാനം", icon: Wallet },
   { href: "/staff/profile", en: "Profile", ml: "പ്രൊഫൈൽ", icon: UserRound },
+  { href: "/staff/salary", en: "Salary", ml: "ശമ്പളം", icon: IndianRupee },
 ];
 const ADMIN_ITEM: Item = { href: "/admin", en: "Admin panel", ml: "അഡ്മിൻ", icon: LayoutGrid };
 
@@ -26,8 +27,14 @@ export function StaffShell({ name, subtitle, adminLink, jobsLink, children }: { 
   const path = usePathname();
   // Phone tab bar: at most 5 items. The admin panel link lives in the desktop sidebar
   // and as an icon in the phone header.
-  const tabs: Item[] = [ITEMS[0], ...(jobsLink ? [{ href: "/staff/jobs", en: "Jobs", ml: "സർവീസ്", icon: Wrench }] : []), ...ITEMS.slice(1)];
-  const items: Item[] = [...tabs, ...(adminLink ? [ADMIN_ITEM] : [])];
+  const jobs: Item[] = jobsLink ? [{ href: "/staff/jobs", en: "Jobs", ml: "സർവീസ്", icon: Wrench }] : [];
+  const extra: Item[] = [
+    ...(jobsLink ? [{ href: "/staff/routes", en: "Routes", ml: "റൂട്ടുകൾ", icon: Route }] : []),
+    { href: "/staff/reclaims", en: "Reclaims", ml: "ചെലവ് ക്ലെയിം", icon: Receipt },
+  ];
+  // Phone tab bar keeps 5 items; routes and reclaims are in the desktop sidebar and on the dashboard.
+  const tabs: Item[] = [ITEMS[0], ...jobs, ...ITEMS.slice(1)].slice(0, 5);
+  const items: Item[] = [ITEMS[0], ...jobs, ...ITEMS.slice(1), ...extra, ...(adminLink ? [ADMIN_ITEM] : [])];
 
   return (
     <div className="min-h-screen bg-canvas">

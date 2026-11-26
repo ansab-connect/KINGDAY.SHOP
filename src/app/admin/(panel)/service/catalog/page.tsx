@@ -10,14 +10,17 @@ import { getServiceCatalog } from "@/features/service/catalog";
 import { isSupabaseConfigured } from "@/lib/env";
 import { formatPaise } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ServiceConfigExtra } from "@/components/best-fit/service-config";
 
-export const metadata: Metadata = { title: "BEST FIT Catalog" };
+export const metadata: Metadata = { title: "Service Configuration" };
 
 const TABS = [
   { key: "options", label: "Booking options" },
   { key: "categories", label: "Categories" },
   { key: "types", label: "Service types" },
   { key: "items", label: "Service items" },
+  { key: "modes", label: "Service modes" },
+  { key: "settings", label: "Base location & company" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
@@ -52,7 +55,7 @@ async function Catalog({ searchParams }: PageProps<"/admin/service/catalog">) {
       <Link href="/admin/service" className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-royal hover:underline">
         <ArrowLeft aria-hidden className="size-4" /> Service Management
       </Link>
-      <PageHeader title="BEST FIT Catalog" description="What customers can book. Switch entries off instead of deleting them, so old bookings keep their names." />
+      <PageHeader title="Service Configuration" description="Service types, product categories and service modes shown on the customer booking page. Switch entries off instead of deleting them, so old bookings keep their names." />
       <nav aria-label="Catalog sections" className="-mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1">
         {TABS.map((t) => (
           <Link
@@ -66,6 +69,8 @@ async function Catalog({ searchParams }: PageProps<"/admin/service/catalog">) {
         ))}
       </nav>
 
+      {tab === "modes" || tab === "settings" ? <ServiceConfigExtra tab={tab} canEdit={canEdit} /> : (
+      <>
       {canEdit ? (
         <Card className="mb-4 shadow-card">
           <CardHeader>
@@ -115,6 +120,8 @@ async function Catalog({ searchParams }: PageProps<"/admin/service/catalog">) {
                     </Row>
                   ))}
       </div>
+      </>
+      )}
     </>
   );
 }

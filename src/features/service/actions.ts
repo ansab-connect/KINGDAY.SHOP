@@ -9,7 +9,7 @@ import { queuePushDispatch } from "@/features/push/send";
 import { formatMobile, normalizeMobile } from "@/features/customer/mobile";
 
 const phone = z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, "Enter a valid mobile number.");
-const mediaPath = z.string().regex(/^[0-9a-f-]{36}\/[a-z0-9-]{6,80}\.(webp|jpg|jpeg|png|webm|ogg|mp4|m4a|mp3)$/);
+const mediaPath = z.string().regex(/^[0-9a-f-]{36}\/[a-z0-9-]{6,80}\.(webp|jpg|jpeg|png|webm|ogg|mp4|m4a|mp3|pdf)$/);
 
 const bookingSchema = z
   .object({
@@ -20,22 +20,29 @@ const bookingSchema = z
     booking_kind: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,40}$/).default("service"),
     purchase_source: z.enum(["kingday", "external"]),
     order_id: z.union([z.literal(""), z.uuid()]),
-    product_name: z.string().trim().min(2, "Enter the product name.").max(200),
-    purchase_date: z.union([z.literal(""), z.iso.date()]),
-    purchase_details: z.string().trim().max(500),
+    product_name: z.string().trim().max(200).default(""),
+    purchase_date: z.union([z.literal(""), z.iso.date()]).default(""),
+    purchase_details: z.string().trim().max(500).default(""),
     complaint: z.string().trim().max(3000),
     voice_path: z.union([z.literal(""), mediaPath]),
-    photo_paths: z.array(mediaPath).max(4),
-    address: z.string().trim().min(5, "Enter the service address.").max(500),
+    photo_paths: z.array(mediaPath).max(8),
+    purchase_invoice_path: z.union([z.literal(""), mediaPath]).default(""),
+    voice_duration_seconds: z.number().int().min(0).max(600).nullable().default(null),
+    service_mode: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,40}$/).default("home"),
+    service_centre_id: z.union([z.literal(""), z.uuid()]).default(""),
+    town: z.string().trim().max(80).default(""),
+    instructions: z.string().trim().max(500).default(""),
+    client_key: z.union([z.literal(""), z.uuid()]).default(""),
+    address: z.string().trim().max(500).default(""),
     latitude: z.number().min(-90).max(90).nullable(),
     longitude: z.number().min(-180).max(180).nullable(),
     // Inspection first: the date is optional.
     preferred_date: z.union([z.literal(""), z.iso.date("Choose a valid date.")]).default(""),
-    service_type: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,40}$/, "Choose a service type.").default("repair"),
+    service_type: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,40}$/, "Choose a service type.").default("paid"),
     preferred_time: z.union([z.literal(""), z.enum(["morning", "afternoon", "evening"])]).default(""),
   })
   .refine((v) => v.complaint.length >= 5 || v.voice_path, { path: ["complaint"], message: "Describe the problem or record a voice note." })
-  .refine((v) => v.purchase_source === "external" || v.order_id, { path: ["order_id"], message: "Choose the order, or pick “Bought elsewhere”." });
+  .refine((v) => v.service_mode === "centre" || v.service_centre_id || v.address.length >= 5, { path: ["address"], message: "Enter the service address." });
 
 export type BookingResult = { ok: true; code: string } | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
@@ -57,7 +64,7 @@ async function prepare(input: unknown): Promise<{ ok: true; v: Parsed; userId: s
   }
   const v = parsed.data;
   const own = (p: string) => p.startsWith(`${user.id}/`);
-  if (!v.photo_paths.every(own) || (v.voice_path && !own(v.voice_path))) return { ok: false, error: "Invalid upload. Please try again." };
+  if (!v.photo_paths.every(own) || (v.voice_path && !own(v.voice_path)) || (v.purchase_invoice_path && !own(v.purchase_invoice_path))) return { ok: false, error: "Invalid upload. Please try again." };
   const mobile = normalizeMobile(v.mobile);
   if (!mobile) return { ok: false, error: "Please fix the highlighted fields.", fieldErrors: { mobile: "Enter a valid mobile number." } };
 
@@ -123,13 +130,13 @@ export async function addToServiceCartAction(input: unknown): Promise<BookingRes
     service_type: v.service_type,
     purchase_source: v.order_id ? "kingday" : v.purchase_source,
     order_id: v.order_id || null,
-    product_name: v.product_name,
+    product_name: v.product_name || "Service item",
     purchase_date: v.purchase_date || null,
     purchase_details: v.purchase_details || null,
     complaint: v.complaint || null,
     voice_path: v.voice_path || null,
     photo_paths: v.photo_paths,
-    address: v.address,
+    address: v.address || "—",
     latitude: v.latitude,
     longitude: v.longitude,
     preferred_date: v.preferred_date || null,

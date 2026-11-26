@@ -11,6 +11,9 @@ import { getInvoice, PAYMENT_METHODS } from "@/features/service/invoices";
 import { formatDate, formatPaise } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
+const inr2 = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 });
+const formatPaise2 = (p: number) => inr2.format(p / 100);
+
 export const metadata: Metadata = { title: "Service invoice", robots: { index: false, follow: false } };
 
 /**
@@ -29,11 +32,16 @@ async function Invoice({ params }: { params: Promise<{ id: string }> }) {
   const bookingCode = (b as { booking_code?: string } | null)?.booking_code ?? "";
   const method = PAYMENT_METHODS.find((m) => m.value === inv.payment_method)?.label;
 
+  // Section A (inspection) comes from the pre-invoice: shown here, never charged twice.
+  const { data: piData } = await supabase.from("inspection_pre_invoices").select("id, invoice_number, distance_km, slab_code, rate_paise, charge_paise, tax_paise, total_paise, amount_paid, balance").eq("booking_id", inv.booking_id).eq("status", "issued").maybeSingle();
+  const pi = piData as { id: string; invoice_number: string; distance_km: number; slab_code: string; rate_paise: number; charge_paise: number; tax_paise: number; total_paise: number; amount_paid: number; balance: number } | null;
   const rows = [
+    { d: "B. SERVICE COST", q: null, p: null, t: null },
     ...(inv.basic_charge ? [{ d: "Service charge", q: 1, p: inv.basic_charge, t: inv.basic_charge }] : []),
     ...(inv.labour_charge ? [{ d: "Labour charge", q: 1, p: inv.labour_charge, t: inv.labour_charge }] : []),
-    ...inv.items.filter((i) => i.kind === "spare_part").map((i) => ({ d: `Spare part: ${i.description}`, q: i.quantity, p: i.unit_price, t: i.line_total })),
     ...inv.items.filter((i) => i.kind !== "spare_part").map((i) => ({ d: i.description, q: i.quantity, p: i.unit_price, t: i.line_total })),
+    ...(inv.items.some((i) => i.kind === "spare_part") ? [{ d: "C. PARTS / REPLACEMENT", q: null, p: null, t: null }] : []),
+    ...inv.items.filter((i) => i.kind === "spare_part").map((i) => ({ d: i.description, q: i.quantity, p: i.unit_price, t: i.line_total })),
   ];
   const link = `${siteConfig.url}/service-invoice/${inv.id}`;
   const waText = `KING DAY Service invoice ${inv.invoice_number}\nBooking ${bookingCode}\nTotal: ${formatPaise(inv.grand_total)} (${inv.payment_status === "paid" ? "Paid" : `Balance ${formatPaise(inv.balance)}`})\nView: ${link}`;
@@ -93,14 +101,29 @@ async function Invoice({ params }: { params: Promise<{ id: string }> }) {
             </tr>
           </thead>
           <tbody className="tabular">
-            {rows.map((r, i) => (
-              <tr key={i} className="border-b border-border/60">
-                <td className="py-2.5 pr-3 text-deep">{r.d}</td>
-                <td className="py-2.5 text-right">{r.q}</td>
-                <td className="py-2.5 text-right">{formatPaise(r.p)}</td>
-                <td className="py-2.5 text-right text-deep">{formatPaise(r.t)}</td>
-              </tr>
-            ))}
+            {pi ? (
+              <>
+                <tr><td colSpan={4} className="pt-3 pb-1 text-xs font-bold tracking-wide text-royal">A. INSPECTION COST (pre-invoice {pi.invoice_number})</td></tr>
+                <tr className="border-b border-border/60">
+                  <td className="py-2.5 pr-3 text-deep">Inspection: {pi.distance_km} km × {formatPaise2(pi.rate_paise)}/km (slab {pi.slab_code}){pi.tax_paise ? ` + tax ${formatPaise2(pi.tax_paise)}` : ""}<span className="block text-xs text-muted-foreground">Billed on the pre-invoice{pi.amount_paid ? `; paid ${formatPaise2(pi.amount_paid)}` : ""}. Not charged again below.</span></td>
+                  <td className="py-2.5 text-right">1</td>
+                  <td className="py-2.5 text-right">{formatPaise2(pi.total_paise)}</td>
+                  <td className="py-2.5 text-right text-deep">{formatPaise2(pi.total_paise)}</td>
+                </tr>
+              </>
+            ) : null}
+            {rows.map((r, i) =>
+              r.q === null ? (
+                <tr key={i}><td colSpan={4} className="pt-3 pb-1 text-xs font-bold tracking-wide text-royal">{r.d}</td></tr>
+              ) : (
+                <tr key={i} className="border-b border-border/60">
+                  <td className="py-2.5 pr-3 text-deep">{r.d}</td>
+                  <td className="py-2.5 text-right">{r.q}</td>
+                  <td className="py-2.5 text-right">{formatPaise(r.p ?? 0)}</td>
+                  <td className="py-2.5 text-right text-deep">{formatPaise(r.t ?? 0)}</td>
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
 
@@ -111,6 +134,8 @@ async function Invoice({ params }: { params: Promise<{ id: string }> }) {
           <div className="mt-1 flex justify-between border-t pt-2 text-base font-bold text-deep"><dt>Grand total</dt><dd>{formatPaise(inv.grand_total)}</dd></div>
           {inv.amount_paid ? <div className="flex justify-between"><dt className="text-muted-foreground">Paid / advance</dt><dd>− {formatPaise(inv.amount_paid)}</dd></div> : null}
           <div className="flex justify-between font-semibold text-deep"><dt>Balance due</dt><dd>{formatPaise(inv.balance)}</dd></div>
+          {pi ? <div className="flex justify-between text-xs text-muted-foreground"><dt>Inspection pre-invoice balance</dt><dd>{formatPaise2(pi.balance)}</dd></div> : null}
+          {pi ? <div className="flex justify-between border-t pt-1 font-bold text-deep"><dt>Total due (A + B + C)</dt><dd>{formatPaise2(inv.balance + pi.balance)}</dd></div> : null}
         </dl>
 
         <footer className="mt-8 flex flex-col gap-1 border-t pt-4 text-sm">

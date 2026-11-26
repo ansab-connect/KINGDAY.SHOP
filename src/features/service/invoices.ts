@@ -56,6 +56,17 @@ export async function getInvoice(id: string): Promise<ServiceInvoice | null> {
 /** Default basic charge in paise (Admin → Settings). */
 export async function getDefaultBasicCharge(): Promise<number> {
   const supabase = await createClient();
+  // BEST FIT → Service Charge Settings (active for today) wins over the old single setting.
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: sc } = await supabase
+    .from("service_charge_settings")
+    .select("amount_paise, effective_to")
+    .eq("is_active", true)
+    .lte("effective_from", today)
+    .order("effective_from", { ascending: false })
+    .limit(5);
+  const current = ((sc ?? []) as { amount_paise: number; effective_to: string | null }[]).find((s) => !s.effective_to || s.effective_to >= today);
+  if (current) return current.amount_paise;
   const { data } = await supabase.from("store_settings").select("value").eq("key", "service.basic_charge").maybeSingle();
   const v = (data as { value?: unknown } | null)?.value;
   return typeof v === "number" ? v : 0;

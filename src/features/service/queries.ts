@@ -12,13 +12,13 @@ export type BookingRow = {
   category: string;
   purchase_source: string;
   order_id: string | null;
-  product_name: string;
+  product_name: string | null;
   purchase_date: string | null;
   purchase_details: string | null;
   complaint: string | null;
   voice_path: string | null;
   photo_paths: string[];
-  address: string;
+  address: string | null;
   latitude: number | null;
   longitude: number | null;
   preferred_date: string;
@@ -26,6 +26,9 @@ export type BookingRow = {
   assigned_to: string | null;
   assigned_at: string | null;
   created_at: string;
+  category_label?: string | null;
+  service_type_label?: string | null;
+  service_mode?: string;
 };
 
 /** Prefill for the booking form: profile, default address and the customer's own KING DAY purchases. */

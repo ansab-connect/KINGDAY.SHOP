@@ -29,6 +29,8 @@ export const MODULES = [
   { key: "password_resets", label: "Password Resets" },
   { key: "purchases", label: "Purchases" },
   { key: "expenses", label: "Expenses" },
+  { key: "best_fit", label: "BEST FIT Operations" },
+  { key: "accounts", label: "Accounts & Commissions" },
 ] as const;
 
 export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export"] as const;

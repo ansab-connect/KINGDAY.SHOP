@@ -16,17 +16,23 @@ export type NavAccess = { permissions: Permissions; isSuperAdmin: boolean } | nu
 
 export function AdminNavLinks({ onNavigate, access }: { onNavigate?: () => void; access: NavAccess }) {
   const pathname = usePathname();
+  const groups = navFor(access?.permissions ?? null, access?.isSuperAdmin);
+  // Only the most specific matching link is highlighted (e.g. /admin/service/slabs, not /admin/service too).
+  const best = groups
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((h) => !h.includes("?") && isActivePath(pathname, h))
+    .sort((a, b) => b.length - a.length)[0];
 
   return (
     <nav aria-label="Admin" className="flex flex-col gap-6">
-      {navFor(access?.permissions ?? null, access?.isSuperAdmin).map((group) => (
+      {groups.map((group) => (
         <div key={group.label}>
           <p className="px-3 pb-2 text-[0.68rem] font-semibold tracking-[0.16em] text-white/40 uppercase">
             {group.label}
           </p>
           <ul className="flex flex-col gap-0.5">
             {group.items.map((item) => {
-              const active = isActivePath(pathname, item.href);
+              const active = item.href === best;
               return (
                 <li key={item.href}>
                   <Link

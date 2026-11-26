@@ -16,6 +16,7 @@ import { preferredDateText } from "@/features/service/constants";
 import { bookingMedia, getInspection, getJobEvents, listTechnicians, type BookingRow } from "@/features/service/queries";
 import { getDefaultBasicCharge, getInvoiceForBooking, getReplacedItems, replacedName } from "@/features/service/invoices";
 import { ReplacedItems } from "@/components/service/replaced-items";
+import { BookingOpsPanel } from "@/components/best-fit/booking-panel";
 import { CustomItemReview } from "@/components/admin/service/custom-item-review";
 import { formatDate, formatDateTime, formatPaise } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -60,8 +61,8 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
               <h2 className="font-heading text-lg font-semibold text-deep">Product &amp; problem</h2>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 {[
-                  ["Category", categoryLabel(b.category)],
-                  ["Product", b.product_name],
+                  ["Category", (b as BookingRow & { category_label?: string | null }).category_label ?? categoryLabel(b.category)],
+                  ["Product", b.product_name ?? "—"],
                   ["Bought", b.purchase_source === "kingday" ? "From KING DAY" : "Elsewhere"],
                   ["Purchase date", b.purchase_date ? formatDate(new Date(b.purchase_date)) : "—"],
                   ["Purchase details", b.purchase_details ?? "—"],
@@ -159,13 +160,14 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
 
         <div className="flex flex-col gap-6">
+        <BookingOpsPanel bookingId={b.id} />
         <Card className="shadow-card">
           <CardContent className="flex flex-col gap-4">
             <h2 className="font-heading text-lg font-semibold text-deep">Technician</h2>
             <p className="text-sm text-deep">
               {tech ? `${tech.staff_code ?? ""} · ${tech.full_name ?? ""}` : b.assigned_to ? "Assigned (inactive staff)" : "Not assigned yet"}
             </p>
-            {manage && reassignable ? (
+            {manage && reassignable && !can(me, "best_fit", "edit") ? (
               <AssignJobForm bookingId={b.id} technicians={technicians} currentId={b.assigned_to} locked={!["new", "assigned"].includes(b.status)} />
             ) : null}
             {manage && movable ? (

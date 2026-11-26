@@ -13,12 +13,14 @@ export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number]["value"];
 export const SERVICE_STATUSES = [
   { value: "new", label: "Booking received", ml: "ബുക്കിംഗ് ലഭിച്ചു" },
   { value: "assigned", label: "Assigned", ml: "ഏൽപ്പിച്ചു" },
+  { value: "scheduled", label: "Scheduled", ml: "സമയം നിശ്ചയിച്ചു" },
   { value: "accepted", label: "Accepted", ml: "സ്വീകരിച്ചു" },
   { value: "on_the_way", label: "On the way", ml: "വഴിയിൽ" },
-  { value: "reached", label: "Reached location", ml: "സ്ഥലത്തെത്തി" },
+  { value: "reached", label: "Arrived", ml: "സ്ഥലത്തെത്തി" },
   { value: "inspection_started", label: "Inspection started", ml: "പരിശോധന തുടങ്ങി" },
   { value: "inspection_completed", label: "Inspection completed", ml: "പരിശോധന പൂർത്തിയായി" },
-  { value: "started", label: "Service in progress", ml: "സർവീസ് നടക്കുന്നു" },
+  { value: "started", label: "Work in progress", ml: "ജോലി നടക്കുന്നു" },
+  { value: "awaiting_parts", label: "Awaiting parts", ml: "പാർട്സിനായി കാത്തിരിക്കുന്നു" },
   { value: "completed", label: "Service completed", ml: "സർവീസ് പൂർത്തിയായി" },
   { value: "ready_for_delivery", label: "Ready for delivery", ml: "ഡെലിവറിക്ക് തയ്യാർ" },
   { value: "invoiced", label: "Invoice generated", ml: "ബിൽ തയ്യാർ" },
@@ -32,7 +34,7 @@ export const statusLabel = (s: string) => SERVICE_STATUSES.find((x) => x.value =
 export const categoryLabel = (c: string) => SERVICE_CATEGORIES.find((x) => x.value === c)?.en ?? humanize(c);
 
 export const SERVICE_MEDIA_BUCKET = "service-media";
-export const MAX_PHOTOS = 4;
+export const MAX_PHOTOS = 8;
 export const MAX_VOICE_SECONDS = 120;
 
 export const mapsLink = (lat: number, lng: number) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;

@@ -118,7 +118,7 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
                       <span className="w-28 shrink-0 font-mono text-xs font-semibold text-royal">{b.booking_code}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium text-deep">{b.customer_name} · {b.mobile}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{categoryLabel(b.category)} · {b.product_name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{b.category_label ?? categoryLabel(b.category)}{b.service_type_label ? ` · ${b.service_type_label}` : ""}{b.service_mode === "centre" ? " · Centre" : ""}{b.product_name ? ` · ${b.product_name}` : ""}</span>
                       </span>
                       <span className="hidden w-28 text-xs text-muted-foreground md:block">{preferredDateText(b.preferred_date)}</span>
                       <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", b.status === "new" ? "bg-warning-soft text-warning" : b.status === "cancelled" ? "bg-muted text-muted-foreground" : "bg-royal-50 text-royal")}>
