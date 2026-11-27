@@ -36,7 +36,7 @@ export function CheckoutView({
 }: {
   addresses: Address[];
   settings: Settings;
-  customer: { name: string; code: string };
+  customer: { name: string; code: string; phone?: string };
   onlineEnabled: boolean;
   testMode: boolean;
   mode?: "cart" | "buynow";
@@ -232,6 +232,8 @@ export function CheckoutView({
               <AddressForm
                 current={editing === "new" ? null : editing}
                 firstAddress={addresses.length === 0}
+                prefill={{ name: customer.name === "Customer" ? "" : customer.name, phone: customer.phone ?? "" }}
+                compact
                 onSaved={() => {
                   setEditing(null);
                   router.refresh();

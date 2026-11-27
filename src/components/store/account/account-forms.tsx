@@ -87,30 +87,53 @@ export function AddressBook({ addresses }: { addresses: Address[] }) {
   );
 }
 
+/** City and state from an Indian PIN code (India Post public lookup); silent if it fails. */
+function usePinLookup() {
+  const [place, setPlace] = useState<{ city: string; state: string } | null>(null);
+  const lookup = (pin: string) => {
+    if (!/^[1-9][0-9]{5}$/.test(pin)) return;
+    fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => r.json())
+      .then((j: { Status: string; PostOffice?: { District: string; State: string }[] }[]) => {
+        const po = j?.[0]?.Status === "Success" ? j[0].PostOffice?.[0] : null;
+        if (po) setPlace({ city: po.District, state: po.State });
+      })
+      .catch(() => undefined);
+  };
+  return { place, lookup };
+}
+
 /** Add or edit one delivery address (account page and checkout). */
-export function AddressForm({ current, firstAddress, onSaved, onCancel }: { current: Address | null; firstAddress: boolean; onSaved?: () => void; onCancel?: () => void }) {
+export function AddressForm({ current, firstAddress, onSaved, onCancel, prefill, compact = false }: { current: Address | null; firstAddress: boolean; onSaved?: () => void; onCancel?: () => void; prefill?: { name: string; phone: string }; compact?: boolean }) {
+  const { place, lookup } = usePinLookup();
   return (
-    <section className="rounded-2xl border p-5 sm:p-6">
-      <h2 className="font-heading text-lg font-semibold text-deep">{current ? "Edit address" : "Add a delivery address"}</h2>
-      <ActionForm key={current?.id ?? "new"} action={saveAddressAction} submitLabel="Save address" resetOnSuccess={!current} onSuccess={onSaved} className="mt-4">
+    <section className={compact ? "" : "rounded-2xl border p-5 sm:p-6"}>
+      <h2 className="font-heading text-lg font-semibold text-deep">{current ? "Edit address" : compact ? "Where should we deliver?" : "Add a delivery address"}</h2>
+      <ActionForm key={current?.id ?? "new"} action={saveAddressAction} submitLabel={compact ? "Save and continue" : "Save address"} resetOnSuccess={!current} onSuccess={onSaved} className="mt-4">
         {(state) => (
           <>
             <input type="hidden" name="id" value={current?.id ?? ""} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field name="full_name" label="Recipient name" state={state} defaultValue={current?.full_name} autoComplete="name" required />
-              <Field name="phone" label="Mobile number" type="tel" state={state} defaultValue={current?.phone} autoComplete="tel" required />
-              <div className="sm:col-span-2"><Field name="line1" label="House / building / street" state={state} defaultValue={current?.line1} autoComplete="address-line1" required /></div>
-              <Field name="line2" label="Area / locality" state={state} defaultValue={current?.line2} autoComplete="address-line2" />
-              <Field name="landmark" label="Landmark" state={state} defaultValue={current?.landmark} />
-              <Field name="city" label="City" state={state} defaultValue={current?.city} autoComplete="address-level2" required />
-              <Field name="state" label="State" state={state} defaultValue={current?.state ?? (current ? undefined : "Kerala")} autoComplete="address-level1" required />
-              <Field name="postal_code" label="PIN code" state={state} defaultValue={current?.postal_code} autoComplete="postal-code" required />
-              <Field name="label" label="Label (e.g. Home)" state={state} defaultValue={current?.label} />
+              <Field name="full_name" label="Name" state={state} defaultValue={current?.full_name ?? prefill?.name} autoComplete="name" required />
+              <Field name="phone" label="Mobile number" type="tel" state={state} defaultValue={current?.phone ?? prefill?.phone} autoComplete="tel" required />
+              <div className="sm:col-span-2"><Field name="line1" label="House name, street, area" state={state} defaultValue={current?.line1} autoComplete="address-line1" required /></div>
+              <Field name="landmark" label="Landmark (optional)" state={state} defaultValue={current?.landmark} />
+              <label className="flex flex-col gap-1.5 text-sm font-medium text-deep">
+                <span>PIN code<span className="text-danger"> *</span></span>
+                <input name="postal_code" inputMode="numeric" maxLength={6} defaultValue={current?.postal_code ?? ""} autoComplete="postal-code" aria-invalid={Boolean(state.fieldErrors?.postal_code)} onChange={(e) => lookup(e.target.value.trim())} className={fieldClass} />
+                {state.fieldErrors?.postal_code ? <span className="text-xs font-normal text-danger">{state.fieldErrors.postal_code}</span> : null}
+              </label>
+              <Field key={`c-${place?.city ?? ""}`} name="city" label="City / district" state={state} defaultValue={place?.city ?? current?.city} autoComplete="address-level2" required />
+              <Field key={`s-${place?.state ?? ""}`} name="state" label="State" state={state} defaultValue={place?.state ?? current?.state ?? (current ? undefined : "Kerala")} autoComplete="address-level1" required />
+              {compact ? <input type="hidden" name="line2" value={current?.line2 ?? ""} /> : <Field name="line2" label="Area / locality" state={state} defaultValue={current?.line2} autoComplete="address-line2" />}
+              {compact ? <input type="hidden" name="label" value={current?.label ?? ""} /> : <Field name="label" label="Label (e.g. Home)" state={state} defaultValue={current?.label} />}
             </div>
-            <label className="flex items-center gap-2.5 text-sm text-deep">
-              <input type="checkbox" name="is_default" defaultChecked={current?.is_default ?? firstAddress} className="size-4 accent-royal" />
-              Use as my default delivery address
-            </label>
+            {compact ? <input type="hidden" name="is_default" value={!current || current.is_default ? "on" : ""} /> : (
+              <label className="flex items-center gap-2.5 text-sm text-deep">
+                <input type="checkbox" name="is_default" defaultChecked={current?.is_default ?? firstAddress} className="size-4 accent-royal" />
+                Use as my default delivery address
+              </label>
+            )}
           </>
         )}
       </ActionForm>

@@ -25,6 +25,17 @@ export function BfPage({ title, description, module, actions, children }: { titl
   );
 }
 
+/** A row of links to related pages that are not in the side menu. */
+export function MoreLinks({ links }: { links: [string, string][] }) {
+  return (
+    <nav aria-label="More pages" className="-mt-2 flex flex-wrap gap-2">
+      {links.map(([href, label]) => (
+        <a key={href} href={href} className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-royal hover:bg-royal-50">{label}</a>
+      ))}
+    </nav>
+  );
+}
+
 export function Panel({ title, description, children, className, aside }: { title?: string; description?: string; children: React.ReactNode; className?: string; aside?: React.ReactNode }) {
   return (
     <section className={cn("rounded-2xl border bg-card p-5 shadow-card", className)}>

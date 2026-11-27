@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { OpForm } from "@/components/best-fit/op-form";
-import { BfPage, DataTable, Panel, Status } from "@/components/best-fit/ui";
+import { BfPage, MoreLinks, DataTable, Panel, Status } from "@/components/best-fit/ui";
 import { getGroups, getPeople } from "@/features/best-fit/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -55,5 +55,5 @@ async function Content() {
 }
 
 export default function Page() {
-  return <BfPage title="Technician Dashboard" module="best_fit"><Content /></BfPage>;
+  return <BfPage title="Technician Dashboard" module="best_fit"><MoreLinks links={[["/admin/best-fit/groups", "Technician groups"], ["/admin/best-fit/ai-groups", "AI location groups"], ["/admin/best-fit/schedule", "Task scheduling"]]} /><Content /></BfPage>;
 }

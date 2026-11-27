@@ -115,8 +115,9 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
           {/* Laptop/desktop: the photos stay in view while the details column scrolls (no blank area). */}
           <div className="min-w-0 lg:sticky lg:top-28 lg:self-start">
             <VariantGallery sharedImages={product.sharedImages} video={product.video} social={social} categorySlug={product.category.slug} name={product.name} />
-            {/* Variants, size and warranty sit right under the photos on every screen size. */}
-            <div className="mt-5 flex flex-col gap-4">
+            {/* Desktop: variants, size and warranty right under the photos. Phones show them
+                next to Buy now instead, so the button stays near the top. */}
+            <div className="mt-5 hidden flex-col gap-4 lg:flex">
               <VariantOptions variantTypes={product.variantTypes} />
               <ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={warrantyLines} />
             </div>
@@ -146,6 +147,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 prepaidPct={product.prepaidDiscountPct}
                 codPct={product.codDiscountPct}
                 settings={priceSettings}
+                mobileOptions={<><VariantOptions variantTypes={product.variantTypes} /><ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={warrantyLines} /></>}
               />
             </div>
 

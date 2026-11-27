@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bike, Camera, CarFront, Check, CheckCircle2, Clock, FileText, Home, Images, Loader2, MapPin, Package, Phone, ShieldCheck, Store, Wrench, X, type LucideIcon } from "lucide-react";
 import { inputClass } from "@/components/admin/form/fields";
 import { L } from "@/components/i18n/lang";
 import { useLang } from "@/components/i18n/language-switcher";
 import { createServiceBookingAction } from "@/features/service/actions";
+import { estimateVisitAction, type VisitEstimateResult } from "@/features/service/estimate";
 import { MAX_PHOTOS, SERVICE_MEDIA_BUCKET } from "@/features/service/constants";
 import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
@@ -25,43 +26,52 @@ const PURPLE = "#4B0082";
 const TYPE_ICONS: LucideIcon[] = [Phone, ShieldCheck, Wrench];
 const CAT_ICONS: Record<string, LucideIcon> = { bicycles: Bike, "ride-ons": CarFront, other: Package };
 
-function Section({ n, title, hint, children }: { n: number; title: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
+/** One numbered block of the form. */
+function Step({ n, title, children }: { n: number; title: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="rounded-3xl border border-[#4B0082]/10 bg-white p-5 shadow-[0_10px_40px_-24px_rgb(75_0_130/0.45)] sm:p-7">
-      <div className="mb-4 flex items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#1A0F2E] text-sm font-bold text-[#D4AF37]">{n}</span>
-        <div>
-          <h2 className="font-heading text-lg font-bold text-[#1A0F2E]">{title}</h2>
-          {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
-        </div>
-      </div>
-      {children}
+    <section className="rounded-2xl border bg-white p-5 shadow-card sm:p-6">
+      <h2 className="mb-4 flex items-center gap-3 font-heading text-lg font-semibold text-[#1A0F2E]">
+        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#4B0082] text-sm text-white">{n}</span>
+        {title}
+      </h2>
+      <div className="flex flex-col gap-5">{children}</div>
     </section>
   );
 }
 
-function Card({ selected, onClick, icon: Icon, title, desc, children }: { selected: boolean; onClick: () => void; icon?: LucideIcon; title: React.ReactNode; desc?: React.ReactNode; children?: React.ReactNode }) {
+/** A labelled question inside a step. */
+function Field({ label, required, hint, children }: { label: React.ReactNode; required?: boolean; hint?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-semibold text-[#1A0F2E]">{label}{required ? <span className="text-danger"> *</span> : null}</span>
+      {children}
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+/** A tap-to-choose option with a radio circle, so it is obvious it can be selected. */
+function Choice({ selected, onClick, icon: Icon, title, desc, children }: { selected: boolean; onClick: () => void; icon?: LucideIcon; title: React.ReactNode; desc?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <button
       type="button"
-      aria-pressed={selected}
+      role="radio"
+      aria-checked={selected}
       onClick={onClick}
       className={cn(
-        "relative flex w-full items-start gap-3 rounded-2xl border-2 p-4 text-left transition-all",
-        selected ? "border-[#4B0082] bg-[#4B0082]/[0.04] shadow-[0_8px_24px_-12px_rgb(75_0_130/0.6)]" : "border-border bg-white hover:border-[#D4AF37]",
+        "flex w-full items-start gap-3 rounded-xl border-2 px-3.5 py-3 text-left transition-colors",
+        selected ? "border-[#4B0082] bg-[#4B0082]/[0.05]" : "border-border bg-white hover:border-[#4B0082]/40",
       )}
     >
-      {Icon ? (
-        <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl", selected ? "bg-[#4B0082] text-[#D4AF37]" : "bg-[#F4EEFA] text-[#4B0082]")}>
-          <Icon aria-hidden className="size-5" />
-        </span>
-      ) : null}
+      <span className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2", selected ? "border-[#4B0082] bg-[#4B0082]" : "border-muted-foreground/40")}>
+        {selected ? <Check aria-hidden className="size-3 text-white" strokeWidth={3} /> : null}
+      </span>
+      {Icon ? <Icon aria-hidden className={cn("mt-0.5 size-5 shrink-0", selected ? "text-[#4B0082]" : "text-muted-foreground")} /> : null}
       <span className="min-w-0 flex-1">
-        <span className="block font-semibold text-[#1A0F2E]">{title}</span>
-        {desc ? <span className="mt-0.5 block text-sm text-muted-foreground">{desc}</span> : null}
+        <span className="block text-sm font-semibold text-[#1A0F2E]">{title}</span>
+        {desc ? <span className="mt-0.5 block text-xs text-muted-foreground">{desc}</span> : null}
         {children}
       </span>
-      {selected ? <span className="absolute top-3 right-3 grid size-6 place-items-center rounded-full bg-[#D4AF37] text-[#1A0F2E]"><Check aria-hidden className="size-4" /></span> : null}
     </button>
   );
 }
@@ -86,6 +96,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   const [fromKingDay, setFromKingDay] = useState<boolean | null>(null);
   const [purchaseKey, setPurchaseKey] = useState("");
+  const [productName, setProductName] = useState("");
   const [bill, setBill] = useState<File | null>(null);
   const [complaint, setComplaint] = useState("");
   const [voice, setVoice] = useState<VoiceNote | null>(null);
@@ -130,7 +141,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
-    const missing = !serviceType ? "Choose the service type." : !category ? "Choose your product category." : complaint.trim().length < 5 && !voice ? "Describe the problem or record a voice note." : !mode ? "Choose where you want the service." : modeKind === "centre" && !centre ? "Choose a service centre." : modeKind === "visit" && address.trim().length < 5 ? "Enter the service address." : !known && (name.trim().length < 2 || mobile.trim().length < 7) ? "Enter your name and mobile number." : null;
+    const missing = !known && (name.trim().length < 2 || mobile.trim().length < 7) ? "Enter your name and mobile number." : !category ? "Choose your product." : fromKingDay === null ? "Tell us where you bought it." : !serviceType ? "Choose the service you need." : complaint.trim().length < 5 && !voice ? "Describe the problem or record a voice note." : !mode ? "Choose where you want the service." : modeKind === "centre" && !centre ? "Choose a service centre." : modeKind === "visit" && address.trim().length < 5 ? "Enter the service address." : null;
     if (missing) {
       setError(missing);
       return;
@@ -173,6 +184,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
         customer_name: name, mobile, email: defaults.email, category, service_type: serviceType, booking_kind: "service",
         purchase_source: fromKingDay ? "kingday" : "external", order_id: fromKingDay && purchase ? purchase.orderId : "",
         purchase_details: fromKingDay && purchase ? `KING DAY order ${purchase.orderNumber} · ${purchase.productName}` : "",
+        product_name: fromKingDay && purchase ? purchase.productName : productName,
         complaint, voice_path: voicePath, voice_duration_seconds: voice?.seconds ?? null, photo_paths: photoPaths, purchase_invoice_path: billPath,
         service_mode: mode, service_centre_id: modeKind === "centre" ? centre : "", address: modeKind === "visit" ? address : "", town, instructions,
         latitude: modeKind === "visit" ? (location?.lat ?? null) : null, longitude: modeKind === "visit" ? (location?.lng ?? null) : null,
@@ -206,134 +218,169 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
     );
   }
 
-  let n = 0;
+
+  const chip = (on: boolean) => cn("h-11 rounded-full border-2 px-5 text-sm font-semibold", on ? "border-[#4B0082] bg-[#4B0082] text-white" : "border-border bg-white text-[#1A0F2E] hover:border-[#4B0082]/40");
   return (
     <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
-      <Section n={++n} title={<L en="What kind of service?" ml="ഏത് തരം സർവീസ്?" />}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {types.map((ty, i) => <Card key={ty.slug} selected={serviceType === ty.slug} onClick={() => setServiceType(ty.slug)} icon={TYPE_ICONS[i % TYPE_ICONS.length]} title={t(ty)} desc={ty.description} />)}
-        </div>
-      </Section>
-
-      <Section n={++n} title={<L en="Your product" ml="നിങ്ങളുടെ ഉൽപ്പന്നം" />}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {mains.map((m) => <Card key={m.slug} selected={main === m.slug} onClick={() => pickMain(m.slug)} icon={CAT_ICONS[m.slug] ?? Package} title={t(m)} />)}
-        </div>
-        {subs.length ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {subs.map((s) => (
-              <button key={s.slug} type="button" aria-pressed={category === s.slug} onClick={() => setCategory(s.slug)}
-                className={cn("h-11 rounded-full border-2 px-5 text-sm font-semibold", category === s.slug ? "border-[#4B0082] bg-[#4B0082] text-white" : "border-border bg-white text-[#1A0F2E] hover:border-[#D4AF37]")}>
-                {t(s)}
-              </button>
-            ))}
+      <Step n={1} title={<L en="Your details" ml="നിങ്ങളുടെ വിവരങ്ങൾ" />}>
+        {known ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#F4EEFA] px-4 py-3 text-sm">
+            <span><span className="font-semibold text-[#1A0F2E]">{defaults.name}</span> · {defaults.mobile}{defaults.code ? <span className="ml-2 font-mono text-xs text-[#4B0082]">{defaults.code}</span> : null}</span>
+            <Link href="/account" className="font-semibold text-[#4B0082] hover:underline"><L en="Change" ml="മാറ്റുക" /></Link>
           </div>
-        ) : null}
-      </Section>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={<L en="Name" ml="പേര്" />} required><input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" className={inputClass} /></Field>
+            <Field label={<L en="Mobile number" ml="മൊബൈൽ നമ്പർ" />} required><input value={mobile} onChange={(e) => setMobile(e.target.value)} type="tel" inputMode="tel" maxLength={20} autoComplete="tel" className={inputClass} /></Field>
+          </div>
+        )}
+      </Step>
 
-      <Section n={++n} title={<L en="Photos of the product" ml="ഉൽപ്പന്നത്തിന്റെ ഫോട്ടോകൾ" />} hint={<L en={`Optional, up to ${MAX_PHOTOS}. Show the problem area.`} ml={`ഐച്ഛികം, ${MAX_PHOTOS} വരെ.`} />}>
-        <div className="flex flex-wrap gap-3">
-          {photos.map((p, i) => (
-            <div key={p.url} className="relative size-24 overflow-hidden rounded-2xl border">
-              {/* eslint-disable-next-line @next/next/no-img-element -- local preview before upload */}
-              <img src={p.url} alt={`Photo ${i + 1}`} className="size-full object-cover" />
-              <button type="button" onClick={() => setPhotos(photos.filter((_, j) => j !== i))} aria-label="Remove photo" className="absolute top-1 right-1 grid size-7 place-items-center rounded-full bg-[#1A0F2E]/75 text-white"><X className="size-4" /></button>
+      <Step n={2} title={<L en="Your product" ml="നിങ്ങളുടെ ഉൽപ്പന്നം" />}>
+        <Field label={<L en="What is it?" ml="ഏത് ഉൽപ്പന്നം?" />} required>
+          <div role="radiogroup" className="flex flex-wrap gap-2">
+            {mains.map((m) => {
+              const Icon = CAT_ICONS[m.slug] ?? Package;
+              return (
+                <button key={m.slug} type="button" role="radio" aria-checked={main === m.slug} onClick={() => pickMain(m.slug)} className={cn(chip(main === m.slug), "inline-flex items-center gap-2")}>
+                  <Icon aria-hidden className="size-4" /> {t(m)}
+                </button>
+              );
+            })}
+          </div>
+          {subs.length ? (
+            <div role="radiogroup" className="mt-1 flex flex-wrap gap-2 rounded-xl bg-muted/50 p-2">
+              {subs.map((s) => (
+                <button key={s.slug} type="button" role="radio" aria-checked={category === s.slug} onClick={() => setCategory(s.slug)} className={cn(chip(category === s.slug), "h-10 px-4")}>{t(s)}</button>
+              ))}
             </div>
-          ))}
-          {photos.length < MAX_PHOTOS ? (
-            <>
-              <label className="grid size-24 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-[#4B0082]/30 text-[#4B0082] hover:border-[#D4AF37]">
-                <span className="flex flex-col items-center gap-1 text-xs font-semibold"><Camera aria-hidden className="size-6" /><L en="Camera" ml="ക്യാമറ" /></span>
-                <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
-              </label>
-              <label className="grid size-24 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-[#4B0082]/30 text-[#4B0082] hover:border-[#D4AF37]">
-                <span className="flex flex-col items-center gap-1 text-xs font-semibold"><Images aria-hidden className="size-6" /><L en="Gallery" ml="ഗാലറി" /></span>
-                <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
-              </label>
-            </>
           ) : null}
-        </div>
-      </Section>
+        </Field>
 
-      <Section n={++n} title={<L en="Was it bought from KING DAY?" ml="KING DAY-ൽ നിന്നാണോ വാങ്ങിയത്?" />}>
-        <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-          <Card selected={fromKingDay === true} onClick={() => setFromKingDay(true)} title={<L en="Yes" ml="അതെ" />} />
-          <Card selected={fromKingDay === false} onClick={() => setFromKingDay(false)} title={<L en="No" ml="അല്ല" />} />
-        </div>
+        <Field label={<L en="Where did you buy it?" ml="എവിടെ നിന്നാണ് വാങ്ങിയത്?" />} required>
+          <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
+            <Choice selected={fromKingDay === true} onClick={() => setFromKingDay(true)} title={<L en="Bought from KING DAY" ml="KING DAY-ൽ നിന്ന് വാങ്ങിയത്" />} />
+            <Choice selected={fromKingDay === false} onClick={() => setFromKingDay(false)} title={<L en="Bought from another shop" ml="മറ്റൊരു കടയിൽ നിന്ന് വാങ്ങിയത്" />} />
+          </div>
+        </Field>
         {fromKingDay ? (
-          <div className="mt-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3">
             {purchases.length ? (
-              <label className="flex flex-col gap-1 text-sm"><span className="font-medium text-[#1A0F2E]"><L en="Your order (optional)" ml="ഓർഡർ (ഐച്ഛികം)" /></span>
+              <Field label={<L en="Which order? (optional)" ml="ഏത് ഓർഡർ? (ഐച്ഛികം)" />}>
                 <select value={purchaseKey} onChange={(e) => setPurchaseKey(e.target.value)} className={inputClass}>
                   <option value="">{ml ? "തിരഞ്ഞെടുക്കുക…" : "Choose…"}</option>
                   {purchases.map((p) => <option key={p.key} value={p.key}>{p.productName} · {p.orderNumber}</option>)}
                 </select>
-              </label>
+              </Field>
             ) : null}
             <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border-2 border-dashed border-[#4B0082]/30 px-4 py-2.5 text-sm font-semibold text-[#4B0082] hover:border-[#D4AF37]">
-              <FileText aria-hidden className="size-4" />{bill ? bill.name : <L en="Attach bill (photo or PDF, optional)" ml="ബിൽ ചേർക്കുക (ഐച്ഛികം)" />}
+              <FileText aria-hidden className="size-4" />{bill ? bill.name : <L en="Add the bill photo (optional)" ml="ബില്ലിന്റെ ഫോട്ടോ ചേർക്കുക (ഐച്ഛികം)" />}
               <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={(e) => setBill(e.target.files?.[0] ?? null)} />
             </label>
             {bill ? <button type="button" onClick={() => setBill(null)} className="w-fit text-xs text-danger underline"><L en="Remove bill" ml="ബിൽ നീക്കുക" /></button> : null}
           </div>
+        ) : fromKingDay === false ? (
+          <Field label={<L en="Product name (optional)" ml="ഉൽപ്പന്നത്തിന്റെ പേര് (ഐച്ഛികം)" />}>
+            <input value={productName} onChange={(e) => setProductName(e.target.value)} maxLength={200} placeholder={ml ? "ഉദാ: 12V ഇലക്ട്രിക് ജീപ്പ്" : "e.g. 12V electric jeep, red"} className={inputClass} />
+          </Field>
         ) : null}
-      </Section>
 
-      <Section n={++n} title={<L en="Tell us the problem" ml="പ്രശ്നം പറയൂ" />} hint={<L en="Type it, record a voice note, or both." ml="ടൈപ്പ് ചെയ്യുക, അല്ലെങ്കിൽ ശബ്ദ സന്ദേശം." />}>
-        <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={4} maxLength={3000} placeholder={ml ? "ഉദാ: ബാറ്ററി ചാർജ് ആകുന്നില്ല" : "e.g. Battery not charging, brake noise"} className={cn(inputClass, "h-auto py-2")} />
-        <div className="mt-3"><VoiceRecorder value={voice} onChange={setVoice} status={busy && stage?.startsWith("Uploading voice") ? stage : null} /></div>
-      </Section>
+        <Field label={<L en="Photos (optional)" ml="ഫോട്ടോകൾ (ഐച്ഛികം)" />} hint={<L en={`Up to ${MAX_PHOTOS}. Show the problem area.`} ml={`${MAX_PHOTOS} വരെ. പ്രശ്നമുള്ള ഭാഗം കാണിക്കുക.`} />}>
+          <div className="flex flex-wrap gap-3">
+            {photos.map((p, i) => (
+              <div key={p.url} className="relative size-20 overflow-hidden rounded-xl border">
+                {/* eslint-disable-next-line @next/next/no-img-element -- local preview before upload */}
+                <img src={p.url} alt={`Photo ${i + 1}`} className="size-full object-cover" />
+                <button type="button" onClick={() => setPhotos(photos.filter((_, j) => j !== i))} aria-label="Remove photo" className="absolute top-1 right-1 grid size-6 place-items-center rounded-full bg-[#1A0F2E]/75 text-white"><X className="size-3.5" /></button>
+              </div>
+            ))}
+            {photos.length < MAX_PHOTOS ? (
+              <>
+                <label className="grid size-20 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-[#4B0082]/30 text-[#4B0082] hover:border-[#D4AF37]">
+                  <span className="flex flex-col items-center gap-1 text-xs font-semibold"><Camera aria-hidden className="size-5" /><L en="Camera" ml="ക്യാമറ" /></span>
+                  <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
+                </label>
+                <label className="grid size-20 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-[#4B0082]/30 text-[#4B0082] hover:border-[#D4AF37]">
+                  <span className="flex flex-col items-center gap-1 text-xs font-semibold"><Images aria-hidden className="size-5" /><L en="Gallery" ml="ഗാലറി" /></span>
+                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
+                </label>
+              </>
+            ) : null}
+          </div>
+        </Field>
+      </Step>
 
-      <Section n={++n} title={<L en="Where would you like your service?" ml="സർവീസ് എവിടെ വേണം?" />}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {modes.map((m) => <Card key={m.slug} selected={mode === m.slug} onClick={() => setMode(m.slug)} icon={m.kind === "centre" ? Store : Home} title={ml && m.title_ml ? m.title_ml : m.title} desc={m.description} />)}
+      <Step n={3} title={<L en="The problem" ml="പ്രശ്നം" />}>
+        <Field label={<L en="What do you need?" ml="എന്ത് സർവീസ് വേണം?" />} required>
+          <div role="radiogroup" className="grid gap-2 sm:grid-cols-3">
+            {types.map((ty, i) => <Choice key={ty.slug} selected={serviceType === ty.slug} onClick={() => setServiceType(ty.slug)} icon={TYPE_ICONS[i % TYPE_ICONS.length]} title={t(ty)} desc={ty.description} />)}
+          </div>
+        </Field>
+        <Field label={<L en="Tell us the problem" ml="പ്രശ്നം പറയൂ" />} required hint={<L en="Type it, or record a voice note — or both." ml="ടൈപ്പ് ചെയ്യുക, അല്ലെങ്കിൽ ശബ്ദ സന്ദേശം റെക്കോർഡ് ചെയ്യുക." />}>
+          <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3} maxLength={3000} placeholder={ml ? "ഉദാ: ബാറ്ററി ചാർജ് ആകുന്നില്ല" : "e.g. Battery not charging, brake noise"} className={cn(inputClass, "h-auto py-2")} />
+          <VoiceRecorder value={voice} onChange={setVoice} status={busy && stage?.startsWith("Uploading voice") ? stage : null} />
+        </Field>
+      </Step>
+
+      <Step n={4} title={<L en="Where should we service it?" ml="എവിടെ വെച്ച് സർവീസ് ചെയ്യണം?" />}>
+        <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
+          {modes.map((m) => <Choice key={m.slug} selected={mode === m.slug} onClick={() => setMode(m.slug)} icon={m.kind === "centre" ? Store : Home} title={ml && m.title_ml ? m.title_ml : m.title} desc={m.description} />)}
         </div>
         {modeKind === "visit" ? (
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span className="font-medium text-[#1A0F2E]"><L en="Address" ml="വിലാസം" /> <span className="text-danger">*</span></span>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2"><Field label={<L en="Address" ml="വിലാസം" />} required>
               <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} maxLength={500} autoComplete="street-address" className={cn(inputClass, "h-auto py-2")} />
-            </label>
-            <label className="flex flex-col gap-1 text-sm"><span className="font-medium text-[#1A0F2E]"><L en="Town / district" ml="സ്ഥലം / ജില്ല" /></span><input value={town} onChange={(e) => setTown(e.target.value)} maxLength={80} className={inputClass} /></label>
-            <label className="flex flex-col gap-1 text-sm"><span className="font-medium text-[#1A0F2E]"><L en="Instructions (optional)" ml="നിർദ്ദേശങ്ങൾ" /></span><input value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={500} placeholder={ml ? "ഉദാ: ഗേറ്റിനടുത്ത് വിളിക്കുക" : "e.g. Call at the gate"} className={inputClass} /></label>
+            </Field></div>
+            <Field label={<L en="Town / place" ml="സ്ഥലം" />}><input value={town} onChange={(e) => setTown(e.target.value)} maxLength={80} className={inputClass} /></Field>
+            <Field label={<L en="Note for the technician (optional)" ml="ടെക്നീഷ്യന് കുറിപ്പ് (ഐച്ഛികം)" />}><input value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={500} placeholder={ml ? "ഉദാ: ഗേറ്റിനടുത്ത് വിളിക്കുക" : "e.g. Call at the gate"} className={inputClass} /></Field>
             <div className="sm:col-span-2"><LocationPicker value={location} onChange={setLocation} /></div>
-            <p className="text-xs text-muted-foreground sm:col-span-2"><L en="Your map location is optional. It helps us plan the visit; the inspection charge uses the verified road distance." ml="മാപ്പ് ലൊക്കേഷൻ ഐച്ഛികമാണ്." /></p>
+            {location ? <div className="sm:col-span-2"><VisitEstimate location={location} /></div> : null}
           </div>
         ) : modeKind === "centre" ? (
-          <div className="mt-5 flex flex-col gap-3">
-            {sortedCentres.length === 0 ? <p className="text-sm text-muted-foreground"><L en="No service centres are open for booking right now. Please choose Home Service." ml="സർവീസ് സെന്ററുകൾ ഇപ്പോൾ ലഭ്യമല്ല." /></p> : null}
+          <div role="radiogroup" className="flex flex-col gap-2">
+            {sortedCentres.length === 0 ? <p className="text-sm text-muted-foreground"><L en="No service centres are open for booking right now. Please choose a home visit." ml="സർവീസ് സെന്ററുകൾ ഇപ്പോൾ ലഭ്യമല്ല. വീട്ടിൽ വന്ന് സർവീസ് തിരഞ്ഞെടുക്കുക." /></p> : null}
             {sortedCentres.map((c) => (
-              <Card key={c.id} selected={centre === c.id} onClick={() => setCentre(c.id)} icon={MapPin} title={c.name} desc={c.address}>
+              <Choice key={c.id} selected={centre === c.id} onClick={() => setCentre(c.id)} icon={MapPin} title={c.name} desc={c.address}>
                 <span className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {c.dist != null ? <span>≈ {c.dist.toFixed(1)} km away</span> : null}
                   {c.working_hours ? <span className="inline-flex items-center gap-1"><Clock aria-hidden className="size-3" /> {c.working_hours}</span> : null}
                   {c.phone ? <span className="inline-flex items-center gap-1"><Phone aria-hidden className="size-3" /> {c.phone}</span> : null}
                 </span>
-              </Card>
+              </Choice>
             ))}
-            <p className="text-xs text-muted-foreground"><L en="Our staff will attend to your product at the selected centre." ml="തിരഞ്ഞെടുത്ത സെന്ററിൽ ഞങ്ങളുടെ ജീവനക്കാർ സഹായിക്കും." /></p>
           </div>
         ) : null}
-      </Section>
+        <p className="text-xs text-muted-foreground"><L en="No need to pick a date. We will call you to fix a convenient time." ml="തീയതി തിരഞ്ഞെടുക്കേണ്ട. സൗകര്യപ്രദമായ സമയം ഞങ്ങൾ വിളിച്ച് ഉറപ്പിക്കും." /></p>
+      </Step>
 
-      <Section n={++n} title={<L en="Your details" ml="നിങ്ങളുടെ വിവരങ്ങൾ" />}>
-        {known ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#F4EEFA] px-4 py-3 text-sm">
-            <span><span className="font-semibold text-[#1A0F2E]">{defaults.name}</span> · {defaults.mobile}{defaults.code ? <span className="ml-2 font-mono text-xs text-[#4B0082]">{defaults.code}</span> : null}</span>
-            <Link href="/account" className="font-semibold text-[#4B0082] hover:underline"><L en="Change" ml="മാറ്റുക" /></Link>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm"><span className="font-medium"><L en="Name" ml="പേര്" /></span><input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" className={inputClass} /></label>
-            <label className="flex flex-col gap-1 text-sm"><span className="font-medium"><L en="Mobile number" ml="മൊബൈൽ നമ്പർ" /></span><input value={mobile} onChange={(e) => setMobile(e.target.value)} type="tel" inputMode="tel" maxLength={20} autoComplete="tel" className={inputClass} /></label>
-          </div>
-        )}
-      </Section>
-
-      {error ? <p role="alert" className="rounded-2xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
+      {error ? <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
       <button type="submit" disabled={busy} className="inline-flex h-14 items-center justify-center gap-2 rounded-full px-8 text-base font-bold text-[#1A0F2E] shadow-[0_14px_34px_-14px_rgb(212_175_55/0.9)] disabled:opacity-60" style={{ background: "linear-gradient(135deg,#E8C964,#D4AF37)" }}>
         {busy ? <Loader2 aria-hidden className="size-5 animate-spin" /> : <Wrench aria-hidden className="size-5" color={PURPLE} />}
         {busy ? (stage ?? "…") : <L en="Book service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />}
       </button>
     </form>
+  );
+}
+
+/** Approximate road distance and inspection charge for a home visit (final uses the verified distance). */
+function VisitEstimate({ location }: { location: LatLng }) {
+  const [state, setState] = useState<{ key: string; r: VisitEstimateResult } | null>(null);
+  const key = `${location.lat.toFixed(4)},${location.lng.toFixed(4)}`;
+  useEffect(() => {
+    let alive = true;
+    void estimateVisitAction({ lat: location.lat, lng: location.lng }).then((r) => alive && setState({ key, r }));
+    return () => {
+      alive = false;
+    };
+  }, [key, location.lat, location.lng]);
+  const r = state?.key === key ? state.r : null;
+  if (!r) return <p className="text-xs text-muted-foreground"><L en="Calculating distance…" ml="ദൂരം കണക്കാക്കുന്നു…" /></p>;
+  if (!r.ok) return null;
+  return (
+    <p className="rounded-xl bg-[#F4EEFA] px-4 py-3 text-sm text-[#1A0F2E]">
+      <L en="Distance from KING DAY" ml="KING DAY-ൽ നിന്നുള്ള ദൂരം" />: <span className="font-semibold">≈ {r.km} km</span>
+      {r.chargePaise != null ? <> · <L en="Inspection charge about" ml="പരിശോധനാ ചാർജ് ഏകദേശം" /> <span className="font-semibold">₹{(r.chargePaise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></> : null}
+      <span className="mt-1 block text-xs text-muted-foreground"><L en="Approximate. The final amount uses the distance our technician confirms." ml="ഏകദേശ തുക. ടെക്നീഷ്യൻ ഉറപ്പിക്കുന്ന ദൂരം അനുസരിച്ചാണ് അന്തിമ തുക." /></span>
+    </p>
   );
 }

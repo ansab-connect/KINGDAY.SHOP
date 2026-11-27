@@ -3,14 +3,15 @@ import "server-only";
 /**
  * Road routing through an OSRM-compatible server (self-hosted OSRM, or a hosted provider
  * that speaks the OSRM API). Set ROUTING_OSRM_URL, e.g. https://osrm.example.com.
- * Without it, no distance is invented: callers get `{ ok: false, reason: "not_configured" }`.
+ * Without it, the free public OSRM server (real road network, light use only) is used.
+ * Distances always come from the provider; nothing is invented.
  * Straight-line distance is never used for billing.
  */
 export type Point = { lat: number; lng: number };
 export type Leg = { km: number; minutes: number };
 export type RoutingError = { ok: false; reason: "not_configured" | "no_route" | "failed"; message: string };
 
-const BASE = process.env.ROUTING_OSRM_URL?.replace(/\/+$/, "") ?? "";
+const BASE = (process.env.ROUTING_OSRM_URL || "https://router.project-osrm.org").replace(/\/+$/, "");
 export const routingProvider = BASE ? `osrm:${URL.canParse(BASE) ? new URL(BASE).host : "custom"}` : null;
 
 const coords = (pts: Point[]) => pts.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(";");

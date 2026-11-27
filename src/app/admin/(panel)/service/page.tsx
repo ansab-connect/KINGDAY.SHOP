@@ -56,11 +56,22 @@ async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
         description="BEST FIT bookings. Assign technicians and follow every job from inspection to delivery."
         actions={
           <Link href="/admin/service/catalog" className="inline-flex h-10 items-center rounded-lg border bg-white px-4 text-sm font-semibold text-deep hover:bg-muted">
-            BEST FIT catalog
+            Service settings
           </Link>
         }
       />
       <AutoRefresh seconds={30} />
+      <details className="mb-4 rounded-xl border bg-white p-4 text-sm">
+        <summary className="cursor-pointer font-semibold text-royal">How a service job works (6 steps)</summary>
+        <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-deep">
+          <li><b>Customer books</b> on the BEST FIT page → the job appears here as <i>New</i>.</li>
+          <li><b>Open the job</b> → in “Work order”, choose the technician (and a date if you want).</li>
+          <li><b>Home visit:</b> the road distance and inspection charge are calculated from the customer’s map pin. Check the km, then “Create pre-invoice” if you charge inspection.</li>
+          <li><b>Technician</b> accepts in the staff app (or press “Accept for the technician” on the job) → Start inspection → Inspection completed → Start service → <b>Service completed</b>.</li>
+          <li>When completed, the <b>Invoice</b> box appears on the job: add charges and parts, record payment, then <b>Approve</b> so the customer can see it.</li>
+          <li>Finally “Ready for delivery”. Technician earnings: BEST FIT → Technician Invoices → “Finalise &amp; assign earnings”.</li>
+        </ol>
+      </details>
       <ServiceStats />
       {error ? (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning-soft p-4 text-sm text-warning">

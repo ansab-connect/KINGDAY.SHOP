@@ -40,7 +40,7 @@ type Props = {
  * a pre-filled order message; the cart is kept in the browser. Prices shown are
  * display-only: online checkout (Phase 8) re-reads them from the database.
  */
-export function PurchasePanel({ productId, name, shortDescription, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings }: Props) {
+export function PurchasePanel({ productId, name, shortDescription, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings, mobileOptions }: Props & { mobileOptions?: React.ReactNode }) {
   const { variants, variant } = useVariantSelection();
   // Quantity resets to 1 whenever a different variant is chosen (picker lives under the photos).
   const [qtyState, setQtyState] = useState({ id: variant.id, n: 1 });
@@ -112,7 +112,8 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
         </p>
       </div>
 
-      {shortDescription ? <p className="text-base leading-relaxed text-muted-foreground">{shortDescription}</p> : null}
+      {/* Phones: colour/model choices sit right above the quantity and Buy now (desktop shows them under the photos). */}
+      {mobileOptions ? <div className="flex flex-col gap-4 lg:hidden">{mobileOptions}</div> : null}
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex h-12 items-center rounded-full border bg-white">
@@ -129,16 +130,6 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
         </p>
       </div>
 
-      {!out ? (
-        <dl className="rounded-2xl border border-royal-100 bg-royal-50/40 p-4 text-sm" aria-live="polite" aria-label="Price if you pay online">
-          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal ({qty} item{qty === 1 ? "" : "s"})</dt><dd className="tabular">{formatPaise(prepaid.subtotal)}</dd></div>
-          {prepaid.discount ? (
-            <div className="mt-1.5 flex justify-between text-success"><dt>Prepaid discount ({prepaidPct}%)</dt><dd className="tabular">−{formatPaise(prepaid.discount)}</dd></div>
-          ) : null}
-          <div className="mt-1.5 flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular">{prepaid.shipping ? formatPaise(prepaid.shipping) : <span className="font-semibold text-success">Free</span>}</dd></div>
-          <div className="mt-2 flex justify-between border-t border-royal-100 pt-2 text-base font-bold text-deep"><dt>You pay online</dt><dd className="tabular">{formatPaise(prepaid.total)}</dd></div>
-        </dl>
-      ) : null}
 
       <div className="flex flex-col gap-3">
         {/* Buy now: the one bold, warm action on the page (orange stands out from the purple
@@ -201,6 +192,19 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
           </a>
         ) : null}
       </div>
+
+      {!out ? (
+        <dl className="rounded-2xl border border-royal-100 bg-royal-50/40 p-4 text-sm" aria-live="polite" aria-label="Price if you pay online">
+          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal ({qty} item{qty === 1 ? "" : "s"})</dt><dd className="tabular">{formatPaise(prepaid.subtotal)}</dd></div>
+          {prepaid.discount ? (
+            <div className="mt-1.5 flex justify-between text-success"><dt>Prepaid discount ({prepaidPct}%)</dt><dd className="tabular">−{formatPaise(prepaid.discount)}</dd></div>
+          ) : null}
+          <div className="mt-1.5 flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular">{prepaid.shipping ? formatPaise(prepaid.shipping) : <span className="font-semibold text-success">Free</span>}</dd></div>
+          <div className="mt-2 flex justify-between border-t border-royal-100 pt-2 text-base font-bold text-deep"><dt>You pay online</dt><dd className="tabular">{formatPaise(prepaid.total)}</dd></div>
+        </dl>
+      ) : null}
+
+      {shortDescription ? <p className="text-base leading-relaxed text-muted-foreground">{shortDescription}</p> : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <button

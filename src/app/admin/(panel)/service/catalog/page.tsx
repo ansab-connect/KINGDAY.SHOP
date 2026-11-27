@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
+import { MoreLinks } from "@/components/best-fit/ui";
 import { CategoryForm, ItemForm, OptionForm, TypeForm } from "@/components/admin/service/catalog-forms";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,7 +56,8 @@ async function Catalog({ searchParams }: PageProps<"/admin/service/catalog">) {
       <Link href="/admin/service" className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-royal hover:underline">
         <ArrowLeft aria-hidden className="size-4" /> Service Management
       </Link>
-      <PageHeader title="Service Configuration" description="Service types, product categories and service modes shown on the customer booking page. Switch entries off instead of deleting them, so old bookings keep their names." />
+      <PageHeader title="Service Settings" description="Service types, product categories and service modes shown on the customer booking page. Switch entries off instead of deleting them, so old bookings keep their names." />
+      <div className="mb-4"><MoreLinks links={[["/admin/service/history", "Service history"], ["/admin/service/customers", "Customer service details"], ["/admin/service/visibility", "What customers can see"]]} /></div>
       <nav aria-label="Catalog sections" className="-mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1">
         {TABS.map((t) => (
           <Link

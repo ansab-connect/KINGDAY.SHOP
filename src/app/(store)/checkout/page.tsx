@@ -20,16 +20,16 @@ async function Checkout({ buyNow, pay }: { buyNow: boolean; pay?: "razorpay" | "
   const [addresses, settings, { data: profile }] = await Promise.all([
     getAddresses(),
     getCheckoutSettings(),
-    supabase.from("profiles").select("full_name, customer_code").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("full_name, customer_code, phone").eq("id", user.id).maybeSingle(),
   ]);
-  const p = profile as { full_name: string | null; customer_code: string | null } | null;
+  const p = profile as { full_name: string | null; customer_code: string | null; phone: string | null } | null;
 
   const rzp = getRazorpayConfig();
   return (
     <CheckoutView
       addresses={addresses}
       settings={settings}
-      customer={{ name: p?.full_name ?? user.fullName ?? "Customer", code: p?.customer_code ?? "" }}
+      customer={{ name: p?.full_name ?? user.fullName ?? "Customer", code: p?.customer_code ?? "", phone: p?.phone ?? "" }}
       onlineEnabled={rzp !== null}
       testMode={rzp?.mode === "test"}
       mode={buyNow ? "buynow" : "cart"}

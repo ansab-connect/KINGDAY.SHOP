@@ -87,7 +87,7 @@ export async function advanceJobAction(input: { bookingId: string; status: strin
   const parsed = z
     .object({
       bookingId: id,
-      status: z.enum(["on_the_way", "reached", "inspection_started", "inspection_completed", "started", "completed", "ready_for_delivery"]),
+      status: z.enum(["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts", "completed", "ready_for_delivery"]),
       note: note.optional(),
     })
     .safeParse(input);

@@ -40,7 +40,9 @@ const NEXT: Record<string, Step[]> = {
 };
 
 /** Accept/decline, then one big button for the next step, with an optional note. */
-export function JobActions({ bookingId, status }: { bookingId: string; status: string }) {
+export function JobActions({ bookingId, status: rawStatus, manager = false }: { bookingId: string; status: string; manager?: boolean }) {
+  // A work order with a date ("scheduled") is answered exactly like a new assignment.
+  const status = rawStatus === "scheduled" ? "assigned" : rawStatus;
   const router = useRouter();
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,16 @@ export function JobActions({ bookingId, status }: { bookingId: string; status: s
   return (
     <div className="flex flex-col gap-3">
       <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Note (optional)" aria-label="Note" className={inputClass} />
-      {status === "assigned" ? (
+      {status === "assigned" && manager ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => run(() => advanceJobAction({ bookingId, status: "accepted", note }))}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-success text-sm font-semibold text-white hover:bg-success/90 disabled:opacity-60"
+        >
+          {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Check aria-hidden className="size-4" />} Accept for the technician
+        </button>
+      ) : status === "assigned" ? (
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"

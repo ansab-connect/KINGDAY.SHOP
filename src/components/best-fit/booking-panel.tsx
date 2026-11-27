@@ -3,11 +3,11 @@ import { OpButton, OpForm } from "@/components/best-fit/op-form";
 import { DataTable, Panel, Status, km, rupees, when } from "@/components/best-fit/ui";
 import { can, getCurrentUser } from "@/features/auth/session";
 import { getGroups, getPeople, personName, techOptions } from "@/features/best-fit/queries";
-import { routingProvider } from "@/lib/routing";
+import { roadDistance } from "@/lib/routing";
 import { createClient } from "@/lib/supabase/server";
 
 type B = {
-  id: string; booking_code: string; service_mode: string; service_centre_id: string | null; status: string; latitude: number | null;
+  id: string; booking_code: string; service_mode: string; service_centre_id: string | null; status: string; latitude: number | null; longitude: number | null;
   estimated_distance_km: number | null; estimated_distance_source: string | null; verified_distance_km: number | null; verified_at: string | null;
   instructions: string | null; town: string | null; priority: string; purchase_invoice_path: string | null; category_label: string | null; service_type_label: string | null;
 };
@@ -17,7 +17,7 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
   const supabase = await createClient();
   const me = await getCurrentUser();
   const [{ data: bd }, { data: hist }, { data: pis }, { data: wos }, { data: inv }, people, groups] = await Promise.all([
-    supabase.from("service_bookings").select("id, booking_code, service_mode, service_centre_id, status, latitude, estimated_distance_km, estimated_distance_source, verified_distance_km, verified_at, instructions, town, priority, purchase_invoice_path, category_label, service_type_label").eq("id", bookingId).maybeSingle(),
+    supabase.from("service_bookings").select("id, booking_code, service_mode, service_centre_id, status, latitude, longitude, estimated_distance_km, estimated_distance_source, verified_distance_km, verified_at, instructions, town, priority, purchase_invoice_path, category_label, service_type_label").eq("id", bookingId).maybeSingle(),
     supabase.from("service_distance_history").select("id, kind, old_km, new_km, source, reason, created_at").eq("booking_id", bookingId).order("created_at", { ascending: false }),
     supabase.from("inspection_pre_invoices").select("id, invoice_number, status, distance_km, slab_code, rate_paise, charge_paise, total_paise, amount_paid, balance, payment_status").eq("booking_id", bookingId).order("created_at", { ascending: false }),
     supabase.from("work_orders").select("id, work_order_number, technician_id, group_id, status, scheduled_date, scheduled_slot, created_at").eq("booking_id", bookingId).order("created_at", { ascending: false }),
@@ -38,6 +38,16 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
   const openWo = workOrders.find((w) => !["cancelled", "reassigned"].includes(w.status));
   const home = b.service_mode !== "centre";
   const invoice = inv as { id: string; invoice_number: string; approval_status: string; balance: number } | null;
+  // Distance and charge: verified km wins; otherwise the saved estimate; otherwise a live road
+  // estimate from the shop to the customer's pin (shown, saved only when staff press Save).
+  const { data: baseRow } = await supabase.from("store_settings").select("value").eq("key", "best_fit.base_location").maybeSingle();
+  const bv = (baseRow as { value: { lat: number | null; lng: number | null } } | null)?.value;
+  const base = bv?.lat != null && bv?.lng != null ? { lat: Number(bv.lat), lng: Number(bv.lng) } : null;
+  const pin = b.latitude != null && b.longitude != null ? { lat: b.latitude, lng: b.longitude } : null;
+  const live = home && base && pin && b.estimated_distance_km == null && b.verified_distance_km == null ? await roadDistance(base, pin) : null;
+  const liveKm = live?.ok ? live.km : null;
+  const calcKm = b.verified_distance_km ?? b.estimated_distance_km ?? liveKm;
+  const preview = calcKm != null ? ((await supabase.rpc("preview_inspection_charge", { p_km: calcKm })).data as { slab: string | null; rate_paise?: number; charge_paise: number | null } | null) : null;
   const assignable = ["new", "assigned", "scheduled", "accepted", "on_the_way", "reached"].includes(b.status);
 
   return (
@@ -55,14 +65,21 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
       {home ? (
         <Panel title="Road distance" description="Billing uses only the verified one-way road distance.">
           <dl className="mb-3 grid grid-cols-2 gap-2 text-sm">
-            <div><dt className="text-muted-foreground">Estimated</dt><dd className="font-semibold text-deep">{km(b.estimated_distance_km)}{b.estimated_distance_source ? <span className="block text-xs font-normal text-muted-foreground">{b.estimated_distance_source}</span> : null}</dd></div>
+            <div><dt className="text-muted-foreground">Estimated</dt><dd className="font-semibold text-deep">{km(b.estimated_distance_km ?? liveKm)}{b.estimated_distance_source ? <span className="block text-xs font-normal text-muted-foreground">{b.estimated_distance_source}</span> : liveKm != null ? <span className="block text-xs font-normal text-muted-foreground">Road route from the shop (about {live?.ok ? live.minutes : 0} min) · not saved yet</span> : null}</dd></div>
             <div><dt className="text-muted-foreground">Verified</dt><dd className="font-semibold text-deep">{km(b.verified_distance_km)}{b.verified_at ? <span className="block text-xs font-normal text-muted-foreground">{when(b.verified_at)}</span> : null}</dd></div>
           </dl>
+          {calcKm != null && preview?.charge_paise != null ? (
+            <p className="mb-3 rounded-lg bg-royal-50 px-3 py-2 text-sm text-deep">
+              <span className="font-semibold">Inspection charge{b.verified_distance_km == null ? " (estimate)" : ""}:</span> {km(calcKm)} × {rupees(preview.rate_paise ?? 0)}/km ({preview.slab}) = <span className="font-bold">{rupees(preview.charge_paise)}</span>
+            </p>
+          ) : null}
+          {!base ? <p className="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">The shop location is not set, so distance can&apos;t be calculated. <Link href="/admin/service/catalog?tab=settings" className="font-semibold underline">Set it in Service Configuration</Link>.</p> : null}
+          {live && !live.ok ? <p className="mb-3 text-xs text-warning">{live.message}</p> : null}
           {manage ? (
             <div className="flex flex-col gap-3">
-              {b.latitude != null ? (
-                routingProvider ? <OpButton op="distance.estimate" values={{ booking_id: b.id }} label="Estimate road distance" tone="neutral" /> : <p className="text-xs text-warning">Road estimate unavailable: no routing provider configured (ROUTING_OSRM_URL).</p>
-              ) : <p className="text-xs text-muted-foreground">No map pin from the customer.</p>}
+              {pin ? (
+                base ? <OpButton op="distance.estimate" values={{ booking_id: b.id }} label={b.estimated_distance_km == null ? "Save estimated distance" : "Re-check road distance"} tone="neutral" /> : null
+              ) : <p className="text-xs text-muted-foreground">No map pin from the customer. Enter the distance below after checking.</p>}
               {openPi ? <p className="text-xs text-muted-foreground">Void the pre-invoice to change the verified distance.</p> : (
                 <OpForm op="distance.verify" hidden={{ booking_id: b.id }} columns={2} submitLabel="Save verified distance"
                   fields={[{ name: "km", label: "Actual one-way km", type: "number", required: true, step: "0.01" }, { name: "reason", label: b.verified_distance_km != null ? "Reason for change" : "Note (optional)", required: b.verified_distance_km != null }]} />

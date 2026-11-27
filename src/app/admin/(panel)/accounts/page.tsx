@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BfPage, Panel, RangeFilter, Stats, range, rupees, type SP } from "@/components/best-fit/ui";
+import { BfPage, MoreLinks, Panel, RangeFilter, Stats, range, rupees, type SP } from "@/components/best-fit/ui";
 import { getAccountsSummary } from "@/features/best-fit/accounts";
 
 export const metadata: Metadata = { title: "Accounts" };
@@ -38,5 +38,5 @@ async function Content({ searchParams }: SP) {
 }
 
 export default function Page(props: SP) {
-  return <BfPage title="Accounts" description="Revenue, staff payables and expenses from recorded transactions only." module="accounts"><Content {...props} /></BfPage>;
+  return <BfPage title="Accounts" description="Revenue, staff payables and expenses from recorded transactions only." module="accounts"><MoreLinks links={[["/admin/accounts/revenue", "Customer revenue"], ["/admin/accounts/invoices", "Invoice history"], ["/admin/accounts/reports", "Financial reports"], ["/admin/orders", "Product orders"], ["/admin/service", "Service bookings"]]} /><Content {...props} /></BfPage>;
 }

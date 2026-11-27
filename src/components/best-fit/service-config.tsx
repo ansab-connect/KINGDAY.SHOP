@@ -1,3 +1,4 @@
+import { BaseLocationForm } from "./base-location-form";
 import { OpButton, OpForm, type Field } from "@/components/best-fit/op-form";
 import { DataTable, Panel, Status } from "@/components/best-fit/ui";
 import { can, getCurrentUser } from "@/features/auth/session";
@@ -57,10 +58,9 @@ export async function ServiceConfigExtra({ tab, canEdit }: { tab: "modes" | "set
     <div className="flex flex-col gap-6">
       <Panel title="KING DAY base location" description="Start point for road distances and routes. Super Admin only.">
         {base.lat == null ? <p className="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning">Exact coordinates are not set yet, so road distances cannot be estimated.</p> : null}
-        <p className="mb-3 text-sm text-muted-foreground">Routing provider: {routingProvider ?? "not configured (set ROUTING_OSRM_URL on the server)"}.</p>
+        <p className="mb-3 text-sm text-muted-foreground">Road distances: {routingProvider}.</p>
         {superAdmin ? (
-          <OpForm op="setting.save" transform="settingValue" hidden={{ key: "best_fit.base_location" }} initial={base} columns={3}
-            fields={[{ name: "label", label: "Address", wide: true }, { name: "lat", label: "Latitude", type: "number", required: true }, { name: "lng", label: "Longitude", type: "number", required: true }]} />
+          <BaseLocationForm initial={base} />
         ) : <p className="text-sm text-deep">{base.label} {base.lat != null ? `(${base.lat}, ${base.lng})` : ""}</p>}
       </Panel>
       <Panel title="Company & invoice details" description="Printed on inspection pre-invoices and final service invoices.">

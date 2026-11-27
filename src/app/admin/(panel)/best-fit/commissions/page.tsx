@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { CommissionRuleForm } from "@/components/best-fit/commission-form";
 import { OpButton } from "@/components/best-fit/op-form";
-import { BfPage, DataTable, Panel, Status, Tabs, day, param, type SP } from "@/components/best-fit/ui";
+import { BfPage, MoreLinks, DataTable, Panel, Status, Tabs, day, param, type SP } from "@/components/best-fit/ui";
 import { can, getCurrentUser } from "@/features/auth/session";
 import { getPeople, getSetting, personName, staffOptions, techOptions } from "@/features/best-fit/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -63,5 +63,5 @@ async function Content({ searchParams }: SP) {
 }
 
 export default function Page(props: SP) {
-  return <BfPage title="Invoice & Commission Settings" description="Three independent splits per Service Booking: inspection, service cost and parts." module="best_fit"><Content {...props} /></BfPage>;
+  return <BfPage title="Invoice & Commission Settings" description="Three independent splits per Service Booking: inspection, service cost and parts." module="best_fit"><MoreLinks links={[["/admin/best-fit/payment-slabs", "Technician payment slabs"], ["/admin/best-fit/service-charges", "Service charge (₹300 split)"], ["/admin/best-fit/wallet", "Staff earnings wallet"], ["/admin/best-fit/performance", "Technician performance"], ["/admin/best-fit/reports", "Reports"]]} /><Content {...props} /></BfPage>;
 }

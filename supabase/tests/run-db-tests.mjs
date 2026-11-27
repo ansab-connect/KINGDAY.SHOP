@@ -1848,6 +1848,26 @@ await test("warranty: seeded 5-month battery warranty applies to jeeps (and subc
   const d = (await rows(`select public.product_display_extras($1) d`, [wJeep.pid]))[0].d;
   assert(d.warranties.length === 1 && d.size === null, JSON.stringify(d));
 });
+await test("service flow: a manager can accept a scheduled job for the technician and finish it", async () => {
+  await asSuperuser();
+  await db.query(`update public.service_bookings set status = 'cancelled' where customer_id = $1 and status not in ('completed','invoiced','cancelled','ready_for_delivery')`, [alice]);
+  await user(alice);
+  const code = (await rows(`select public.create_service_booking($1::jsonb) c`, [bfBooking({ client_key: "99999999-2222-3333-4444-555555555555" })]))[0].c;
+  await asSuperuser();
+  const id = (await rows(`select id from public.service_bookings where booking_code = $1`, [code]))[0].id;
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  await user(admin2);
+  await expectError(`select public.advance_service_job($1, 'accepted')`, [id], /not available/);
+  await db.query(`select public.assign_work_order($1::jsonb)`, [JSON.stringify({ booking_id: id, technician_id: svc2, scheduled_date: tomorrow })]);
+  await user(svc);
+  await expectError(`select public.advance_service_job($1, 'accepted')`, [id], /invalid status/);
+  await user(admin2);
+  await db.query(`select public.advance_service_job($1, 'accepted', 'Accepted at the shop')`, [id]);
+  for (const s of ["inspection_started", "inspection_completed", "started", "completed"]) await db.query(`select public.advance_service_job($1, $2)`, [id, s]);
+  await asSuperuser();
+  const [b] = await rows(`select status, accepted_at, completed_at from public.service_bookings where id = $1`, [id]);
+  assert(b.status === "completed" && b.accepted_at && b.completed_at, JSON.stringify(b));
+});
 await test("warranty: only admins manage warranties; brand assignment works", async () => {
   await user(staff);
   await expectError(`insert into public.warranties (name, duration_months) values ('Hack', 12)`, [], /row-level security/);

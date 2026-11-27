@@ -39,10 +39,10 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
   const [media, events, inspection, invoice, basicDefault, replaced] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), getInvoiceForBooking(id), getDefaultBasicCharge(), getReplacedItems(id)]);
   const partsLines = replaced.map((r) => ({ id: r.id, partId: r.part_id, name: replacedName(r), quantity: r.quantity, unitPrice: r.unit_price_paise, approval: r.approval_status }));
   const partsTotal = partsLines.filter((l) => l.approval === "approved").reduce((n, l) => n + l.quantity * l.unitPrice, 0);
-  const partsEditable = ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "completed"].includes(b.status) && invoice?.payment_status !== "paid" && invoice?.approval_status !== "approved";
+  const partsEditable = ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts", "completed"].includes(b.status) && invoice?.payment_status !== "paid" && invoice?.approval_status !== "approved";
   const phone = b.mobile.replace(/\s/g, "");
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, I'm the KING DAY technician for booking ${b.booking_code}.`)}`;
-  const canReport = ["reached", "inspection_started", "inspection_completed", "started", "completed", "ready_for_delivery"].includes(b.status);
+  const canReport = ["reached", "inspection_started", "inspection_completed", "started", "awaiting_parts", "completed", "ready_for_delivery"].includes(b.status);
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,7 +63,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
         )}
       </div>
 
-      {b.status === "assigned" || ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"].includes(b.status) ? (
+      {["assigned", "scheduled", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts", "completed"].includes(b.status) ? (
         <Card title={<L en="Update job" ml="ജോലി അപ്ഡേറ്റ്" />}>
           <JobActions bookingId={b.id} status={b.status} />
         </Card>
