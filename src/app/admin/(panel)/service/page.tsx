@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Service Management" };
 
-const OPEN = ["new", "assigned", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"];
+const OPEN = ["new", "assigned", "scheduled", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts"];
 
 async function ServiceContent({ searchParams }: PageProps<"/admin/service">) {
   const sp = await searchParams;

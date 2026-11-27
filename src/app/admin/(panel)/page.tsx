@@ -40,7 +40,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Overview" };
 
-const IN_PROGRESS = ["assigned", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"];
+const IN_PROGRESS = ["assigned", "scheduled", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts"];
 
 /** Real service counts; RLS returns rows only to people who may view service bookings. */
 async function getServiceSummary() {

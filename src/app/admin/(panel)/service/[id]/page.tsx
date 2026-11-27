@@ -43,7 +43,7 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
   const open = !["completed", "ready_for_delivery", "invoiced", "cancelled"].includes(b.status);
   // Managers can move the timeline too (workshop jobs, or when the technician cannot).
   const movable = ["assigned", "scheduled", "awaiting_parts", "accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "completed", "invoiced"].includes(b.status);
-  const reassignable = ["new", "assigned", "accepted", "on_the_way", "reached"].includes(b.status);
+  const reassignable = ["new", "assigned", "scheduled", "accepted", "on_the_way", "reached"].includes(b.status);
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, this is KING DAY Service about booking ${b.booking_code}.`)}`;
 
   return (
@@ -168,7 +168,7 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
               {tech ? `${tech.staff_code ?? ""} · ${tech.full_name ?? ""}` : b.assigned_to ? "Assigned (inactive staff)" : "Not assigned yet"}
             </p>
             {manage && reassignable && !can(me, "best_fit", "edit") ? (
-              <AssignJobForm bookingId={b.id} technicians={technicians} currentId={b.assigned_to} locked={!["new", "assigned"].includes(b.status)} />
+              <AssignJobForm bookingId={b.id} technicians={technicians} currentId={b.assigned_to} locked={!["new", "assigned", "scheduled"].includes(b.status)} />
             ) : null}
             {manage && movable ? (
               <div className="flex flex-col gap-2 border-t pt-4">

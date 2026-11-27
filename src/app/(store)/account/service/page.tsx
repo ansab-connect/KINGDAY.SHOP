@@ -101,9 +101,9 @@ async function Bookings() {
 
 /** Inspection-first progress: received → inspection → service → completed → ready for delivery. */
 const STEPS = [
-  { en: "Received", ml: "ലഭിച്ചു", at: ["new", "assigned", "accepted", "on_the_way", "reached"] },
+  { en: "Received", ml: "ലഭിച്ചു", at: ["new", "assigned", "scheduled", "accepted", "on_the_way", "reached"] },
   { en: "Inspection", ml: "പരിശോധന", at: ["inspection_started", "inspection_completed"] },
-  { en: "In service", ml: "സർവീസ്", at: ["started"] },
+  { en: "In service", ml: "സർവീസ്", at: ["started", "awaiting_parts"] },
   { en: "Completed", ml: "പൂർത്തിയായി", at: ["completed", "invoiced"] },
   { en: "Ready", ml: "തയ്യാർ", at: ["ready_for_delivery"] },
 ];

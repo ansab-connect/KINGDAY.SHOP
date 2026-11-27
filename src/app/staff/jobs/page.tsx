@@ -27,9 +27,9 @@ const inGroup = (b: BookingRow, g: Group, today: string) =>
   g === "today"
     ? b.preferred_date === today && !["completed", "ready_for_delivery", "invoiced", "cancelled"].includes(b.status)
     : g === "pending"
-      ? b.status === "assigned"
+      ? ["assigned", "scheduled"].includes(b.status)
       : g === "progress"
-        ? ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started"].includes(b.status)
+        ? ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts"].includes(b.status)
         : g === "completed"
           ? ["completed", "ready_for_delivery", "invoiced"].includes(b.status)
           : b.status === "cancelled";
@@ -43,7 +43,7 @@ async function Jobs({ searchParams }: { searchParams: Promise<Record<string, str
   const jobs = (data ?? []) as BookingRow[];
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
   // New jobs to accept come first, whatever their date; otherwise today's jobs.
-  const tab: Group = chosen ?? (jobs.some((b) => b.status === "assigned") ? "pending" : "today");
+  const tab: Group = chosen ?? (jobs.some((b) => ["assigned", "scheduled"].includes(b.status)) ? "pending" : "today");
   const shown = jobs.filter((b) => inGroup(b, tab, today));
 
   return (
