@@ -17,7 +17,11 @@ function pickMime(): { mime: string; ext: VoiceNote["ext"] } | null {
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 /** Record → stop → play / pause → delete or re-record. Upload happens when the booking is sent. */
-export function VoiceRecorder({ value, onChange, status }: { value: VoiceNote | null; onChange: (v: VoiceNote | null) => void; status?: string | null }) {
+/** Lets the form finish a recording that is still running when the customer taps Book. */
+export type VoiceControl = { finish: () => Promise<VoiceNote | null> };
+
+export function VoiceRecorder({ value, onChange, status, control }: { value: VoiceNote | null; onChange: (v: VoiceNote | null) => void; status?: string | null; control?: React.MutableRefObject<VoiceControl | null> }) {
+  const done = useRef<((v: VoiceNote | null) => void) | null>(null);
   const rec = useRef<MediaRecorder | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -47,15 +51,21 @@ export function VoiceRecorder({ value, onChange, status }: { value: VoiceNote | 
       r.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunks, { type: fmt.mime });
+        const resolve = done.current;
+        done.current = null;
         if (blob.size < 1000) {
           setError("The recording is empty. Please try again.");
+          resolve?.(null);
           return;
         }
         if (blob.size > 10 * 1024 * 1024) {
           setError("That recording is too long. Keep it under 2 minutes.");
+          resolve?.(null);
           return;
         }
-        onChange({ blob, ext: fmt.ext, url: URL.createObjectURL(blob), seconds: secondsRef.current });
+        const note: VoiceNote = { blob, ext: fmt.ext, url: URL.createObjectURL(blob), seconds: secondsRef.current };
+        onChange(note);
+        resolve?.(note);
       };
       rec.current = r;
       r.start(1000);
@@ -77,6 +87,19 @@ export function VoiceRecorder({ value, onChange, status }: { value: VoiceNote | 
     timer.current = null;
     if (rec.current && rec.current.state !== "inactive") rec.current.stop();
     setRecording(false);
+  }
+
+  // A recording still running when the form is sent is stopped and handed over, not lost.
+  if (control) {
+    control.current = {
+      finish: () =>
+        rec.current && rec.current.state !== "inactive"
+          ? new Promise<VoiceNote | null>((resolve) => {
+              done.current = resolve;
+              stop();
+            })
+          : Promise.resolve(value),
+    };
   }
 
   function toggle() {

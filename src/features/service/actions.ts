@@ -118,6 +118,16 @@ export async function cancelServiceBookingAction(id: string): Promise<{ ok: bool
   return { ok: true };
 }
 
+/** Optional: the customer confirms the service is done and the product is ready. */
+export async function confirmMyServiceAction(id: string, note: string): Promise<{ ok: boolean; error?: string }> {
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: "Invalid booking." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("confirm_my_service", { p_id: id, p_note: note.slice(0, 500) || null });
+  if (error) return { ok: false, error: "Couldn't save your confirmation. Please try again." };
+  refresh();
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------- Service cart (independent of the product cart)
 export async function addToServiceCartAction(input: unknown): Promise<BookingResult> {
   const prep = await prepare(input);

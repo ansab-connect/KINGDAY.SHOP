@@ -13,7 +13,7 @@ import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { LocationPicker, type LatLng } from "./location-picker";
-import { VoiceRecorder, type VoiceNote } from "./voice-recorder";
+import { VoiceRecorder, type VoiceControl, type VoiceNote } from "./voice-recorder";
 
 export type Purchase = { key: string; orderId: string; orderNumber: string; productName: string; placedAt: string };
 type Defaults = { name: string; mobile: string; email: string; address: string; code: string };
@@ -100,6 +100,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
   const [bill, setBill] = useState<File | null>(null);
   const [complaint, setComplaint] = useState("");
   const [voice, setVoice] = useState<VoiceNote | null>(null);
+  const voiceCtl = useRef<VoiceControl | null>(null);
   const [mode, setMode] = useState("");
   const [centre, setCentre] = useState("");
   const [address, setAddress] = useState(defaults.address);
@@ -141,6 +142,8 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
+    // A voice note still recording is finished first, so it is never left out.
+    const voice = (await voiceCtl.current?.finish()) ?? null;
     const missing = !known && (name.trim().length < 2 || mobile.trim().length < 7) ? "Enter your name and mobile number." : !category ? "Choose your product." : fromKingDay === null ? "Tell us where you bought it." : !serviceType ? "Choose the service you need." : complaint.trim().length < 5 && !voice ? "Describe the problem or record a voice note." : !mode ? "Choose where you want the service." : modeKind === "centre" && !centre ? "Choose a service centre." : modeKind === "visit" && address.trim().length < 5 ? "Enter the service address." : null;
     if (missing) {
       setError(missing);
@@ -318,7 +321,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
         </Field>
         <Field label={<L en="Tell us the problem" ml="പ്രശ്നം പറയൂ" />} required hint={<L en="Type it, or record a voice note — or both." ml="ടൈപ്പ് ചെയ്യുക, അല്ലെങ്കിൽ ശബ്ദ സന്ദേശം റെക്കോർഡ് ചെയ്യുക." />}>
           <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3} maxLength={3000} placeholder={ml ? "ഉദാ: ബാറ്ററി ചാർജ് ആകുന്നില്ല" : "e.g. Battery not charging, brake noise"} className={cn(inputClass, "h-auto py-2")} />
-          <VoiceRecorder value={voice} onChange={setVoice} status={busy && stage?.startsWith("Uploading voice") ? stage : null} />
+          <VoiceRecorder control={voiceCtl} value={voice} onChange={setVoice} status={busy && stage?.startsWith("Uploading voice") ? stage : null} />
         </Field>
       </Step>
 

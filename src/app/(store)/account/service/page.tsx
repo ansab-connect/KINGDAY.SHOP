@@ -5,6 +5,7 @@ import { Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { AccountShell } from "@/components/store/account/account-shell";
 import { CancelBookingButton } from "@/components/store/service/cancel-booking";
+import { ConfirmService } from "@/components/store/service/confirm-service";
 import { Container } from "@/components/store/section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireUser } from "@/features/auth/session";
@@ -91,6 +92,11 @@ async function Bookings() {
                 </Link>
               ) : null}
               {b.status === "new" || b.status === "assigned" ? <CancelBookingButton id={b.id} /> : null}
+              {["completed", "ready_for_delivery", "invoiced"].includes(b.status) ? (
+                (b as { customer_confirmed_at?: string | null }).customer_confirmed_at ? (
+                  <p className="mt-3 text-sm font-semibold text-success">✓ <L en="You confirmed the service is done" ml="സർവീസ് പൂർത്തിയായെന്ന് നിങ്ങൾ ഉറപ്പിച്ചു" /></p>
+                ) : <ConfirmService id={b.id} />
+              ) : null}
             </li>
           ))}
         </ul>

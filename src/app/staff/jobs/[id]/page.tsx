@@ -80,6 +80,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
             ["Mobile", b.mobile],
             ["Address", b.address],
             ["Booked on", formatDate(new Date(b.created_at))],
+            ...(["completed", "ready_for_delivery", "invoiced"].includes(b.status) ? [["Customer", (b as { customer_confirmed_at?: string | null }).customer_confirmed_at ? "✓ Confirmed service done" : "Not confirmed yet (optional)"]] : []),
           ].map(([k, v]) => (
             <div key={k} className="grid grid-cols-[6.5rem_1fr] gap-2">
               <dt className="text-muted-foreground">{k}</dt>

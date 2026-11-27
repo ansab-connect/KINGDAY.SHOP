@@ -1874,6 +1874,14 @@ await test("service flow: a manager can accept a scheduled job for the technicia
   await db.query(`select public.add_custom_replaced_item($1, 'Brake cable', 1, 25000, false)`, [id]).catch(async () => db.query(`select public.set_replaced_part($1, $2, 1)`, [id, battery]));
   await asSuperuser();
   assert((await rows(`select count(*)::int n from public.service_replaced_items where booking_id = $1`, [id]))[0].n === 1, "part not added after ready for delivery");
+  // Optional customer confirmation: only the owner, only after completion, only once.
+  await user(svc2);
+  await expectError(`select public.confirm_my_service($1, 'ok')`, [id], /not found/);
+  await user(alice);
+  await db.query(`select public.confirm_my_service($1, 'All good')`, [id]);
+  await expectError(`select public.confirm_my_service($1, null)`, [id], /already confirmed/);
+  await asSuperuser();
+  assert((await rows(`select customer_confirmed_at is not null c from public.service_bookings where id = $1`, [id]))[0].c, "not confirmed");
 });
 await test("warranty: only admins manage warranties; brand assignment works", async () => {
   await user(staff);

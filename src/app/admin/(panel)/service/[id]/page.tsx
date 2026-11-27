@@ -188,6 +188,12 @@ async function BookingContent({ params }: { params: Promise<{ id: string }> }) {
         <Card className="h-fit shadow-card">
           <CardContent className="flex flex-col gap-4">
             <h2 className="font-heading text-lg font-semibold text-deep">Customer</h2>
+            {["completed", "ready_for_delivery", "invoiced"].includes(b.status) ? (() => {
+              const c = b as BookingRow & { customer_confirmed_at?: string | null; customer_confirm_note?: string | null };
+              return c.customer_confirmed_at
+                ? <p className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">✓ Customer confirmed the service is done · {formatDateTime(new Date(c.customer_confirmed_at))}{c.customer_confirm_note ? ` · “${c.customer_confirm_note}”` : ""}</p>
+                : <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Customer hasn&apos;t confirmed yet (optional; the job can continue).</p>;
+            })() : null}
             <div className="text-sm">
               <p className="font-semibold text-deep">{b.customer_name}{customerCode ? <span className="ml-2 font-mono text-xs text-royal">{customerCode}</span> : null}</p>
               <p className="text-muted-foreground">{b.mobile}{b.email ? ` · ${b.email}` : ""}</p>
