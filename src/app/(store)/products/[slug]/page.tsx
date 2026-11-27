@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProductSkeleton } from "@/components/store/product/product-skeleton";
@@ -14,7 +15,6 @@ import { ProductFacts, VariantGallery, VariantSelectionProvider, VariantSpecs } 
 import { PurchasePanel, VariantOptions } from "@/components/store/product/purchase-panel";
 import { Container, SectionHeading } from "@/components/store/section";
 import { siteConfig } from "@/config/site";
-import { storeContact } from "@/config/storefront";
 import {
   getAllProducts,
   getCatalogSource,
@@ -53,6 +53,7 @@ export async function generateMetadata({ params }: PageProps<"/products/[slug]">
 }
 
 async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "params">) {
+  const company = await getCompany();
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
@@ -70,7 +71,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
   const warrantySpec = product.specs.find((s) => /warranty/i.test(s.label));
   const productUrl = `${siteConfig.url}/products/${product.slug}`;
   const social = await resolveSocialVideo(product.videoLink ?? null);
-  const waNumber = storeContact.whatsapp.replace(/\D/g, "") || null;
+  const waNumber = company.whatsapp.replace(/\D/g, "") || null;
 
   const jsonLd = {
     "@context": "https://schema.org",

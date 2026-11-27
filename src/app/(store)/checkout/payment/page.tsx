@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -7,7 +8,6 @@ import { PayAgainButton } from "@/components/store/checkout/pay-again";
 import { Container } from "@/components/store/section";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OFFICIAL_SUPPORT_EMAIL, OFFICIAL_WHATSAPP } from "@/config/storefront";
 import { requireUser } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { formatPaise } from "@/lib/format";
@@ -25,6 +25,7 @@ function holdWindow(placedAt: string) {
 }
 
 async function Payment({ searchParams }: PageProps<"/checkout/payment">) {
+  const company = await getCompany();
   const sp = await searchParams;
   const number = typeof sp.order === "string" && /^KD[0-9]{6,}$/.test(sp.order) ? sp.order : null;
   if (!isSupabaseConfigured || !number) notFound();
@@ -44,7 +45,7 @@ async function Payment({ searchParams }: PageProps<"/checkout/payment">) {
   const expired = o.status !== "pending" || hold.expired;
   const failed = o.payment_status === "failed" || sp.failed === "1";
   const authorized = o.payment_status === "authorized";
-  const wa = `https://wa.me/${OFFICIAL_WHATSAPP}?text=${encodeURIComponent(`Hi KING DAY, I need help paying for order ${o.order_number}.`)}`;
+  const wa = `https://wa.me/${company.whatsapp}?text=${encodeURIComponent(`Hi KING DAY, I need help paying for order ${o.order_number}.`)}`;
   const minutesLeft = hold.minutesLeft;
 
   return (
@@ -91,7 +92,7 @@ async function Payment({ searchParams }: PageProps<"/checkout/payment">) {
         </div>
       </div>
       <p className="mt-4 text-xs text-muted-foreground">
-        Support: <a href={`mailto:${OFFICIAL_SUPPORT_EMAIL}?subject=${encodeURIComponent(`Payment for ${o.order_number}`)}`} className="font-medium text-royal hover:underline">{OFFICIAL_SUPPORT_EMAIL}</a>
+        Support: <a href={`mailto:${company.email}?subject=${encodeURIComponent(`Payment for ${o.order_number}`)}`} className="font-medium text-royal hover:underline">{company.email}</a>
       </p>
     </div>
   );

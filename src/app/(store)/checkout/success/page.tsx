@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -7,7 +8,6 @@ import { PurchaseEvent } from "@/components/analytics/meta-pixel";
 import { Container } from "@/components/store/section";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OFFICIAL_WHATSAPP } from "@/config/storefront";
 import { requireUser } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { formatPaise } from "@/lib/format";
@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata: Metadata = { title: "Order placed", robots: { index: false } };
 
 async function Success({ searchParams }: PageProps<"/checkout/success">) {
+  const company = await getCompany();
   const raw = (await searchParams).order;
   const number = typeof raw === "string" && /^KD[0-9]{6,}$/.test(raw) ? raw : null;
   if (!isSupabaseConfigured || !number) notFound();
@@ -57,14 +58,14 @@ async function Success({ searchParams }: PageProps<"/checkout/success">) {
         {online ? "Payment received and your order is confirmed. We'll update you when it ships." : "Our team will call you to confirm the delivery date."}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">
-        Questions? <a href="mailto:kingdaystore@gmail.com" className="font-medium text-royal hover:underline">kingdaystore@gmail.com</a>
+        Questions? <a href={`mailto:${company.email}`} className="font-medium text-royal hover:underline">{company.email}</a>
       </p>
       <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
         <Link href="/account/orders" className="inline-flex h-11 items-center justify-center rounded-full bg-royal px-5 text-sm font-semibold text-white hover:bg-royal-800">
           View my orders
         </Link>
         <a
-          href={`https://wa.me/${OFFICIAL_WHATSAPP}?text=${encodeURIComponent(message)}`}
+          href={`https://wa.me/${company.whatsapp}?text=${encodeURIComponent(message)}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted"

@@ -3,6 +3,8 @@ import { DM_Sans, Noto_Sans_Malayalam, Outfit } from "next/font/google";
 import { LANG_BOOT_SCRIPT } from "@/components/i18n/lang";
 import { PwaManager } from "@/components/pwa/pwa-manager";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CompanyProvider } from "@/components/company-provider";
+import { getCompany } from "@/features/company";
 import { siteConfig } from "@/config/site";
 import "./globals.css";
 
@@ -48,7 +50,8 @@ export const viewport: Viewport = {
   themeColor: "#4B0082",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const company = await getCompany();
   return (
     <html lang="en-IN" suppressHydrationWarning className={`${outfit.variable} ${dmSans.variable} ${malayalam.variable} h-full antialiased`}>
       <head>
@@ -56,7 +59,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: LANG_BOOT_SCRIPT }} />
       </head>
       <body className="flex min-h-full flex-col">
-        <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        <CompanyProvider company={company}>
+          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        </CompanyProvider>
         <PwaManager />
       </body>
     </html>

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import { Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { PageHero } from "@/components/store/page-hero";
 import { Container } from "@/components/store/section";
-import { storeContact, whatsappLink } from "@/config/storefront";
+import { whatsappLink } from "@/config/storefront";
 
 export const metadata: Metadata = {
   title: "Contact Us",
@@ -10,13 +11,14 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contact" },
 };
 
-export default function ContactPage() {
-  const wa = whatsappLink("Hi KING DAY, I'd like some help choosing a product.");
+export default async function ContactPage() {
+  const company = await getCompany();
+  const wa = whatsappLink("Hi KING DAY, I'd like some help choosing a product.", company.whatsapp);
   const channels = [
-    wa && { icon: MessageCircle, label: "WhatsApp", value: storeContact.whatsappDisplay, href: wa, external: true },
-    storeContact.phone && { icon: Phone, label: "Phone", value: storeContact.phone, href: `tel:${storeContact.phone}` },
-    storeContact.email && { icon: Mail, label: "Email", value: storeContact.email, href: `mailto:${storeContact.email}` },
-    storeContact.address && { icon: MapPin, label: "Visit", value: storeContact.address },
+    wa && { icon: MessageCircle, label: "WhatsApp", value: company.whatsappDisplay, href: wa, external: true },
+    company.phone && { icon: Phone, label: "Phone", value: company.phone, href: `tel:${company.phone}` },
+    company.email && { icon: Mail, label: "Email", value: company.email, href: `mailto:${company.email}` },
+    company.address && { icon: MapPin, label: "Visit", value: company.address },
   ].filter(Boolean) as { icon: typeof Phone; label: string; value: string; href?: string; external?: boolean }[];
 
   return (

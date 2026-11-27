@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getCompany } from "@/features/company";
 import { AuthCard } from "@/components/auth/auth-card";
 import { AuthForm } from "@/components/auth/auth-form";
 import { requestPasswordResetApproval } from "@/features/auth/password-reset";
@@ -10,7 +11,8 @@ export const metadata: Metadata = { title: "Reset password", robots: { index: fa
  * Forgot password: the customer proposes a new password; our team confirms it's them
  * (a call to the registered mobile) and approves it. The old password works until then.
  */
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  const company = await getCompany();
   return (
     <AuthCard
       title="Reset your password"
@@ -18,7 +20,7 @@ export default function ForgotPasswordPage() {
       footer={
         <>
           <p className="mb-3 text-xs">
-            For your safety, a KING DAY team member approves every password reset. Need it faster? Message us on WhatsApp at +91 94959 02904 from your registered number.
+            For your safety, a KING DAY team member approves every password reset. Need it faster? Message us on WhatsApp at {company.whatsappDisplay} from your registered number.
           </p>
           <Link href="/login" className="font-medium text-royal hover:underline">Back to sign in</Link>
         </>

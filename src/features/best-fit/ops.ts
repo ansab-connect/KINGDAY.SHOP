@@ -137,6 +137,14 @@ export async function runOp(op: string, values: V): Promise<OpResult> {
   // ---- route plan: stops in the optimised order, legs from the provider
   if (op === "route.build") return buildRoute(v);
 
+  if (op === "setting.save" && v.key === "best_fit.company") {
+    const { error } = await supabase.rpc("save_best_fit_setting", { p_key: "best_fit.company", p_value: v.value });
+    if (error) return { ok: false, error: message(error) };
+    updateTag("company");
+    refresh();
+    return { ok: true, message: "Company details saved. The website and new invoices use them now." };
+  }
+
   const rpc = RPCS[op];
   if (!rpc) return { ok: false, error: "Unknown action." };
   const { data, error } = await supabase.rpc(rpc.fn, rpc.args(v));

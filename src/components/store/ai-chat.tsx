@@ -1,9 +1,9 @@
 "use client";
 
+import { useCompany } from "@/components/company-provider";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Bot, Loader2, MessageCircle, Send, X } from "lucide-react";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
-import { OFFICIAL_WHATSAPP } from "@/config/storefront";
 import { customerChatAction } from "@/features/ai/chat";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,7 @@ function Linkified({ text }: { text: string }) {
 
 /** Floating help chat (Gemini). Answers from KING DAY's own data; WhatsApp is always one tap away. */
 export function AiChat() {
+  const company = useCompany();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([HELLO]);
   const [draft, setDraft] = useState("");
@@ -56,7 +57,7 @@ export function AiChat() {
     });
   };
 
-  const wa = `https://wa.me/${OFFICIAL_WHATSAPP}?text=${encodeURIComponent("Hi KING DAY, I have a question.")}`;
+  const wa = `https://wa.me/${company.whatsapp}?text=${encodeURIComponent("Hi KING DAY, I have a question.")}`;
 
   return (
     <>

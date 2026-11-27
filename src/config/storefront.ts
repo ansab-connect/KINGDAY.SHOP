@@ -52,12 +52,12 @@ export const whyChoose = [
   },
 ] as const;
 
-export const supportMailto = (subject?: string) =>
-  `mailto:${storeContact.email}${subject ? `?subject=${encodeURIComponent(subject)}` : ""}`;
+export const supportMailto = (subject?: string, email: string = storeContact.email) =>
+  `mailto:${email}${subject ? `?subject=${encodeURIComponent(subject)}` : ""}`;
 
 /** Build a WhatsApp deep link. Returns null when no store number is configured. */
-export function whatsappLink(message: string): string | null {
-  const digits = storeContact.whatsapp.replace(/\D/g, "");
+export function whatsappLink(message: string, number: string = storeContact.whatsapp): string | null {
+  const digits = number.replace(/\D/g, "");
   if (!digits) return null;
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }

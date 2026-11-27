@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -6,7 +7,6 @@ import { ArrowLeft, Plus } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { CancelBill, ShareBill } from "@/components/admin/billing/bill-actions";
 import { PrintButton } from "@/components/admin/print-button";
-import { OFFICIAL_WHATSAPP_DISPLAY, storeContact } from "@/config/storefront";
 import { can, getCurrentUser, hasRole } from "@/features/auth/session";
 import { BILL_PAYMENT_METHODS, getBill } from "@/features/billing/bills";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -16,6 +16,7 @@ export const metadata: Metadata = { title: "Bill", robots: { index: false } };
 
 /** Printable A4 / receipt bill. Print, or "Save as PDF" to download. */
 async function BillView({ params, searchParams }: { params: PageProps<"/admin/billing/[id]">["params"]; searchParams: PageProps<"/admin/billing/[id]">["searchParams"] }) {
+  const company = await getCompany();
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   if (!isSupabaseConfigured) notFound();
   const me = await getCurrentUser();
@@ -70,10 +71,10 @@ async function BillView({ params, searchParams }: { params: PageProps<"/admin/bi
           <div>
             <Logo />
             <p className="mt-2 max-w-xs text-xs leading-snug text-neutral-700">
-              {storeContact.address}, Kozhikode, Kerala
+              {company.address}, Kozhikode, Kerala
               <br />
-              Ph / WhatsApp: {OFFICIAL_WHATSAPP_DISPLAY}
-              {storeContact.email ? <><br />{storeContact.email}</> : null}
+              Ph / WhatsApp: {company.whatsappDisplay}
+              {company.email ? <><br />{company.email}</> : null}
             </p>
           </div>
           <div className="text-right">

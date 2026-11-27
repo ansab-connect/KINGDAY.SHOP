@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { getCompany } from "@/features/company";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { L } from "@/components/i18n/lang";
 import { InstallAppButton } from "@/components/pwa/install-app";
 import { Container } from "@/components/store/section";
 import { productCategories, siteConfig } from "@/config/site";
-import { storeContact, whatsappLink } from "@/config/storefront";
+import { whatsappLink } from "@/config/storefront";
 
 const companyLinks = [
   { title: <L en="About Us" ml="ഞങ്ങളെക്കുറിച്ച്" />, href: "/about" },
@@ -24,12 +25,13 @@ const policyLinks = [
   { title: <L en="Terms of Service" ml="സേവന നിബന്ധനകൾ" />, href: "/policies/terms" },
 ];
 
-export function StoreFooter() {
-  const wa = whatsappLink("Hi KING DAY, I have a question.");
+export async function StoreFooter() {
+  const company = await getCompany();
+  const wa = whatsappLink("Hi KING DAY, I have a question.", company.whatsapp);
   const social = [
-    storeContact.instagram && { label: "Instagram", href: `https://instagram.com/${storeContact.instagram.replace(/^@/, "")}` },
-    storeContact.facebook && { label: "Facebook", href: storeContact.facebook },
-    storeContact.youtube && { label: "YouTube", href: storeContact.youtube },
+    company.instagram && { label: "Instagram", href: `https://instagram.com/${company.instagram.replace(/^@/, "")}` },
+    company.facebook && { label: "Facebook", href: company.facebook },
+    company.youtube && { label: "YouTube", href: company.youtube },
   ].filter(Boolean) as { label: string; href: string }[];
 
   return (
@@ -41,17 +43,17 @@ export function StoreFooter() {
           <InstallAppButton tone="dark" className="mt-4" />
           <p className="mt-4 hidden max-w-xs text-sm leading-relaxed text-white/65 sm:block">{siteConfig.description}</p>
           <ul className="mt-4 grid gap-2 text-sm text-white/75 sm:mt-6 sm:flex sm:flex-col sm:gap-2.5">
-            {storeContact.phone ? (
-              <li className="flex items-center gap-2.5"><Phone aria-hidden className="size-4 text-gold" /><a href={`tel:${storeContact.phone}`} className="hover:text-white">{storeContact.phone}</a></li>
+            {company.phone ? (
+              <li className="flex items-center gap-2.5"><Phone aria-hidden className="size-4 text-gold" /><a href={`tel:${company.phone}`} className="hover:text-white">{company.phone}</a></li>
             ) : null}
-            {storeContact.email ? (
-              <li className="flex items-center gap-2.5"><Mail aria-hidden className="size-4 text-gold" /><a href={`mailto:${storeContact.email}`} className="hover:text-white">{storeContact.email}</a></li>
+            {company.email ? (
+              <li className="flex items-center gap-2.5"><Mail aria-hidden className="size-4 text-gold" /><a href={`mailto:${company.email}`} className="hover:text-white">{company.email}</a></li>
             ) : null}
             {wa ? (
               <li className="flex items-center gap-2.5"><MessageCircle aria-hidden className="size-4 text-gold" /><a href={wa} target="_blank" rel="noopener noreferrer" className="hover:text-white"><L en="Chat on WhatsApp" ml="WhatsApp-ൽ ചാറ്റ് ചെയ്യുക" /></a></li>
             ) : null}
-            {storeContact.address ? (
-              <li className="flex items-start gap-2.5"><MapPin aria-hidden className="mt-0.5 size-4 text-gold" /><span>{storeContact.address}</span></li>
+            {company.address ? (
+              <li className="flex items-start gap-2.5"><MapPin aria-hidden className="mt-0.5 size-4 text-gold" /><span>{company.address}</span></li>
             ) : null}
           </ul>
         </div>

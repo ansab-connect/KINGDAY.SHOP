@@ -17,7 +17,6 @@ const modeFields: Field[] = [
   { name: "is_active", label: "Active", type: "bool" },
 ];
 
-type Company = Record<string, string>;
 type Base = { label: string; lat: number | null; lng: number | null };
 
 /** Extra Service Configuration tabs: service modes, base location, company & invoice details. */
@@ -48,9 +47,8 @@ export async function ServiceConfigExtra({ tab, canEdit }: { tab: "modes" | "set
   const me = await getCurrentUser();
   const superAdmin = me?.roles.includes("super_admin") ?? false;
   const bestFit = can(me, "best_fit", "edit");
-  const [base, company, pre, parts] = await Promise.all([
+  const [base, pre, parts] = await Promise.all([
     getSetting<Base>("best_fit.base_location", { label: "", lat: null, lng: null }),
-    getSetting<Company>("best_fit.company", {}),
     getSetting<{ tax_percent: number }>("best_fit.pre_invoice", { tax_percent: 0 }),
     getSetting<boolean>("best_fit.parts_commission_enabled", false),
   ]);
@@ -63,15 +61,8 @@ export async function ServiceConfigExtra({ tab, canEdit }: { tab: "modes" | "set
           <BaseLocationForm initial={base} />
         ) : <p className="text-sm text-deep">{base.label} {base.lat != null ? `(${base.lat}, ${base.lng})` : ""}</p>}
       </Panel>
-      <Panel title="Company & invoice details" description="Printed on inspection pre-invoices and final service invoices.">
-        {bestFit ? (
-          <OpForm op="setting.save" transform="settingValue" hidden={{ key: "best_fit.company", base: company }} initial={company} columns={2}
-            fields={[
-              { name: "name", label: "Company name", required: true }, { name: "division", label: "Division" }, { name: "gstin", label: "GSTIN" },
-              { name: "phone", label: "Phone" }, { name: "email", label: "Email" }, { name: "logo_url", label: "Logo URL" },
-              { name: "address", label: "Address", wide: true }, { name: "terms", label: "Terms", type: "textarea" }, { name: "payment_instructions", label: "Payment instructions", type: "textarea" },
-            ]} />
-        ) : null}
+      <Panel title="Company & invoice details" description="Edited in one place: System → Company Details (Super Admin).">
+        <a href="/admin/settings/company" className="text-sm font-semibold text-royal hover:underline">Open Company Details</a>
       </Panel>
       {bestFit ? (
         <Panel title="Pre-invoice tax">

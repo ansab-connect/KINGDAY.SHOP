@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { PrintButton } from "@/components/admin/print-button";
-import { OFFICIAL_WHATSAPP_DISPLAY, storeContact } from "@/config/storefront";
 import { assertCan } from "@/features/auth/session";
 import { getOrderDetail } from "@/features/orders/queries";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -12,6 +12,7 @@ export const metadata: Metadata = { title: "Shipping label", robots: { index: fa
 
 /** 100 × 150 mm shipping label (standard courier size). Print, or "Save as PDF" to download. */
 async function Label({ params }: { params: PageProps<"/admin/orders/[id]/label">["params"] }) {
+  const company = await getCompany();
   const { id } = await params;
   if (!isSupabaseConfigured) notFound();
   try {
@@ -79,8 +80,8 @@ async function Label({ params }: { params: PageProps<"/admin/orders/[id]/label">
         </section>
 
         <footer className="mt-2 border-t-2 border-black pt-2 text-[10px] leading-snug">
-          <span className="font-bold">From: KING DAY</span>, {storeContact.address}, Kozhikode, Kerala · {OFFICIAL_WHATSAPP_DISPLAY}
-          {storeContact.email ? <> · {storeContact.email}</> : null}
+          <span className="font-bold">From: KING DAY</span>, {company.address}, Kozhikode, Kerala · {company.whatsappDisplay}
+          {company.email ? <> · {company.email}</> : null}
         </footer>
       </article>
     </main>

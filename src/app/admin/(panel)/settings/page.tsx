@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import Link from "next/link";
 import { History, Mail, MapPin, MessageCircle, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { SettingsForm } from "@/components/admin/settings-form";
 import { StaffOnly } from "@/components/admin/staff-only";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { storeContact } from "@/config/storefront";
 import { EDITABLE_SETTINGS } from "@/features/admin/settings-keys";
 import { getCurrentUser, hasRole } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -29,11 +29,12 @@ async function loadValues(): Promise<Record<string, string | boolean>> {
 }
 
 async function SettingsPageContent() {
+  const company = await getCompany();
   const [values, me] = await Promise.all([loadValues(), getCurrentUser()]);
   const contact = [
-    { icon: Mail, label: "Support email", value: storeContact.email, href: `mailto:${storeContact.email}` },
-    { icon: MessageCircle, label: "WhatsApp (BUY NOW)", value: storeContact.whatsappDisplay, href: `https://wa.me/${storeContact.whatsapp}` },
-    { icon: MapPin, label: "Office", value: storeContact.address },
+    { icon: Mail, label: "Support email", value: company.email, href: `mailto:${company.email}` },
+    { icon: MessageCircle, label: "WhatsApp (BUY NOW)", value: company.whatsappDisplay, href: `https://wa.me/${company.whatsapp}` },
+    { icon: MapPin, label: "Office", value: company.address },
   ];
 
   return (

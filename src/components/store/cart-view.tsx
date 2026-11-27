@@ -1,11 +1,12 @@
 "use client";
 
+import { useCompany } from "@/components/company-provider";
 import Link from "next/link";
 import { Mail, ShoppingBag } from "lucide-react";
 import { CartLine } from "@/components/store/cart-line";
 import { QuickAccount } from "@/components/store/quick-account";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
-import { OFFICIAL_WHATSAPP, supportMailto } from "@/config/storefront";
+import { supportMailto } from "@/config/storefront";
 import { removeFromCart, setCartQuantity, useCart } from "@/features/cart/cart-store";
 import { formatPaise } from "@/lib/format";
 
@@ -16,6 +17,7 @@ export type CartCustomer = { name: string; code: string; mobile: string | null }
 export type DeliverySettings = { flatShipping: number; freeShippingAbove: number | null } | null;
 
 export function CartView({ customer, accounts = true, delivery = null }: { customer: CartCustomer; accounts?: boolean; delivery?: DeliverySettings }) {
+  const company = useCompany();
   const items = useCart();
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const shipping = delivery ? (delivery.freeShippingAbove !== null && subtotal >= delivery.freeShippingAbove ? 0 : delivery.flatShipping) : null;
@@ -40,7 +42,7 @@ export function CartView({ customer, accounts = true, delivery = null }: { custo
     "",
     `Estimated total: ${formatPaise(subtotal + (shipping ?? 0))}`,
   ].join("\n");
-  const orderHref = `https://wa.me/${OFFICIAL_WHATSAPP}?text=${encodeURIComponent(message)}`;
+  const orderHref = `https://wa.me/${company.whatsapp}?text=${encodeURIComponent(message)}`;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
@@ -84,7 +86,7 @@ export function CartView({ customer, accounts = true, delivery = null }: { custo
             <QuickAccount next="/checkout" />
           </div>
         )}
-        <a href={supportMailto("Cart enquiry")} className="mt-3 inline-flex w-full items-center justify-center gap-2 text-sm text-muted-foreground hover:text-royal">
+        <a href={supportMailto("Cart enquiry", company.email)} className="mt-3 inline-flex w-full items-center justify-center gap-2 text-sm text-muted-foreground hover:text-royal">
           <Mail aria-hidden className="size-4" /> Questions? Email support
         </a>
       </aside>

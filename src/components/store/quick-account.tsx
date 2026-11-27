@@ -6,6 +6,7 @@ import { AuthForm } from "@/components/auth/auth-form";
 import { L } from "@/components/i18n/lang";
 import { signIn, signUp } from "@/features/auth/actions";
 import { cn } from "@/lib/utils";
+import { useCompany } from "@/components/company-provider";
 
 /**
  * First purchase or booking: new customers register with name + mobile on the spot;
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 export function QuickAccount({ next, title, initialTab = "new" }: { next: string; title?: React.ReactNode; initialTab?: "new" | "returning" }) {
   const [tab, setTab] = useState<"new" | "returning">(initialTab);
   const [useEmail, setUseEmail] = useState(false);
+  const company = useCompany();
   return (
     <div className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-card sm:p-6">
       {title ? <h2 className="font-heading text-lg font-semibold text-deep">{title}</h2> : null}
@@ -61,7 +63,7 @@ export function QuickAccount({ next, title, initialTab = "new" }: { next: string
             <Link href="/forgot-password" className="font-medium text-royal hover:underline">Forgot your password?</Link>
             <button type="button" onClick={() => setUseEmail((v) => !v)} className="text-muted-foreground hover:text-deep">{useEmail ? "Use mobile number" : "Use email instead"}</button>
           </div>
-          <a href="https://wa.me/919495902904?text=Hi%20KING%20DAY%2C%20I%20need%20help%20signing%20in." target="_blank" rel="noopener noreferrer" className="rounded-xl bg-[#25D366]/10 px-4 py-3 text-center text-sm font-semibold text-[#128C7E]">
+          <a href={`https://wa.me/${company.whatsapp}?text=${encodeURIComponent("Hi KING DAY, I need help signing in.")}`} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-[#25D366]/10 px-4 py-3 text-center text-sm font-semibold text-[#128C7E]">
             <L en="Trouble signing in? Message us on WhatsApp" ml="ലോഗിൻ ചെയ്യാൻ പ്രശ്നമുണ്ടോ? WhatsApp-ൽ മെസേജ് ചെയ്യൂ" />
           </a>
         </>

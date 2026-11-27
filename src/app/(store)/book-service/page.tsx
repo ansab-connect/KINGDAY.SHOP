@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import { Suspense } from "react";
 import { BadgeCheck, ClipboardCheck, Clock3, HardHat, MapPinned, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 import { L } from "@/components/i18n/lang";
@@ -8,7 +9,6 @@ import { BookingForm, type CentreChoice, type ModeChoice } from "@/components/st
 import { BestFitHowItWorks } from "@/components/store/service/best-fit-how-it-works";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OFFICIAL_WHATSAPP } from "@/config/storefront";
 import { isMobileLoginEmail } from "@/features/customer/mobile";
 import { getCurrentUser } from "@/features/auth/session";
 import { getServiceCatalog } from "@/features/service/catalog";
@@ -74,7 +74,8 @@ function HeroArt() {
   );
 }
 
-export default function BookServicePage() {
+export default async function BookServicePage() {
+  const company = await getCompany();
   return (
     <>
       <section className="relative overflow-hidden bg-[#1A0F2E] text-white">
@@ -101,7 +102,7 @@ export default function BookServicePage() {
           <Suspense fallback={<div className="flex flex-col gap-4">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-40 rounded-3xl" />)}</div>}>
             <BestFit />
           </Suspense>
-          <a href={`https://wa.me/${OFFICIAL_WHATSAPP}?text=${encodeURIComponent("Hi BEST FIT, I need help with a service.")}`} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#4B0082]">
+          <a href={`https://wa.me/${company.whatsapp}?text=${encodeURIComponent("Hi BEST FIT, I need help with a service.")}`} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#4B0082]">
             <WhatsAppIcon className="size-5 text-success" /> <L en="Need help? Chat with us on WhatsApp" ml="സഹായം വേണോ? വാട്സ്ആപ്പിൽ ചോദിക്കൂ" />
           </a>
         </div>

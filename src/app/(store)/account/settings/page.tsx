@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import { Suspense } from "react";
 import { Mail, Settings } from "lucide-react";
 import { AuthForm } from "@/components/auth/auth-form";
@@ -6,7 +7,7 @@ import { AccountShell } from "@/components/store/account/account-shell";
 import { ComingSoon } from "@/components/store/coming-soon";
 import { Container } from "@/components/store/section";
 import { Skeleton } from "@/components/ui/skeleton";
-import { storeContact, supportMailto } from "@/config/storefront";
+import { supportMailto } from "@/config/storefront";
 import { updatePassword } from "@/features/auth/actions";
 import { requireUser } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -14,6 +15,7 @@ import { isSupabaseConfigured } from "@/lib/env";
 export const metadata: Metadata = { title: "Account Settings", robots: { index: false } };
 
 async function SettingsContent() {
+  const company = await getCompany();
   const user = await requireUser("/account/settings");
   return (
     <AccountShell active="/account/settings" title="Account settings">
@@ -35,8 +37,8 @@ async function SettingsContent() {
         <section className="rounded-2xl border p-5 sm:p-6">
           <h2 className="font-heading text-lg font-semibold text-deep">Need help?</h2>
           <p className="mt-1 text-sm text-muted-foreground">To change your email address or close your account, contact our support team.</p>
-          <a href={supportMailto("Account help")} className="mt-5 inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
-            <Mail aria-hidden className="size-4" /> {storeContact.email}
+          <a href={supportMailto("Account help", company.email)} className="mt-5 inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold text-deep hover:bg-muted">
+            <Mail aria-hidden className="size-4" /> {company.email}
           </a>
         </section>
       </div>

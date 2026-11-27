@@ -1,5 +1,6 @@
 "use client";
 
+import { useCompany } from "@/components/company-provider";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Banknote, Lock, Mail, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
@@ -8,7 +9,7 @@ import { Price } from "@/components/store/price";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { useVariantSelection } from "@/components/store/product/variant-selection";
-import { OFFICIAL_WHATSAPP, supportMailto, whatsappLink } from "@/config/storefront";
+import { supportMailto, whatsappLink } from "@/config/storefront";
 import { addToCart, startBuyNow } from "@/features/cart/cart-store";
 import { estimateTotals, type PriceSettings } from "@/features/orders/pricing";
 import { contentParams, track } from "@/lib/meta-pixel";
@@ -42,6 +43,7 @@ type Props = {
  */
 export function PurchasePanel({ productId, name, shortDescription, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings, mobileOptions }: Props & { mobileOptions?: React.ReactNode }) {
   const { variants, variant } = useVariantSelection();
+  const company = useCompany();
   // Quantity resets to 1 whenever a different variant is chosen (picker lives under the photos).
   const [qtyState, setQtyState] = useState({ id: variant.id, n: 1 });
   const qty = qtyState.id === variant.id ? qtyState.n : 1;
@@ -95,8 +97,8 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
     url: productUrl,
     total: cod.total,
   };
-  const buyHref = whatsappOrderUrl(whatsappNumber ?? OFFICIAL_WHATSAPP, waOrder);
-  const enquireHref = whatsappLink(`Hi KING DAY, I have a question about ${name} ${productUrl}`);
+  const buyHref = whatsappOrderUrl(whatsappNumber ?? company.whatsapp, waOrder);
+  const enquireHref = whatsappLink(`Hi KING DAY, I have a question about ${name} ${productUrl}`, company.whatsapp);
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6">
@@ -227,7 +229,7 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
             <MessageCircle aria-hidden className="size-4" /> <L en="Ask a question" ml="ചോദ്യം ചോദിക്കുക" />
           </a>
         ) : null}
-        <a href={supportMailto(`Enquiry: ${name}`)} className="inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold text-deep hover:bg-muted">
+        <a href={supportMailto(`Enquiry: ${name}`, company.email)} className="inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold text-deep hover:bg-muted">
           <Mail aria-hidden className="size-4" /> <L en="Email support" ml="ഇമെയിൽ സഹായം" />
         </a>
       </div>

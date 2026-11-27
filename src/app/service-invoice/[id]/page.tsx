@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
+import { getCompany } from "@/features/company";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Logo } from "@/components/brand/logo";
 import { InvoiceShare } from "@/components/service/invoice-share";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OFFICIAL_WHATSAPP_DISPLAY, storeContact } from "@/config/storefront";
 import { siteConfig } from "@/config/site";
 import { getCurrentUser } from "@/features/auth/session";
 import { getInvoice, PAYMENT_METHODS } from "@/features/service/invoices";
@@ -21,6 +21,7 @@ export const metadata: Metadata = { title: "Service invoice", robots: { index: f
  * and the service team (RLS). "Print / Save as PDF" uses the browser's own PDF export.
  */
 async function Invoice({ params }: { params: Promise<{ id: string }> }) {
+  const company = await getCompany();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const me = await getCurrentUser();
@@ -59,9 +60,9 @@ async function Invoice({ params }: { params: Promise<{ id: string }> }) {
           <div>
             <Logo />
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              {storeContact.address}
+              {company.address}
               <br />
-              {OFFICIAL_WHATSAPP_DISPLAY} · {storeContact.email}
+              {company.whatsappDisplay} · {company.email}
             </p>
           </div>
           <div className="sm:text-right">
