@@ -36,7 +36,7 @@ export type Bill = BillRow & {
   cancel_reason: string | null;
   cancelled_at: string | null;
   payments: { method: string; amount: number; reference: string | null; position: number }[];
-  items: { id: string; position: number; sku: string | null; description: string; quantity: number; unit_price: number; line_total: number }[];
+  items: { id: string; position: number; sku: string | null; description: string; quantity: number; unit_price: number; line_total: number; warranty: string | null; cycle_size: string | null }[];
 };
 
 export async function listBills(filters: { kind?: string; q?: string } = {}): Promise<BillRow[]> {
@@ -59,7 +59,7 @@ export async function getBill(id: string): Promise<Bill | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("bills")
-    .select("*, items:bill_items(id, position, sku, description, quantity, unit_price, line_total), payments:bill_payments(method, amount, reference, position)")
+    .select("*, items:bill_items(id, position, sku, description, quantity, unit_price, line_total, warranty, cycle_size), payments:bill_payments(method, amount, reference, position)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`Loading bill: ${error.message}`);

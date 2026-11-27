@@ -137,8 +137,18 @@ export function ProductEditor({
   // ------------------------------------------------------------ Price/stock by size
   // The main category plus "Also show in" categories are the sizes (24 Inch, 26 Inch, …).
   const nameOf = (id: string) => categories.find((c) => c.id === id)?.name ?? "";
+  // Cycle Size: the "Cycle Size" subcategory under Bicycles holds the standard sizes. A cycle's
+  // size is saved as a link to one of them (same table as "Also show in"), never for other products.
+  const cycleSizeNode = categories.find((c) => c.name.trim().toLowerCase() === "cycle size" && c.parent_id);
+  const cycleSizeIds = new Set(categories.filter((c) => cycleSizeNode && c.parent_id === cycleSizeNode.id).map((c) => c.id));
+  const isCycle = (id: string) => {
+    for (let cur = categories.find((c) => c.id === id), i = 0; cur && i < 10; cur = categories.find((c) => c.id === cur?.parent_id), i++) {
+      if (cycleSizeNode && cur.id === cycleSizeNode.parent_id) return true;
+    }
+    return false;
+  };
   const sizesFor = (main: string, extras: string[]): SizeCategory[] =>
-    [...new Set([main, ...extras].filter(Boolean))].map((id) => ({ id, label: sizeLabel(nameOf(id)) || "Size" }));
+    [...new Set([main, ...extras].filter((id) => id && !cycleSizeIds.has(id)))].map((id) => ({ id, label: sizeLabel(nameOf(id)) || "Size" }));
   const sizes = sizesFor(basics.category_id, basics.extra_category_ids);
   const sizeOn = variantsOn && hasSizeType(variantTypes);
   const savedDropped = (list: VariantRow[]) => list.filter((r) => r.id).length;
@@ -167,8 +177,12 @@ export function ProductEditor({
       setVariantTypes(r.types);
       setVariants(r.rows.map((x, i) => (r.rows.some((y) => y.is_default) ? x : { ...x, is_default: i === 0 })));
     }
-    setBasics((p) => ({ ...p, category_id: main, extra_category_ids: extras }));
+    // Cycle size only belongs to cycles: drop it when the product is moved out of Bicycles.
+    const keep = isCycle(main) ? extras : extras.filter((id) => !cycleSizeIds.has(id));
+    setBasics((p) => ({ ...p, category_id: main, extra_category_ids: keep }));
   }
+  const cycleSizeId = basics.extra_category_ids.find((id) => cycleSizeIds.has(id)) ?? "";
+  const otherExtras = basics.extra_category_ids.filter((id) => !cycleSizeIds.has(id));
 
   // Every level, in tree order: "Cycles", "— Electric Cycles", "— — Women".
   const categoryOptions = treeOrder(categories.map((c) => ({ ...c, parentId: c.parent_id ?? null }))).map((c) => ({
@@ -401,13 +415,23 @@ export function ProductEditor({
         <div id="sec-categories" className="scroll-mt-24">
           <FormSection title="2. Categories" description="Where the product shows in the store. Add more categories to list it in several places (e.g. 24″, 26″, 27.5″).">
             <SelectField id="p-category" label="Main category" required value={basics.category_id} error={errors.category_id} placeholder="Choose a category" options={categoryOptions} onChange={(v) => changeCategories(v, basics.extra_category_ids)} />
+            {isCycle(basics.category_id) && cycleSizeIds.size ? (
+              <SelectField
+                id="p-cycle-size"
+                label="Cycle size"
+                value={cycleSizeId}
+                placeholder="No size"
+                options={categories.filter((c) => cycleSizeIds.has(c.id)).map((c) => ({ value: c.id, label: c.name }))}
+                onChange={(v) => changeCategories(basics.category_id, [...otherExtras, ...(v ? [v] : [])])}
+              />
+            ) : null}
             <ExtraCategoriesField
-              options={categoryOptions}
+              options={categoryOptions.filter((o) => !cycleSizeIds.has(o.value))}
               names={new Map(categories.map((c) => [c.id, c.name]))}
               mainId={basics.category_id}
-              value={basics.extra_category_ids}
+              value={otherExtras}
               error={errors.extra_category_ids}
-              onChange={(v) => changeCategories(basics.category_id, v)}
+              onChange={(v) => changeCategories(basics.category_id, [...v, ...(cycleSizeId ? [cycleSizeId] : [])])}
             />
             {sizes.length >= 2 || sizeOn ? (
               <SizePricing

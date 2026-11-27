@@ -10,8 +10,8 @@ import { Breadcrumbs } from "@/components/store/page-hero";
 import { Rating, Stars } from "@/components/store/price";
 import { ProductGrid } from "@/components/store/product-card";
 import { resolveSocialVideo } from "@/features/catalog/social-video";
-import { VariantGallery, VariantSelectionProvider, VariantSpecs } from "@/components/store/product/variant-selection";
-import { PurchasePanel } from "@/components/store/product/purchase-panel";
+import { ProductFacts, VariantGallery, VariantSelectionProvider, VariantSpecs } from "@/components/store/product/variant-selection";
+import { PurchasePanel, VariantOptions } from "@/components/store/product/purchase-panel";
 import { Container, SectionHeading } from "@/components/store/section";
 import { siteConfig } from "@/config/site";
 import { storeContact } from "@/config/storefront";
@@ -19,6 +19,7 @@ import {
   getAllProducts,
   getCatalogSource,
   getProductBySlug,
+  getProductExtras,
   getRelatedProducts,
   getReviewsForProduct,
 } from "@/features/catalog/queries";
@@ -56,12 +57,14 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
-  const [reviews, related, source, priceSettings] = await Promise.all([
+  const [reviews, related, source, priceSettings, extras] = await Promise.all([
     getReviewsForProduct(product.slug),
     getRelatedProducts(product, 4),
     getCatalogSource(),
     getPublicPriceSettings(),
+    getProductExtras(product.id),
   ]);
+  const warrantyLines = extras.warranties.map((w) => w.label);
   const isPreview = source === "preview";
   const boxSpec = product.specs.find((s) => /in the box|box content|package content|included/i.test(s.label));
   const warrantySpec = product.specs.find((s) => /warranty/i.test(s.label));
@@ -112,6 +115,11 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
           {/* Laptop/desktop: the photos stay in view while the details column scrolls (no blank area). */}
           <div className="min-w-0 lg:sticky lg:top-28 lg:self-start">
             <VariantGallery sharedImages={product.sharedImages} video={product.video} social={social} categorySlug={product.category.slug} name={product.name} />
+            {/* Variants, size and warranty sit right under the photos on every screen size. */}
+            <div className="mt-5 flex flex-col gap-4">
+              <VariantOptions variantTypes={product.variantTypes} />
+              <ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={warrantyLines} />
+            </div>
           </div>
 
           <div className="lg:pt-2">
@@ -165,7 +173,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 {boxSpec ? <p>{boxSpec.value}</p> : <p>1 × {product.name} with the standard accessories supplied by the brand. Message us on WhatsApp for the exact box contents.</p>}
               </InfoSection>
               <InfoSection title={<L en="Warranty & Service" ml="വാറന്റിയും സർവീസും" />} icon={ShieldCheck}>
-                <p>{warrantySpec ? warrantySpec.value : "Brand warranty as per the manufacturer's terms."}</p>
+                <p>{warrantyLines.length ? warrantyLines.join(" · ") : warrantySpec ? warrantySpec.value : "Brand warranty as per the manufacturer's terms."}</p>
                 <p className="mt-2">
                   After you buy, our BEST FIT team handles fitting, repairs and service.{" "}
                   <Link href="/policies/warranty" className="font-semibold text-royal hover:underline">Warranty policy</Link> ·{" "}

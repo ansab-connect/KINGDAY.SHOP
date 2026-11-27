@@ -77,6 +77,9 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
                 <Tag aria-hidden className="size-4" /> Download shipping label
               </a>
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <a href={`/order-invoice/${o.id}`} target="_blank" rel="noopener noreferrer">Invoice / PDF</a>
+            </Button>
           </>
         }
       />
@@ -109,6 +112,8 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
                           <p className="text-xs text-muted-foreground">
                             {[i.variant_name, i.sku].filter(Boolean).join(" · ")} · {formatPaise(i.unit_price)} × {i.quantity}
                           </p>
+                          {i.cycle_size ? <p className="text-xs text-muted-foreground">Size: {i.cycle_size}</p> : null}
+                          {i.warranty ? <p className="text-xs text-muted-foreground">{i.warranty}</p> : null}
                         </div>
                         <span className="shrink-0 font-semibold tabular">{formatPaise(i.line_total)}</span>
                       </li>
@@ -132,6 +137,8 @@ async function OrderContent({ params }: { params: PageProps<"/admin/orders/[id]"
                           <p className="text-xs text-muted-foreground">
                             {[i.variant_name, i.sku].filter(Boolean).join(" · ")} · {formatPaise(i.unit_price)} × {i.quantity}
                           </p>
+                          {i.cycle_size ? <p className="text-xs text-muted-foreground">Size: {i.cycle_size}</p> : null}
+                          {i.warranty ? <p className="text-xs text-muted-foreground">{i.warranty}</p> : null}
                         </div>
                         <span className="shrink-0 font-semibold tabular">{formatPaise(i.line_total)}</span>
                       </li>

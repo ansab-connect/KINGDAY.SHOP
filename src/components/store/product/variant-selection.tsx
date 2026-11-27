@@ -90,3 +90,19 @@ export function VariantSpecs({ specs, categoryName }: { specs: { label: string; 
     </dl>
   );
 }
+
+/**
+ * Small plain-text facts under the photos: the cycle size of the chosen variant (cycles only)
+ * and the product's warranty. Nothing is shown when there is neither.
+ */
+export function ProductFacts({ size, variantSizes, warranties }: { size: string | null; variantSizes: Record<string, string>; warranties: string[] }) {
+  const { variant } = useVariantSelection();
+  const s = variantSizes[variant.id] ?? size;
+  if (!s && !warranties.length) return null;
+  return (
+    <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+      {s ? <p>Size: <span className="text-deep">{s}</span></p> : null}
+      {warranties.map((w) => <p key={w}>{w}</p>)}
+    </div>
+  );
+}

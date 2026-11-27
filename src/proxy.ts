@@ -19,6 +19,7 @@ export const config = {
     "/book-service",
     "/service-cart",
     "/service-invoice/:path*",
+    "/order-invoice/:path*",
     "/account/:path*",
     "/wishlist",
     "/cart",

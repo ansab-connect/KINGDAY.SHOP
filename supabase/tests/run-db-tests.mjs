@@ -1826,5 +1826,78 @@ await test("technician payment slabs and accounts summary use stored records onl
   await expectError(`select public.accounts_summary('2026-01-01', '2026-12-31')`, [], /not authorized/);
 });
 
+console.log("Warranties & cycle sizes (0041)");
+// The test database loads seed.sql after the migrations, so run 0041's data step again here.
+await asSuperuser();
+await db.exec(`select private.seed_warranties_and_cycle_sizes();`);
+const mkProduct = async (slug, catSlug, sku) => {
+  const [{ id: pid }] = await rows(`insert into public.products (name, slug, category_id, status) values ($1, $1, (select id from public.categories where slug = $2), 'active') returning id`, [slug, catSlug]);
+  const [{ id: vid }] = await rows(`insert into public.product_variants (product_id, sku, name, mrp, price, is_default) values ($1, $2, 'Default', 100000, 90000, true) returning id`, [pid, sku]);
+  await db.query(`update public.inventory set on_hand = 20, reserved = 0 where variant_id = $1`, [vid]);
+  return { pid, vid };
+};
+let wJeep, wToy, wCycle, wOrder;
+await test("warranty: seeded 5-month battery warranty applies to jeeps (and subcategories), never to toys", async () => {
+  await asSuperuser();
+  wJeep = await mkProduct("w-test-jeep", "electric-jeeps-cars", "KD-WJEEP-1");
+  wToy = await mkProduct("w-test-toy", "toys", "KD-WTOY-1");
+  await anon();
+  const ex = await rows(`select * from public.line_extras($1::uuid[])`, [[wJeep.vid, wToy.vid]]);
+  const j = ex.find((x) => x.variant_id === wJeep.vid), t = ex.find((x) => x.variant_id === wToy.vid);
+  assert(j.warranty === "5 Months Limited Battery Warranty" && t.warranty === null, JSON.stringify(ex));
+  const d = (await rows(`select public.product_display_extras($1) d`, [wJeep.pid]))[0].d;
+  assert(d.warranties.length === 1 && d.size === null, JSON.stringify(d));
+});
+await test("warranty: only admins manage warranties; brand assignment works", async () => {
+  await user(staff);
+  await expectError(`insert into public.warranties (name, duration_months) values ('Hack', 12)`, [], /row-level security/);
+  await user(admin2);
+  const [{ id }] = await rows(`insert into public.warranties (name, coverage, duration_months) values ('Brand frame', 'Frame', 12) returning id`);
+  const [{ id: brand }] = await rows(`insert into public.brands (name, slug) values ('WTestBrand', 'wtestbrand') returning id`);
+  await db.query(`insert into public.warranty_brands (warranty_id, brand_id) values ($1, $2)`, [id, brand]);
+  await asSuperuser();
+  await db.query(`update public.products set brand_id = $1 where id = $2`, [brand, wToy.pid]);
+  const [x] = await rows(`select warranty from public.line_extras($1::uuid[])`, [[wToy.vid]]);
+  assert(x.warranty === "12 Months Limited Frame Warranty", x.warranty);
+});
+await test("orders keep the warranty they were sold with, also after the warranty changes or the order is edited", async () => {
+  await user(bob);
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: wJeep.vid, quantity: 1 }, { variant_id: wToy.vid, quantity: 1 }], address_id: bobAddr })]);
+  wOrder = o.order_id;
+  await asSuperuser();
+  await db.query(`update public.warranties set duration_months = 7 where name = 'Kids ride-on battery warranty'`);
+  let items = await rows(`select variant_id, warranty from public.order_items where order_id = $1`, [wOrder]);
+  assert(items.find((i) => i.variant_id === wJeep.vid).warranty === "5 Months Limited Battery Warranty", JSON.stringify(items));
+  assert(items.find((i) => i.variant_id === wToy.vid).warranty === "12 Months Limited Frame Warranty", "toy brand warranty missing");
+  await db.query(`update public.order_items set warranty = 'tampered' where order_id = $1`, [wOrder]);
+  await user(admin2);
+  await db.query(`select public.admin_update_order_items($1::jsonb)`, [JSON.stringify({ order_id: wOrder, items: [{ variant_id: wJeep.vid, quantity: 2 }, { variant_id: wToy.vid, quantity: 1 }], reason: "customer asked" })]);
+  await asSuperuser();
+  items = await rows(`select variant_id, warranty from public.order_items where order_id = $1`, [wOrder]);
+  assert(items.find((i) => i.variant_id === wJeep.vid).warranty === "5 Months Limited Battery Warranty", "edit replaced the snapshot: " + JSON.stringify(items));
+  const [n] = await rows(`select warranty from public.line_extras($1::uuid[])`, [[wJeep.vid]]);
+  assert(n.warranty === "7 Months Limited Battery Warranty", "new sales should use the new duration");
+});
+await test("cycle size: only for cycles, from Cycle Size or the variant's size category; saved on the order", async () => {
+  await asSuperuser();
+  const sizes = (await rows(`select c.name from public.categories c join public.categories p on p.id = c.parent_id where p.slug = 'cycle-size' order by c.sort_order`)).map((r) => r.name);
+  assert(sizes.join(",") === "12 Inch,14 Inch,16 Inch,20 Inch,24 Inch,26 Inch,27.5 Inch,29 Inch", sizes.join(","));
+  wCycle = await mkProduct("w-test-cycle", "cycles", "KD-WCYC-1");
+  const [{ id: none }] = await rows(`insert into public.product_variants (product_id, sku, name, mrp, price) values ($1, 'KD-WCYC-2', 'Blue', 100000, 90000) returning id`, [wCycle.pid]);
+  await db.query(`update public.inventory set on_hand = 5 where variant_id = $1`, [none]);
+  let [x] = await rows(`select cycle_size from public.line_extras($1::uuid[])`, [[wCycle.vid]]);
+  assert(x.cycle_size === null, "size shown without a selection");
+  await db.query(`insert into public.product_categories (product_id, category_id) values ($1, (select id from public.categories where slug = 'cycle-size-24-inch'))`, [wCycle.pid]);
+  await db.query(`insert into public.product_categories (product_id, category_id) values ($1, (select id from public.categories where slug = 'cycle-size-26-inch'))`, [wJeep.pid]);
+  [x] = await rows(`select cycle_size from public.line_extras($1::uuid[])`, [[wCycle.vid]]);
+  const [j] = await rows(`select cycle_size from public.line_extras($1::uuid[])`, [[wJeep.vid]]);
+  assert(x.cycle_size === "24 Inch" && j.cycle_size === null, `${x.cycle_size} / ${j.cycle_size}`);
+  await user(bob);
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: wCycle.vid, quantity: 1 }], address_id: bobAddr })]);
+  await asSuperuser();
+  const [it] = await rows(`select cycle_size, warranty from public.order_items where order_id = $1`, [o.order_id]);
+  assert(it.cycle_size === "24 Inch" && it.warranty === null, JSON.stringify(it));
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

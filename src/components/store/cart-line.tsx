@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Minus, Package, Plus, Trash2 } from "lucide-react";
 import type { CartItem } from "@/features/cart/cart-store";
+import { useLineExtra } from "@/features/cart/line-extras";
 import { formatPaise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ export function CartLine({
 }) {
   const href = i.url.replace(/^https?:\/\/[^/]+/, "");
   const atMax = i.quantity >= i.maxQty;
+  const extra = useLineExtra(i.variantId);
   return (
     <li className={cn("flex gap-3", compact ? "py-3" : "p-4 sm:p-5")}>
       <Link
@@ -48,6 +50,8 @@ export function CartLine({
               {i.variantName ? `${i.variantName} · ` : ""}
               {formatPaise(i.price)} each
             </p>
+            {extra?.cycle_size ? <p className="text-xs text-muted-foreground">Size: {extra.cycle_size}</p> : null}
+            {extra?.warranty ? <p className="text-xs text-muted-foreground">{extra.warranty}</p> : null}
           </div>
           <span className={cn("shrink-0 font-semibold text-deep tabular", compact ? "text-sm" : "text-base")} aria-label={`Line total ${formatPaise(i.price * i.quantity)}`}>
             {formatPaise(i.price * i.quantity)}

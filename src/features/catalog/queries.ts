@@ -195,3 +195,17 @@ export function parseFilters(params: Record<string, string | string[] | undefine
     page: num("page") ?? 1,
   };
 }
+
+export type ProductExtras = { warranties: { id: string; label: string }[]; size: string | null; variantSizes: Record<string, string> };
+
+/** Warranty lines and cycle size for the product page (cached with the catalogue). */
+export async function getProductExtras(productId: string): Promise<ProductExtras> {
+  "use cache";
+  cacheTag(CATALOG_TAG);
+  cacheLife("hours");
+  const empty: ProductExtras = { warranties: [], size: null, variantSizes: {} };
+  if (!isSupabaseConfigured || !/^[0-9a-f-]{36}$/.test(productId)) return empty;
+  const { createPublicClient } = await import("@/lib/supabase/public");
+  const { data } = await createPublicClient().rpc("product_display_extras", { p_product: productId });
+  return (data as ProductExtras | null) ?? empty;
+}

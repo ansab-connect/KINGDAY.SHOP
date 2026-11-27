@@ -22,8 +22,8 @@ type Props = {
   productId: string;
   name: string;
   shortDescription: string;
-  /** Ordered variant types (e.g. ["Wheel Size", "Colour", "Speed Type"]). Empty = simple list. */
-  variantTypes: string[];
+  /** Kept for callers; the choices themselves render in <VariantOptions> under the photos. */
+  variantTypes?: string[];
   /** Product image used for the cart thumbnail when the variant has none of its own. */
   fallbackImage?: string | null;
   /** Digits-only WhatsApp number, or null when not configured. */
@@ -40,9 +40,12 @@ type Props = {
  * a pre-filled order message; the cart is kept in the browser. Prices shown are
  * display-only: online checkout (Phase 8) re-reads them from the database.
  */
-export function PurchasePanel({ productId, name, shortDescription, variantTypes, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings }: Props) {
-  const { variants, variant, select } = useVariantSelection();
-  const [qty, setQty] = useState(1);
+export function PurchasePanel({ productId, name, shortDescription, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings }: Props) {
+  const { variants, variant } = useVariantSelection();
+  // Quantity resets to 1 whenever a different variant is chosen (picker lives under the photos).
+  const [qtyState, setQtyState] = useState({ id: variant.id, n: 1 });
+  const qty = qtyState.id === variant.id ? qtyState.n : 1;
+  const setQty = (f: (n: number) => number) => setQtyState({ id: variant.id, n: f(qty) });
   const router = useRouter();
   const buyRef = useRef<HTMLButtonElement>(null);
   // ViewContent once per product page (not on re-renders or variant changes).
@@ -64,10 +67,6 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
   }, []);
   const out = variant.stock <= 0;
   const maxQty = Math.max(1, Math.min(variant.stock, 5));
-  const choose = (id: string) => {
-    select(id);
-    setQty(1);
-  };
   const variantLabel = variants.length > 1 && variant.name !== "Default" ? variant.name : null;
   const lineItem = {
     variantId: variant.id,
@@ -78,24 +77,6 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
     maxQty,
     url: productUrl,
     image: variant.images[0]?.src ?? fallbackImage,
-  };
-
-  // Cascading choice: each type only offers values that exist together with the values
-  // already chosen for the types before it (size → its colours → their speeds…).
-  const same = (x: string | undefined, y: string | undefined) => (x ?? "").toLowerCase() === (y ?? "").toLowerCase();
-  const matchesUpTo = (v: StoreVariant, level: number) => variantTypes.slice(0, level).every((t) => same(v.values[t], variant.values[t]));
-  const levels = variantTypes.map((t, level) => {
-    const pool = variants.filter((v) => matchesUpTo(v, level) && v.values[t]);
-    const values = [...new Map(pool.map((v) => [v.values[t].toLowerCase(), v.values[t]])).values()];
-    return { type: t, level, values, pool };
-  });
-  const pick = (level: number, value: string) => {
-    const t = variantTypes[level];
-    const pool = variants.filter((v) => matchesUpTo(v, level) && same(v.values[t], value));
-    // Keep the later choices when that combination exists; prefer something in stock.
-    const score = (v: StoreVariant) => variantTypes.slice(level + 1).filter((x) => same(v.values[x], variant.values[x])).length * 2 + (v.stock > 0 ? 1 : 0);
-    const next = [...pool].sort((a, b) => score(b) - score(a))[0];
-    if (next) choose(next.id);
   };
 
   const prepaid = estimateTotals(variant.price, qty, prepaidPct, true, settings);
@@ -132,50 +113,6 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
       </div>
 
       {shortDescription ? <p className="text-base leading-relaxed text-muted-foreground">{shortDescription}</p> : null}
-
-      {levels.map(({ type, level, values, pool }) =>
-        values.length ? (
-          <fieldset key={type}>
-            <legend className="text-sm font-medium text-deep">
-              {type}: <span className="font-normal text-muted-foreground">{variant.values[type]}</span>
-            </legend>
-            <div className="mt-3 flex flex-wrap gap-2.5">
-              {values.map((value) => (
-                <Choice
-                  key={value}
-                  name={`option-${level}`}
-                  label={value}
-                  checked={same(variant.values[type], value)}
-                  soldOut={pool.filter((v) => same(v.values[type], value)).every((v) => v.stock <= 0)}
-                  swatch={/colou?r/i.test(type) ? swatchFor(value) : null}
-                  onSelect={() => pick(level, value)}
-                />
-              ))}
-            </div>
-          </fieldset>
-        ) : null,
-      )}
-
-      {!variantTypes.length && variants.length > 1 ? (
-        <fieldset>
-          <legend className="text-sm font-medium text-deep">
-            {variants.every((v) => v.colour) ? "Colour" : "Option"}: <span className="font-normal text-muted-foreground">{variant.colour ?? variant.name}</span>
-          </legend>
-          <div className="mt-3 flex flex-wrap gap-2.5">
-            {variants.map((v) => (
-              <Choice
-                key={v.id}
-                name="variant"
-                label={v.colour ?? v.name}
-                checked={v.id === variant.id}
-                soldOut={v.stock <= 0}
-                swatch={swatchFor(v.colour)}
-                onSelect={() => choose(v.id)}
-              />
-            ))}
-          </div>
-        </fieldset>
-      ) : null}
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex h-12 items-center rounded-full border bg-white">
@@ -300,6 +237,82 @@ export function PurchasePanel({ productId, name, shortDescription, variantTypes,
           </button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Colour / model / size choices. Rendered directly under the product photos (mobile and
+ * desktop); choosing one updates the shared selection, so photos, price and stock follow.
+ */
+export function VariantOptions({ variantTypes }: { variantTypes: string[] }) {
+  const { variants, variant, select } = useVariantSelection();
+  const choose = (id: string) => select(id);
+  // Cascading choice: each type only offers values that exist together with the values
+  // already chosen for the types before it (size → its colours → their speeds…).
+  const same = (x: string | undefined, y: string | undefined) => (x ?? "").toLowerCase() === (y ?? "").toLowerCase();
+  const matchesUpTo = (v: StoreVariant, level: number) => variantTypes.slice(0, level).every((t) => same(v.values[t], variant.values[t]));
+  const levels = variantTypes.map((t, level) => {
+    const pool = variants.filter((v) => matchesUpTo(v, level) && v.values[t]);
+    const values = [...new Map(pool.map((v) => [v.values[t].toLowerCase(), v.values[t]])).values()];
+    return { type: t, level, values, pool };
+  });
+  const pick = (level: number, value: string) => {
+    const t = variantTypes[level];
+    const pool = variants.filter((v) => matchesUpTo(v, level) && same(v.values[t], value));
+    // Keep the later choices when that combination exists; prefer something in stock.
+    const score = (v: StoreVariant) => variantTypes.slice(level + 1).filter((x) => same(v.values[x], variant.values[x])).length * 2 + (v.stock > 0 ? 1 : 0);
+    const next = [...pool].sort((a, b) => score(b) - score(a))[0];
+    if (next) choose(next.id);
+  };
+
+  if (!(levels.some((l) => l.values.length) || (!variantTypes.length && variants.length > 1))) return null;
+  return (
+    <div className="flex flex-col gap-4">
+      {levels.map(({ type, level, values, pool }) =>
+        values.length ? (
+          <fieldset key={type}>
+            <legend className="text-sm font-medium text-deep">
+              {type}: <span className="font-normal text-muted-foreground">{variant.values[type]}</span>
+            </legend>
+            <div className="mt-3 flex flex-wrap gap-2.5">
+              {values.map((value) => (
+                <Choice
+                  key={value}
+                  name={`option-${level}`}
+                  label={value}
+                  checked={same(variant.values[type], value)}
+                  soldOut={pool.filter((v) => same(v.values[type], value)).every((v) => v.stock <= 0)}
+                  swatch={/colou?r/i.test(type) ? swatchFor(value) : null}
+                  onSelect={() => pick(level, value)}
+                />
+              ))}
+            </div>
+          </fieldset>
+        ) : null,
+      )}
+
+      {!variantTypes.length && variants.length > 1 ? (
+        <fieldset>
+          <legend className="text-sm font-medium text-deep">
+            {variants.every((v) => v.colour) ? "Colour" : "Option"}: <span className="font-normal text-muted-foreground">{variant.colour ?? variant.name}</span>
+          </legend>
+          <div className="mt-3 flex flex-wrap gap-2.5">
+            {variants.map((v) => (
+              <Choice
+                key={v.id}
+                name="variant"
+                label={v.colour ?? v.name}
+                checked={v.id === variant.id}
+                soldOut={v.stock <= 0}
+                swatch={swatchFor(v.colour)}
+                onSelect={() => choose(v.id)}
+              />
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
     </div>
   );
 }

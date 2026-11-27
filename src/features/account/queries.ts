@@ -13,7 +13,7 @@ export type Address = {
 export type MyOrder = {
   id: string; order_number: string; status: OrderStatus; payment_status: PaymentStatus; payment_method: PaymentMethod;
   grand_total: number; placed_at: string;
-  order_items: { product_name: string; variant_name: string | null; sku: string; quantity: number; line_total: number }[];
+  order_items: { product_name: string; variant_name: string | null; sku: string; quantity: number; line_total: number; warranty: string | null; cycle_size: string | null }[];
   shipments: { carrier: string | null; tracking_number: string | null; tracking_url: string | null; status: string }[];
   order_status_history: { to_status: OrderStatus; created_at: string }[];
 };
@@ -41,7 +41,7 @@ export async function getMyOrders(): Promise<MyOrder[]> {
     .from("orders")
     .select(
       `id, order_number, status, payment_status, payment_method, grand_total, placed_at,
-       order_items(product_name, variant_name, sku, quantity, line_total),
+       order_items(product_name, variant_name, sku, quantity, line_total, warranty, cycle_size),
        shipments(carrier, tracking_number, tracking_url, status),
        order_status_history(to_status, created_at)`,
     )

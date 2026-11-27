@@ -116,6 +116,8 @@ async function BillView({ params, searchParams }: { params: PageProps<"/admin/bi
                 <td className="py-2 pr-2">
                   {i.description}
                   {i.sku ? <span className="block text-[11px] text-neutral-500">{i.sku}</span> : null}
+                  {i.cycle_size ? <span className="block text-[11px] text-neutral-600">Size: {i.cycle_size}</span> : null}
+                  {i.warranty ? <span className="block text-[11px] text-neutral-600">{i.warranty}</span> : null}
                 </td>
                 <td className="py-2 pr-2 text-right tabular-nums">{i.quantity}</td>
                 <td className="py-2 pr-2 text-right tabular-nums">{formatPaise(i.unit_price)}</td>

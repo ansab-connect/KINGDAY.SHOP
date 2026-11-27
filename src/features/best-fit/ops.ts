@@ -1,6 +1,7 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { refresh, updateTag } from "next/cache";
+import { CATALOG_TAG } from "@/features/catalog/cache-tags";
 import { getCurrentUser } from "@/features/auth/session";
 import { queuePushDispatch } from "@/features/push/send";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -27,6 +28,9 @@ const TABLES: Record<string, TableOp> = {
   centrestaff: { table: "service_centre_staff", cols: ["centre_id", "user_id"], key: "*" },
   techsettings: { table: "technician_settings", key: "user_id", cols: ["user_id", "skills", "service_areas", "max_daily_tasks", "is_available", "base_latitude", "base_longitude"] },
   route: { table: "route_plans", cols: ["notes", "plan_date"] },
+  warranty: { table: "warranties", cols: ["name", "warranty_type", "coverage", "duration_months", "description", "sort_order", "is_active"] },
+  warrantycat: { table: "warranty_categories", cols: ["warranty_id", "category_id"], key: "*" },
+  warrantybrand: { table: "warranty_brands", cols: ["warranty_id", "brand_id"], key: "*" },
 };
 
 type RpcOp = { fn: string; args: (v: V) => V; push?: boolean; ok?: string };
@@ -89,6 +93,7 @@ export async function runOp(op: string, values: V): Promise<OpResult> {
         q = await d;
       } else return { ok: false, error: "Unknown action." };
       if (q.error) return { ok: false, error: message(q.error) };
+      if (name.startsWith("warranty")) updateTag(CATALOG_TAG);
       refresh();
       return { ok: true, message: action === "delete" ? "Removed." : "Added." };
     }
@@ -99,6 +104,7 @@ export async function runOp(op: string, values: V): Promise<OpResult> {
     else if (action === "update") res = await supabase.from(t.table).update(pick(v, t.cols.filter((c) => c !== key))).eq(key, v[key] as string);
     else res = await supabase.from(t.table).delete().eq(key, v[key] as string);
     if (res.error) return { ok: false, error: message(res.error) };
+    if (name.startsWith("warranty")) updateTag(CATALOG_TAG);
     refresh();
     return { ok: true, message: action === "delete" ? "Deleted." : "Saved." };
   }

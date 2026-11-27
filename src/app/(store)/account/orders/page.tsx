@@ -71,7 +71,11 @@ async function OrdersContent() {
                 <ul className="mt-5 divide-y text-sm">
                   {o.order_items.map((i) => (
                     <li key={i.sku} className="flex justify-between gap-4 py-2">
-                      <span className="min-w-0 text-deep">{i.product_name}{i.variant_name ? ` · ${i.variant_name}` : ""} <span className="text-muted-foreground">× {i.quantity}</span></span>
+                      <span className="min-w-0 text-deep">
+                        {i.product_name}{i.variant_name ? ` · ${i.variant_name}` : ""} <span className="text-muted-foreground">× {i.quantity}</span>
+                        {i.cycle_size ? <span className="block text-xs text-muted-foreground">Size: {i.cycle_size}</span> : null}
+                        {i.warranty ? <span className="block text-xs text-muted-foreground">{i.warranty}</span> : null}
+                      </span>
                       <span className="shrink-0 tabular">{formatPaise(i.line_total)}</span>
                     </li>
                   ))}
@@ -86,6 +90,7 @@ async function OrdersContent() {
                   ) : shipment?.tracking_number ? (
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Truck aria-hidden className="size-4" /> {shipment.carrier} · {shipment.tracking_number}</span>
                   ) : null}
+                  <a href={`/order-invoice/${o.id}`} target="_blank" className="inline-flex items-center gap-1.5 font-medium text-royal hover:underline">Invoice / PDF</a>
                   <a href={supportMailto(`Order ${o.order_number}`)} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-royal">
                     <Mail aria-hidden className="size-4" /> Help with this order
                   </a>
