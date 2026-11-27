@@ -80,7 +80,7 @@ async function CustomersPageContent({ searchParams }: PageProps<"/admin/customer
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-deep">{c.name}</p>
+                        <a href={`/admin/customers/${c.id}`} className="block truncate font-medium text-deep hover:text-royal hover:underline">{c.name}</a>
                         <p className="truncate text-xs text-muted-foreground">{c.email || `Joined ${formatDate(c.joinedAt)}`}</p>
                       </div>
                     </div>
