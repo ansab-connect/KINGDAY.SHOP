@@ -28,6 +28,7 @@ const TABLES: Record<string, TableOp> = {
   centrestaff: { table: "service_centre_staff", cols: ["centre_id", "user_id"], key: "*" },
   techsettings: { table: "technician_settings", key: "user_id", cols: ["user_id", "skills", "service_areas", "max_daily_tasks", "is_available", "base_latitude", "base_longitude"] },
   route: { table: "route_plans", cols: ["notes", "plan_date"] },
+  coupon: { table: "coupons", cols: ["code", "description", "type", "value", "min_order_value", "max_discount", "expires_at", "usage_limit", "per_customer_limit", "is_active"] },
   warranty: { table: "warranties", cols: ["name", "warranty_type", "coverage", "duration_months", "description", "sort_order", "is_active"] },
   warrantycat: { table: "warranty_categories", cols: ["warranty_id", "category_id"], key: "*" },
   warrantybrand: { table: "warranty_brands", cols: ["warranty_id", "brand_id"], key: "*" },
@@ -80,6 +81,12 @@ export async function runOp(op: string, values: V): Promise<OpResult> {
   // ---- generic table writes: "<name>.create" | "<name>.update" | "<name>.delete"
   const [name, action] = op.split(".");
   const t = TABLES[name];
+  // Coupons: code in capitals; a fixed coupon's value is typed in rupees and stored in paise.
+  if (name === "coupon" && action !== "delete") {
+    if (typeof v.code === "string") v.code = v.code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (v.type === "fixed" && typeof v.value === "number") v.value = Math.round(v.value * 100);
+    if (v.min_order_value == null) v.min_order_value = 0;
+  }
   if (t && ["create", "update", "delete"].includes(action)) {
     const key = t.key ?? "id";
     // Link tables ("*"): the row is identified by all its columns, and can only be added or removed.

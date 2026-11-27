@@ -90,7 +90,7 @@ export const adminNav: AdminNavGroup[] = [
       { title: "Orders", href: "/admin/orders", icon: ShoppingBag, module: "orders", phase: 9 },
       { title: "Billing", href: "/admin/billing", icon: ReceiptText, module: "orders" },
       { title: "Customers", href: "/admin/customers", icon: Users, module: "customers", phase: 7 },
-      { title: "Coupons", href: "/admin/coupons", icon: TicketPercent, module: "coupons", phase: 8 },
+      { title: "Coupons", href: "/admin/coupons", icon: TicketPercent, module: "coupons" },
       { title: "Promotions", href: "/admin/promotions", icon: Megaphone, module: "customers" },
       { title: "Top Bar Messages", href: "/admin/announcements", icon: Megaphone, module: "cms" },
       { title: "Royal Moments", href: "/admin/instagram", icon: Camera, module: "cms" },

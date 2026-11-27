@@ -14,6 +14,7 @@ const input = z.object({
   note: z.string().trim().max(500).optional(),
   paymentMethod: z.enum(["cod", "razorpay"]).default("cod"),
   checkoutKey: z.uuid().optional(),
+  couponCode: z.string().trim().max(24).regex(/^[A-Za-z0-9]*$/).optional(),
 });
 
 export type PlaceOrderResult =
@@ -36,7 +37,7 @@ export async function placeOrderAction(raw: unknown): Promise<PlaceOrderResult> 
   if (!user) return { ok: false, error: "Please sign in again." };
   const parsed = input.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check your order." };
-  const { items, addressId, note, paymentMethod, checkoutKey } = parsed.data;
+  const { items, addressId, note, paymentMethod, checkoutKey, couponCode } = parsed.data;
 
   const cfg = paymentMethod === "razorpay" ? getRazorpayConfig() : null;
   if (paymentMethod === "razorpay" && !cfg) return { ok: false, error: "Online payment isn't available right now. Please choose cash on delivery." };
@@ -49,6 +50,7 @@ export async function placeOrderAction(raw: unknown): Promise<PlaceOrderResult> 
       note: note ?? "",
       payment_method: paymentMethod,
       ...(checkoutKey ? { checkout_key: checkoutKey } : {}),
+      ...(couponCode ? { coupon_code: couponCode.toUpperCase() } : {}),
     },
   });
   if (error) {
@@ -182,19 +184,24 @@ export async function reportRazorpayFailureAction(raw: unknown): Promise<{ order
   return { orderNumber: order.order_number };
 }
 
-export type OrderQuote = { subtotal: number; discount: number; shipping: number; total: number };
+export type OrderQuote = { subtotal: number; discount: number; shipping: number; total: number; couponError?: string };
 
 /** Exact totals from the database (same function place_order uses), for checkout to show. */
 export async function quoteOrderAction(raw: unknown): Promise<OrderQuote | null> {
   if (!isSupabaseConfigured) return null;
   const parsed = z
-    .object({ items: z.array(z.object({ variantId: z.string().uuid(), quantity: z.number().int().min(1).max(50) })).min(1).max(30), method: z.enum(["razorpay", "cod"]) })
+    .object({ items: z.array(z.object({ variantId: z.string().uuid(), quantity: z.number().int().min(1).max(50) })).min(1).max(30), method: z.enum(["razorpay", "cod"]), coupon: z.string().trim().max(24).regex(/^[A-Za-z0-9]*$/).optional() })
     .safeParse(raw);
   if (!parsed.success) return null;
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("price_order", {
-    p: { items: parsed.data.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity })), payment_method: parsed.data.method },
+    p: { items: parsed.data.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity })), payment_method: parsed.data.method, ...(parsed.data.coupon ? { coupon_code: parsed.data.coupon.toUpperCase() } : {}) },
   });
+  // A bad coupon: say why, and quote without it.
+  if (error && parsed.data.coupon && error.code === "22023") {
+    const base = await quoteOrderAction({ items: parsed.data.items, method: parsed.data.method });
+    return base ? { ...base, couponError: error.message } : null;
+  }
   const row = (data as { subtotal: number; discount_total: number; shipping_total: number; grand_total: number }[] | null)?.[0];
   if (error || !row) return null;
   return { subtotal: row.subtotal, discount: row.discount_total, shipping: row.shipping_total, total: row.grand_total };

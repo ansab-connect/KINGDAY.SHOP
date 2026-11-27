@@ -1883,6 +1883,26 @@ await test("service flow: a manager can accept a scheduled job for the technicia
   await asSuperuser();
   assert((await rows(`select customer_confirmed_at is not null c from public.service_bookings where id = $1`, [id]))[0].c, "not confirmed");
 });
+await test("coupons: checked at checkout, discount on the order, code saved, use counted", async () => {
+  await asSuperuser();
+  await db.query(`insert into public.coupons (code, type, value, min_order_value, per_customer_limit) values ('SAVE10', 'percentage', 10, 0, 1), ('OLD5', 'fixed', 500, 0, null)`);
+  await db.query(`update public.coupons set is_active = false where code = 'OLD5'`);
+  await db.query(`update public.inventory set on_hand = on_hand + 5 where variant_id = $1`, [ckVar.id]);
+  await user(bob);
+  await expectError(`select * from public.price_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: ckVar.id, quantity: 1 }], coupon_code: "OLD5" })], /not valid/);
+  const [q0] = await rows(`select * from public.price_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: ckVar.id, quantity: 1 }] })]);
+  const [q] = await rows(`select * from public.price_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: ckVar.id, quantity: 1 }], coupon_code: "save10" })]);
+  assert(q.discount_total === q0.discount_total + Math.round((q0.subtotal - q0.discount_total) * 0.1), JSON.stringify([q0, q]));
+  const [o] = await rows(`select * from public.place_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: ckVar.id, quantity: 1 }], address_id: bobAddr, coupon_code: "SAVE10" })]);
+  await asSuperuser();
+  const [ord] = await rows(`select coupon_code, discount_total from public.orders where id = $1`, [o.order_id]);
+  assert(ord.coupon_code === "SAVE10" && ord.discount_total === q.discount_total, JSON.stringify(ord));
+  assert((await rows(`select used_count from public.coupons where code = 'SAVE10'`))[0].used_count === 1, "use not counted");
+  await user(bob);
+  await expectError(`select * from public.price_order($1::jsonb)`, [JSON.stringify({ items: [{ variant_id: ckVar.id, quantity: 1 }], coupon_code: "SAVE10" })], /already used/);
+  await asSuperuser();
+  await db.query(`update public.orders set placed_at = placed_at - interval '2 hours' where id = $1`, [o.order_id]);
+});
 await test("warranty: only admins manage warranties; brand assignment works", async () => {
   await user(staff);
   await expectError(`insert into public.warranties (name, duration_months) values ('Hack', 12)`, [], /row-level security/);

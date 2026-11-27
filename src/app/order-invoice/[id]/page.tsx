@@ -146,7 +146,7 @@ async function Invoice({ params }: { params: Promise<{ id: string }> }) {
           <table className="w-64 text-[11px] tabular-nums">
             <tbody>
               <tr><td className="py-0.5 text-neutral-600">Subtotal</td><td className="text-right">{formatPaise(o.subtotal)}</td></tr>
-              {o.discount_total ? <tr><td className="py-0.5 text-neutral-600">Discount{o.coupon_code ? ` (${o.coupon_code})` : ""}</td><td className="text-right">− {formatPaise(o.discount_total)}</td></tr> : null}
+              {o.discount_total ? <tr><td className="py-0.5 text-neutral-600">Discount{o.coupon_code ? ` (coupon ${o.coupon_code} applied)` : ""}</td><td className="text-right">− {formatPaise(o.discount_total)}</td></tr> : null}
               <tr><td className="py-0.5 text-neutral-600">Delivery</td><td className="text-right">{o.shipping_total ? formatPaise(o.shipping_total) : "Free"}</td></tr>
               {o.tax_total ? <tr><td className="py-0.5 text-neutral-600">Tax</td><td className="text-right">{formatPaise(o.tax_total)}</td></tr> : null}
               <tr className="border-t-2 border-[#4B0082] text-[13px] font-bold"><td className="pt-1.5">Grand total</td><td className="pt-1.5 text-right">{formatPaise(o.grand_total)}</td></tr>

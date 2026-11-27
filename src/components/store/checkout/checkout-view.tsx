@@ -72,12 +72,14 @@ export function CheckoutView({
   }, [items]);
   // Exact totals (discount by payment method, delivery) from the same database function as the order.
   const [quote, setQuote] = useState<(OrderQuote & { sig: string }) | null>(null);
-  const quoteSig = `${method}|${items.map((i) => `${i.variantId}:${i.quantity}`).join(",")}`;
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState("");
+  const quoteSig = `${coupon}|${method}|${items.map((i) => `${i.variantId}:${i.quantity}`).join(",")}`;
   useEffect(() => {
     if (!items.length) return;
     let alive = true;
     const t = window.setTimeout(() => {
-      quoteOrderAction({ items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), method })
+      quoteOrderAction({ items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), method, ...(coupon ? { coupon } : {}) })
         .then((q) => {
           if (alive && q) setQuote({ ...q, sig: quoteSig });
         })
@@ -133,6 +135,7 @@ export function CheckoutView({
         note,
         paymentMethod: method,
         checkoutKey,
+        ...(coupon && !fresh?.couponError ? { couponCode: coupon } : {}),
       });
       if (!res.ok) {
         setError(res.error);
@@ -314,10 +317,20 @@ export function CheckoutView({
             <CartLine key={i.variantId} item={i} compact onQuantity={(q) => setQuantity(i.variantId, q)} onRemove={() => removeItem(i.variantId)} />
           ))}
         </ul>
+        <div className="mt-3 flex gap-2">
+          <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} maxLength={24} placeholder="Coupon code" aria-label="Coupon code" className="h-10 min-w-0 flex-1 rounded-lg border px-3 text-sm uppercase" />
+          {coupon ? (
+            <button type="button" onClick={() => { setCoupon(""); setCouponInput(""); }} className="h-10 rounded-lg border px-3 text-sm font-semibold text-muted-foreground">Remove</button>
+          ) : (
+            <button type="button" disabled={!couponInput} onClick={() => setCoupon(couponInput)} className="h-10 rounded-lg bg-royal px-4 text-sm font-semibold text-white disabled:opacity-50">Apply</button>
+          )}
+        </div>
+        {coupon && fresh?.couponError ? <p role="alert" className="mt-1 text-xs text-danger">{fresh.couponError}</p> : null}
         <dl className="mt-2 flex flex-col gap-2 border-t pt-3 text-sm" aria-live="polite">
           <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal ({items.reduce((n, i) => n + i.quantity, 0)} item{items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"})</dt><dd className="tabular">{formatPaise(subtotal)}</dd></div>
+          {coupon && fresh && !fresh.couponError ? <div className="flex justify-between text-xs text-success"><dt>Coupon {coupon} applied</dt><dd /></div> : null}
           {discount ? (
-            <div className="flex justify-between text-success"><dt>{method === "razorpay" ? "Prepaid discount" : "COD discount"}</dt><dd className="tabular">−{formatPaise(discount)}</dd></div>
+            <div className="flex justify-between text-success"><dt>{coupon && fresh && !fresh.couponError ? "Discount (incl. coupon)" : method === "razorpay" ? "Prepaid discount" : "COD discount"}</dt><dd className="tabular">−{formatPaise(discount)}</dd></div>
           ) : null}
           <div className="flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular">{shipping ? formatPaise(shipping) : "Free"}</dd></div>
           <div className="flex justify-between border-t pt-3 text-base font-semibold text-deep"><dt>{method === "razorpay" ? "Total to pay now" : "Total (pay on delivery)"}</dt><dd className="tabular">{formatPaise(total)}</dd></div>
