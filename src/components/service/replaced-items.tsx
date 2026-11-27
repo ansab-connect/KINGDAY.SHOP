@@ -24,7 +24,7 @@ const rupees = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { maximumF
  * Replaced Items for one booking: search the master list, tap to add, change quantity,
  * or add a custom item (waits for office approval). Stock and bill update automatically.
  */
-export function ReplacedItems({ bookingId, lines, editable }: { bookingId: string; lines: ReplacedLine[]; editable: boolean }) {
+export function ReplacedItems({ bookingId, lines, editable, lockedReason }: { bookingId: string; lines: ReplacedLine[]; editable: boolean; lockedReason?: string | null }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<PartHit[]>([]);
@@ -107,6 +107,7 @@ export function ReplacedItems({ bookingId, lines, editable }: { bookingId: strin
         </ul>
       )}
 
+      {!editable && lockedReason ? <p className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">{lockedReason}</p> : null}
       {editable ? (
         <>
           <label className="relative block">

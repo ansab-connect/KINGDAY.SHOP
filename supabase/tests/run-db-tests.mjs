@@ -1867,6 +1867,13 @@ await test("service flow: a manager can accept a scheduled job for the technicia
   await asSuperuser();
   const [b] = await rows(`select status, accepted_at, completed_at from public.service_bookings where id = $1`, [id]);
   assert(b.status === "completed" && b.accepted_at && b.completed_at, JSON.stringify(b));
+  // The technician can still add a replaced part after "Ready for delivery".
+  await user(admin2);
+  await db.query(`select public.advance_service_job($1, 'ready_for_delivery')`, [id]);
+  await user(svc2);
+  await db.query(`select public.add_custom_replaced_item($1, 'Brake cable', 1, 25000, false)`, [id]).catch(async () => db.query(`select public.set_replaced_part($1, $2, 1)`, [id, battery]));
+  await asSuperuser();
+  assert((await rows(`select count(*)::int n from public.service_replaced_items where booking_id = $1`, [id]))[0].n === 1, "part not added after ready for delivery");
 });
 await test("warranty: only admins manage warranties; brand assignment works", async () => {
   await user(staff);

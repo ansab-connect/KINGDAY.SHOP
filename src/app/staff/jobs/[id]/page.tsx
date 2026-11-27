@@ -39,7 +39,9 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
   const [media, events, inspection, invoice, basicDefault, replaced] = await Promise.all([bookingMedia(b), getJobEvents(id), getInspection(id), getInvoiceForBooking(id), getDefaultBasicCharge(), getReplacedItems(id)]);
   const partsLines = replaced.map((r) => ({ id: r.id, partId: r.part_id, name: replacedName(r), quantity: r.quantity, unitPrice: r.unit_price_paise, approval: r.approval_status }));
   const partsTotal = partsLines.filter((l) => l.approval === "approved").reduce((n, l) => n + l.quantity * l.unitPrice, 0);
-  const partsEditable = ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts", "completed"].includes(b.status) && invoice?.payment_status !== "paid" && invoice?.approval_status !== "approved";
+  const billLocked = invoice?.payment_status === "paid" || invoice?.approval_status === "approved";
+  const partsEditable = ["accepted", "on_the_way", "reached", "inspection_started", "inspection_completed", "started", "awaiting_parts", "completed", "ready_for_delivery"].includes(b.status) && !billLocked;
+  const partsLockedReason = partsEditable ? null : billLocked ? "The invoice is approved or paid, so parts are locked. Ask the office to change them." : ["assigned", "scheduled"].includes(b.status) ? "Accept the job first, then you can add replaced parts here." : null;
   const phone = b.mobile.replace(/\s/g, "");
   const wa = `https://wa.me/${b.mobile.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}?text=${encodeURIComponent(`Hi ${b.customer_name}, I'm the KING DAY technician for booking ${b.booking_code}.`)}`;
   const canReport = ["reached", "inspection_started", "inspection_completed", "started", "awaiting_parts", "completed", "ready_for_delivery"].includes(b.status);
@@ -130,7 +132,7 @@ async function Job({ params }: { params: Promise<{ id: string }> }) {
       </Card>
 
       <Card title={<L en="Replaced items" ml="മാറ്റിയ പാർട്ടുകൾ" />}>
-        <ReplacedItems bookingId={b.id} lines={partsLines} editable={partsEditable} />
+        <ReplacedItems bookingId={b.id} lines={partsLines} editable={partsEditable} lockedReason={partsLockedReason} />
       </Card>
 
       {["completed", "ready_for_delivery", "invoiced"].includes(b.status) ? (

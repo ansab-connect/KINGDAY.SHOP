@@ -60,8 +60,8 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
   useEffect(() => {
     const el = buyRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    // Hidden only once the main button has scrolled up out of view.
-    const io = new IntersectionObserver(([e]) => setBuyVisible(e.isIntersecting || e.boundingClientRect.top > 0));
+    // Phones: the sticky bar shows whenever the main button is off screen (also on first load).
+    const io = new IntersectionObserver(([e]) => setBuyVisible(e.isIntersecting));
     io.observe(el);
     return () => io.disconnect();
   }, []);
@@ -99,7 +99,7 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
   const enquireHref = whatsappLink(`Hi KING DAY, I have a question about ${name} ${productUrl}`);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 lg:gap-6">
       <div>
         <Price price={variant.price} mrp={variant.mrp} size="lg" />
         {variant.mrp > variant.price ? (
@@ -132,30 +132,30 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
 
 
       <div className="flex flex-col gap-3">
-        {/* Buy now: the one bold, warm action on the page (orange stands out from the purple
+        {/* Buy now: the one bold, warm action on the page (warm gold, the brand colour, never a red "danger" tone; stands out from the purple
             brand and the green WhatsApp button), price on the button, trust line below. */}
         <button
           ref={buyRef}
           type="button"
           disabled={out}
           onClick={() => buy("online")}
-          className="buy-now-shine buy-now-glow group relative flex min-h-[4.5rem] w-full items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-orange-500 to-orange-600 px-4 py-3 text-left text-white transition-[transform,background-color] hover:from-orange-600 hover:to-orange-700 active:scale-[0.99] focus-visible:ring-4 focus-visible:ring-orange-300 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
+          className="buy-now-shine buy-now-glow group relative flex min-h-[4.5rem] w-full items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-[#FFD45C] to-[#F2B705] px-4 py-3 text-left text-[#1A0F2E] transition-[transform,background-color] hover:from-[#FFCC33] hover:to-[#E5A800] active:scale-[0.99] focus-visible:ring-4 focus-visible:ring-[#4B0082]/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
         >
-          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-white/20 ring-1 ring-white/40">
-            <Zap aria-hidden className="size-5 fill-white text-white transition-transform group-hover:scale-110" />
+          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#1A0F2E]/10 ring-1 ring-[#1A0F2E]/15">
+            <Zap aria-hidden className="size-5 fill-[#4B0082] text-[#4B0082] transition-transform group-hover:scale-110" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-lg leading-tight font-extrabold tracking-wide uppercase">
               <L en="Buy now" ml="ഇപ്പോൾ വാങ്ങൂ" />
             </span>
-            <span className="block truncate text-xs font-medium text-white/90">
+            <span className="block truncate text-xs font-semibold text-[#1A0F2E]/75">
               {prepaid.shipping ? "Pay online · UPI · Cards" : "Free delivery · Pay online"}
             </span>
           </span>
           <span className="flex shrink-0 flex-col items-end">
             <span className="text-xl leading-tight font-extrabold tabular">{formatPaise(prepaid.total)}</span>
             {prepaid.discount ? (
-              <span className="mt-0.5 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-bold text-orange-700">Save {formatPaise(prepaid.discount)}</span>
+              <span className="mt-0.5 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-bold text-[#4B0082]">Save {formatPaise(prepaid.discount)}</span>
             ) : null}
           </span>
         </button>
@@ -232,12 +232,12 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
         </a>
       </div>
 
-      {/* Sticky mobile Buy Now (above the bottom menu) once the main button scrolls away. */}
+      {/* Sticky mobile Buy Now (above the bottom menu) whenever the main button is not on screen. */}
       {!out && !buyVisible ? (
-        <div className="fixed inset-x-0 bottom-[4.25rem] z-40 border-t bg-white/95 px-4 py-2.5 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.25)] backdrop-blur lg:hidden">
-          <button type="button" onClick={() => buy("online")} className="buy-now-shine relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-orange-500 to-orange-600 text-sm font-extrabold tracking-wide text-white uppercase shadow-[0_10px_24px_-10px_rgb(234_88_12/0.8)]">
-            <Zap aria-hidden className="size-4 fill-white text-white" /> Buy now · <span className="tabular">{formatPaise(prepaid.total)}</span>
-            {prepaid.discount ? <span className="rounded-full bg-white px-2 py-0.5 text-[0.65rem] text-orange-700 normal-case">Save {formatPaise(prepaid.discount)}</span> : null}
+        <div className="fixed inset-x-0 bottom-[4.25rem] z-40 border-t bg-white/95 py-2.5 pr-[4.75rem] pl-4 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.25)] backdrop-blur lg:hidden">
+          <button type="button" onClick={() => buy("online")} className="buy-now-shine relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FFD45C] to-[#F2B705] text-sm font-extrabold tracking-wide text-[#1A0F2E] uppercase shadow-[0_10px_24px_-10px_rgb(201_150_0/0.8)]">
+            <Zap aria-hidden className="size-4 fill-[#4B0082] text-[#4B0082]" /> Buy now · <span className="tabular">{formatPaise(prepaid.total)}</span>
+            {prepaid.discount ? <span className="rounded-full bg-white px-2 py-0.5 text-[0.65rem] text-[#4B0082] normal-case">Save {formatPaise(prepaid.discount)}</span> : null}
           </button>
         </div>
       ) : null}
@@ -272,14 +272,14 @@ export function VariantOptions({ variantTypes }: { variantTypes: string[] }) {
 
   if (!(levels.some((l) => l.values.length) || (!variantTypes.length && variants.length > 1))) return null;
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2.5">
       {levels.map(({ type, level, values, pool }) =>
         values.length ? (
           <fieldset key={type}>
-            <legend className="text-sm font-medium text-deep">
+            <legend className="text-xs font-semibold text-deep">
               {type}: <span className="font-normal text-muted-foreground">{variant.values[type]}</span>
             </legend>
-            <div className="mt-3 flex flex-wrap gap-2.5">
+            <div className="mt-1.5 flex flex-wrap gap-2">
               {values.map((value) => (
                 <Choice
                   key={value}
@@ -298,10 +298,10 @@ export function VariantOptions({ variantTypes }: { variantTypes: string[] }) {
 
       {!variantTypes.length && variants.length > 1 ? (
         <fieldset>
-          <legend className="text-sm font-medium text-deep">
+          <legend className="text-xs font-semibold text-deep">
             {variants.every((v) => v.colour) ? "Colour" : "Option"}: <span className="font-normal text-muted-foreground">{variant.colour ?? variant.name}</span>
           </legend>
-          <div className="mt-3 flex flex-wrap gap-2.5">
+          <div className="mt-1.5 flex flex-wrap gap-2">
             {variants.map((v) => (
               <Choice
                 key={v.id}
@@ -349,7 +349,7 @@ function Choice({
           <span
             aria-hidden
             className={cn(
-              "block size-9 rounded-full ring-1 ring-black/10 ring-offset-2 transition-all peer-checked:ring-2 peer-checked:ring-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+              "block size-7 rounded-full ring-1 ring-black/10 ring-offset-2 transition-all peer-checked:ring-2 peer-checked:ring-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
               soldOut && "opacity-40",
             )}
             style={{ backgroundColor: swatch }}
@@ -358,7 +358,7 @@ function Choice({
       ) : (
         <span
           className={cn(
-            "inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium text-deep transition-colors peer-checked:border-royal peer-checked:bg-royal-50 peer-checked:text-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+            "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium text-deep transition-colors peer-checked:border-royal peer-checked:bg-royal-50 peer-checked:text-royal peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
             soldOut && "text-muted-foreground line-through",
           )}
         >

@@ -33,7 +33,7 @@ function fieldErrors(error: z.ZodError): AuthFormState["fieldErrors"] {
 
 // Supabase error messages are mapped to neutral text so we never reveal
 // whether an email address or mobile number is registered.
-const GENERIC_LOGIN_ERROR = "Incorrect mobile number, email or password.";
+const GENERIC_LOGIN_ERROR = "That mobile number and password don't match. Check the number, or tap “Forgot your password?”. New here? Choose New customer.";
 
 /**
  * Resolves what the person typed (email or mobile number) to the sign-in email.

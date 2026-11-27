@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { AuthCard } from "@/components/auth/auth-card";
-import { AuthForm } from "@/components/auth/auth-form";
-import { signIn } from "@/features/auth/actions";
+import { QuickAccount } from "@/components/store/quick-account";
 import { safeNextPath } from "@/features/auth/session";
 
 export const metadata: Metadata = { title: "Sign in", robots: { index: false } };
@@ -19,15 +18,7 @@ async function LoginForm({ searchParams }: { searchParams: PageProps<"/login">["
           That link is invalid or has expired. Please sign in or request a new link.
         </p>
       ) : null}
-      <AuthForm
-        action={signIn}
-        submitLabel="Sign in"
-        hidden={{ next }}
-        fields={[
-          { name: "login", label: "Mobile number or email", type: "text", autoComplete: "username", inputMode: "email" },
-          { name: "password", label: "Password", type: "password", autoComplete: "current-password" },
-        ]}
-      />
+      <QuickAccount next={next} initialTab="returning" />
     </>
   );
 }
@@ -35,15 +26,10 @@ async function LoginForm({ searchParams }: { searchParams: PageProps<"/login">["
 export default function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     <AuthCard
-      title="Welcome back"
-      description="Sign in to track orders, save addresses and keep a wishlist."
+      title="Sign in or create an account"
+      description="Use your mobile number. New here? Tap New customer, it takes 20 seconds."
       footer={
-        <>
-          <Link href="/forgot-password" className="font-medium text-royal hover:underline">Forgot your password?</Link>
-          <p className="mt-3">
-            New to KING DAY? <Link href="/register" className="font-medium text-royal hover:underline">Create an account</Link>
-          </p>
-        </>
+        <p>Staff? <Link href="/admin/login" className="font-medium text-royal hover:underline">Staff sign-in</Link></p>
       }
     >
       <Suspense fallback={<div className="h-64" />}>
