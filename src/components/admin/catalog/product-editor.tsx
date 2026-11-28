@@ -5,7 +5,8 @@ import { treeOrder } from "@/features/catalog/category-tree";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, Film, ImageIcon, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { Copy, Film, ImageIcon, Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
+import { aiSeoAction } from "@/features/ai/admin-ai";
 import { AiFillPanel } from "@/components/admin/catalog/ai-fill-panel";
 import { AiWriteButtons } from "@/components/admin/catalog/ai-write-buttons";
 import { ImagePoolProvider, SelectImagesButton, TemporaryImageGallery } from "@/components/admin/catalog/image-pool";
@@ -646,6 +647,7 @@ export function ProductEditor({
 
         <div id="sec-seo" className="scroll-mt-24">
           <FormSection title="7. Search listing (Google)" description="Optional. Leave empty to use the product name and short description.">
+            {aiEnabled ? <SeoButton name={basics.name} short={basics.short_description} category={categories.find((c) => c.id === basics.category_id)?.name} onDone={(t, d) => { setB("seo_title", t); setB("seo_description", d); }} /> : null}
             <TextField id="p-seo-title" label="SEO title" maxLength={70} value={basics.seo_title} error={errors.seo_title} onChange={(v) => setB("seo_title", v)} />
             <TextAreaField id="p-seo-desc" label="SEO description" rows={2} maxLength={170} value={basics.seo_description} error={errors.seo_description} onChange={(v) => setB("seo_description", v)} />
           </FormSection>
@@ -962,5 +964,31 @@ function SectionNav({ items, errorIds }: { items: { id: string; label: string; d
         })}
       </ol>
     </nav>
+  );
+}
+
+/** "Write SEO with AI": Google title + description from the product name, using trending searches. */
+function SeoButton({ name, short, category, onDone }: { name: string; short: string; category?: string; onDone: (title: string, description: string) => void }) {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => start(async () => {
+          setMsg(null);
+          const r = await aiSeoAction({ name, short, category });
+          if (!r.ok) return setMsg(r.error);
+          onDone(r.title, r.description);
+          setMsg("Done. Check it, then save the product.");
+        })}
+        className="inline-flex h-10 items-center gap-2 rounded-lg bg-royal px-4 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-60"
+      >
+        {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Sparkles aria-hidden className="size-4" />}
+        {pending ? "Checking Google trends…" : "Write SEO from title (AI)"}
+      </button>
+      {msg ? <span className="text-xs text-muted-foreground">{msg}</span> : null}
+    </div>
   );
 }

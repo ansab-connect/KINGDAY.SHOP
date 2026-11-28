@@ -38,6 +38,8 @@ export type StoreProduct = {
   variantByCategory?: Record<string, string>;
   /** Set on listings when the card shows a specific variant: the product page opens on it. */
   listedVariantId?: string;
+  /** Cash on delivery is switched off for this product's category (category setting). */
+  noCod?: boolean;
   brand: BrandRef | null;
   /** Price of the default variant (paise). */
   mrp: number;
@@ -91,6 +93,9 @@ export type StoreCategory = {
   seoTitle: string | null;
   seoDescription: string | null;
   productCount: number;
+  /** Category settings: list each variant as its own product card / no cash on delivery. */
+  variantsAsProducts?: boolean;
+  noCod?: boolean;
 };
 
 export type StoreBrand = BrandRef & { description: string; logoUrl: string | null; productCount: number };

@@ -42,6 +42,12 @@ export async function placeOrderAction(raw: unknown): Promise<PlaceOrderResult> 
   const cfg = paymentMethod === "razorpay" ? getRazorpayConfig() : null;
   if (paymentMethod === "razorpay" && !cfg) return { ok: false, error: "Online payment isn't available right now. Please choose cash on delivery." };
 
+  if (paymentMethod === "cod") {
+    const { getAllProducts } = await import("@/features/catalog/queries");
+    const blocked = new Set((await getAllProducts()).filter((x) => x.noCod).flatMap((x) => x.variants.map((v) => v.id)));
+    if (items.some((i) => blocked.has(i.variantId))) return { ok: false, error: "Cash on delivery isn't available for some items in your order. Please pay online or order on WhatsApp." };
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("place_order", {
     p: {

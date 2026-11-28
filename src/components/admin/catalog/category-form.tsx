@@ -33,6 +33,8 @@ export function CategoryForm({
     image_path: category?.image_path ?? null,
     sort_order: String(category?.sort_order ?? 0),
     is_active: category?.is_active ?? true,
+    variants_as_products: category?.variants_as_products ?? false,
+    no_cod: category?.no_cod ?? false,
     seo_title: category?.seo_title ?? "",
     seo_description: category?.seo_description ?? "",
   });
@@ -102,6 +104,10 @@ export function CategoryForm({
         <FormSection title="Visibility">
           <SwitchField id="cat-active" label="Visible in store" checked={v.is_active} onChange={(val) => set("is_active", val)} />
           <TextField id="cat-sort" label="Sort order" type="number" inputMode="numeric" value={v.sort_order} error={errors.sort_order} hint="Lower numbers appear first." onChange={(val) => set("sort_order", val)} />
+        </FormSection>
+        <FormSection title="Settings" description="Off by default. Also applies to the categories inside this one.">
+          <SwitchField id="cat-split" label="Show each variant as a separate product" description="E.g. a jeep in Red, Black and Blue shows as 3 products in the shop." checked={v.variants_as_products} onChange={(val) => set("variants_as_products", val)} />
+          <SwitchField id="cat-nocod" label="No cash on delivery" description="Customers pay online or order on WhatsApp for these products." checked={v.no_cod} onChange={(val) => set("no_cod", val)} />
         </FormSection>
         <div className="flex flex-wrap gap-2">
           <button type="submit" disabled={pending} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-royal px-5 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-60">

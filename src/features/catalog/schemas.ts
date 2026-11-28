@@ -76,6 +76,8 @@ export const categoryInputSchema = z
     image_path: optionalText(300),
     sort_order: z.coerce.number().int().min(0).max(10000).default(0),
     is_active: z.boolean().default(true),
+    variants_as_products: z.boolean().default(false),
+    no_cod: z.boolean().default(false),
     seo_title: optionalText(70),
     seo_description: optionalText(170),
   })

@@ -27,6 +27,23 @@ async function getCatalog(): Promise<CatalogSnapshot> {
   return isSupabaseConfigured ? loadSupabaseCatalog() : previewSnapshot;
 }
 
+function splitVariants(p: StoreProduct): StoreProduct[] {
+  return p.variants.map((v) => {
+    const label = Object.values(v.values ?? {}).filter(Boolean).join(" · ") || v.colour || v.name;
+    return {
+      ...p,
+      name: label && !/^default$/i.test(label) ? `${p.name} - ${label}` : p.name,
+      sku: v.sku,
+      mrp: v.mrp,
+      price: v.price,
+      stock: v.stock,
+      defaultVariantId: v.id,
+      images: v.images.length ? v.images : p.images,
+      listedVariantId: v.id,
+    };
+  });
+}
+
 const discountOf = (p: StoreProduct) => discountPercent(p.mrp, p.price);
 
 function sortProducts(list: StoreProduct[], sort: SortOption): StoreProduct[] {
@@ -60,7 +77,10 @@ export async function getProducts(filters: ProductFilters = {}) {
   const q = filters.q?.trim().toLowerCase();
   // In a category, a product whose variant belongs there is listed with that variant's price.
   const pathBySlug = new Map(categories.map((c) => [c.slug, c.path]));
-  const products = filters.category ? all.map((p) => productForCategory(p, filters.category!, (s) => pathBySlug.get(s))) : all;
+  const inCat = filters.category ? all.map((p) => productForCategory(p, filters.category!, (s) => pathBySlug.get(s))) : all;
+  // Category setting "variants as separate products": one card per variant (e.g. each jeep colour).
+  const split = new Set(categories.filter((c) => c.variantsAsProducts).map((c) => c.slug));
+  const products = split.size ? inCat.flatMap((p) => (!p.listedVariantId && p.variants.length > 1 && (p.category.path ?? [p.category.slug]).some((s) => split.has(s)) ? splitVariants(p) : [p])) : inCat;
   const filtered = products.filter((p) => {
     if (filters.category && !inCategory(p, filters.category)) return false;
     if (filters.brands?.length && !(p.brand && filters.brands.includes(p.brand.slug))) return false;

@@ -80,7 +80,7 @@ export function ProductGrid({ products, priorityCount = 0 }: { products: StorePr
   return (
     <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
       {products.map((p, i) => (
-        <li key={p.id} className="has-[a:focus-visible]:rounded-2xl has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring has-[a:focus-visible]:ring-offset-2">
+        <li key={`${p.id}${p.listedVariantId ?? ""}`} className="has-[a:focus-visible]:rounded-2xl has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring has-[a:focus-visible]:ring-offset-2">
           <ProductCard product={p} priority={i < priorityCount} />
         </li>
       ))}

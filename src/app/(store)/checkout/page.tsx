@@ -6,6 +6,7 @@ import { Container } from "@/components/store/section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAddresses } from "@/features/account/queries";
 import { requireUser } from "@/features/auth/session";
+import { getAllProducts } from "@/features/catalog/queries";
 import { getCheckoutSettings } from "@/features/orders/checkout";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getRazorpayConfig } from "@/lib/razorpay";
@@ -17,11 +18,13 @@ async function Checkout({ buyNow, pay }: { buyNow: boolean; pay?: "razorpay" | "
   if (!isSupabaseConfigured) return <p className="text-sm text-muted-foreground">Online ordering opens soon. Please order on WhatsApp from your cart.</p>;
   const user = await requireUser(buyNow ? `/checkout?buy=1${pay ? `&pay=${pay === "cod" ? "cod" : "online"}` : ""}` : "/checkout");
   const supabase = await createClient();
-  const [addresses, settings, { data: profile }] = await Promise.all([
+  const [addresses, settings, { data: profile }, all] = await Promise.all([
     getAddresses(),
     getCheckoutSettings(),
     supabase.from("profiles").select("full_name, customer_code, phone").eq("id", user.id).maybeSingle(),
+    getAllProducts(),
   ]);
+  const noCodVariants = all.filter((x) => x.noCod).flatMap((x) => x.variants.map((v) => v.id));
   const p = profile as { full_name: string | null; customer_code: string | null; phone: string | null } | null;
 
   const rzp = getRazorpayConfig();
@@ -34,6 +37,7 @@ async function Checkout({ buyNow, pay }: { buyNow: boolean; pay?: "razorpay" | "
       testMode={rzp?.mode === "test"}
       mode={buyNow ? "buynow" : "cart"}
       initialMethod={pay}
+      noCodVariants={noCodVariants}
     />
   );
 }

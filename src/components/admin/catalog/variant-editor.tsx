@@ -1081,7 +1081,8 @@ function ComboRow({
       {expanded ? (
         <tr className="bg-muted/20">
           <td colSpan={9} className="px-3 py-3">
-            <div className="grid gap-4 lg:grid-cols-2">
+            {/* Stays in view on narrow screens (no sideways scrolling); photos come first. */}
+            <div className="sticky left-3 grid max-w-[calc(100vw-4rem)] gap-4 lg:max-w-none xl:grid-cols-2">
               <div className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1 text-xs">
                   <span className="font-medium text-muted-foreground">Variant name (optional)</span>
@@ -1110,7 +1111,7 @@ function ComboRow({
                   </button>
                 </div>
               </div>
-              <div>
+              <div className="order-first">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium text-deep">Images for {label}</p>
                   {product && v.id ? <SelectImagesButton variantId={v.id} label={label} /> : null}

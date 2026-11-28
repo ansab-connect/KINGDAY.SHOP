@@ -17,6 +17,8 @@ export type AdminCategory = {
   image_path: string | null;
   sort_order: number;
   is_active: boolean;
+  variants_as_products?: boolean;
+  no_cod?: boolean;
   seo_title: string | null;
   seo_description: string | null;
   product_count: number;
@@ -112,7 +114,7 @@ export async function listCategories(): Promise<AdminCategory[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name, slug, parent_id, description, image_path, sort_order, is_active, seo_title, seo_description, products!category_id(count)")
+    .select("id, name, slug, parent_id, description, image_path, sort_order, is_active, variants_as_products, no_cod, seo_title, seo_description, products!category_id(count)")
     .order("sort_order")
     .order("name");
   if (error) fail("Loading categories", error);

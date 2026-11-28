@@ -62,6 +62,38 @@ export async function aiWriteAction(input: { mode: keyof typeof MODES; text: str
   return { ok: true, text: res.text.replace(/\*\*/g, "").trim().slice(0, 10000) };
 }
 
+// ---------------------------------------------------------------- SEO from the product title
+
+/** Google title + description from the product name, using what people search for now. */
+export async function aiSeoAction(input: { name: string; category?: string; short?: string }): Promise<{ ok: true; title: string; description: string } | { ok: false; error: string }> {
+  try {
+    await assertCan("products", "edit");
+  } catch {
+    return { ok: false, error: "You don't have permission to edit products." };
+  }
+  const name = String(input.name ?? "").trim().slice(0, 160);
+  if (name.length < 3) return { ok: false, error: "Type the product name first." };
+  const res = await geminiGenerate({
+    system: [
+      "You are an SEO expert for KING DAY, a kids' ride-on, bicycle and toy shop in Kozhikode (Calicut), Kerala, India, selling online across India.",
+      "Search Google for what people in India and Kerala search for right now to buy this kind of product, and use those trending search words naturally.",
+      "Write: TITLE (50-60 characters, main search words first, may end with '| KING DAY') and DESCRIPTION (140-160 characters, benefits + price-friendly words like 'best price', 'free delivery' only if natural, a call to action).",
+      "Never invent specs, prices, offers or warranty. No emojis, no quotes, no markdown.",
+      "Reply exactly as two lines: 'TITLE: ...' then 'DESCRIPTION: ...'.",
+    ].join(" "),
+    messages: [{ role: "user", text: [`Product: ${name}`, input.category ? `Category: ${String(input.category).slice(0, 80)}` : "", input.short ? `About: ${String(input.short).slice(0, 300)}` : ""].filter(Boolean).join(". ") }],
+    search: true,
+    maxTokens: 1024,
+    temperature: 0.4,
+  });
+  if (!res.ok) return { ok: false, error: failMsg(res.error) };
+  const clean = res.text.replace(/\*\*/g, "");
+  const title = clean.match(/TITLE:\s*(.+)/i)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
+  const description = clean.match(/DESCRIPTION:\s*(.+)/i)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
+  if (!title || !description) return { ok: false, error: "The AI didn't answer. Please try again." };
+  return { ok: true, title: title.slice(0, 70), description: description.slice(0, 170) };
+}
+
 // ---------------------------------------------------------------- Business analyst
 
 async function businessSnapshot(): Promise<string> {

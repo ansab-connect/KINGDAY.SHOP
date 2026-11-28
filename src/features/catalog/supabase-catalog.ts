@@ -64,7 +64,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
       .limit(1000),
     supabase
       .from("categories")
-      .select("slug, name, description, image_path, seo_title, seo_description, sort_order, parent:parent_id(slug)")
+      .select("slug, name, description, image_path, seo_title, seo_description, sort_order, variants_as_products, no_cod, parent:parent_id(slug)")
       .eq("is_active", true)
       .order("sort_order"),
     supabase.from("brands").select("slug, name, description, logo_path").eq("is_active", true).order("name"),
@@ -177,6 +177,7 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
 
   type RawCategory = {
     slug: string; name: string; description: string | null; image_path: string | null; seo_title: string | null; seo_description: string | null; parent: { slug: string } | null;
+    variants_as_products?: boolean; no_cod?: boolean;
   };
   const rawCategories = (categoriesRes.data ?? []) as unknown as RawCategory[];
   // Categories nest to any depth: every product carries its full path, so it also shows
@@ -213,7 +214,11 @@ export async function loadSupabaseCatalog(): Promise<CatalogSnapshot> {
     seoTitle: c.seo_title,
     seoDescription: c.seo_description,
     productCount: countFor(c.slug),
+    variantsAsProducts: Boolean(c.variants_as_products),
+    noCod: Boolean(c.no_cod),
   }));
+  const noCod = new Set(rawCategories.filter((c) => c.no_cod).map((c) => c.slug));
+  if (noCod.size) for (const p of products) if ((p.category.path ?? [p.category.slug]).some((s) => noCod.has(s))) p.noCod = true;
 
   const brands: StoreBrand[] = ((brandsRes.data ?? []) as unknown as { slug: string; name: string; description: string | null; logo_path: string | null }[]).map((b) => ({
     slug: b.slug,

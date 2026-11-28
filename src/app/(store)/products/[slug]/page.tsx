@@ -147,7 +147,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 productUrl={productUrl}
                 prepaidPct={product.prepaidDiscountPct}
                 codPct={product.codDiscountPct}
-                settings={priceSettings}
+                settings={{ ...priceSettings, codEnabled: priceSettings.codEnabled && !product.noCod }}
                 warranties={warrantyLines}
                 mobileOptions={<><VariantOptions variantTypes={product.variantTypes} /><ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={[]} /></>}
               />

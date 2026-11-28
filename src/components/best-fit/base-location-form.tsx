@@ -1,18 +1,32 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { LocateFixed, Loader2 } from "lucide-react";
+import { LocateFixed, Loader2, MapPin } from "lucide-react";
 import { inputClass } from "@/components/admin/form/fields";
+import { findPlaceAction } from "@/features/best-fit/geocode";
 import { runOp, type OpResult } from "@/features/best-fit/ops";
 import { Notice } from "./op-form";
 
-type Base = { label?: string; lat: number | null; lng: number | null };
+type Base = { label?: string; pin?: string; lat: number | null; lng: number | null };
 
 /** Shop location for road distances: one tap at the shop ("use this phone's location"), or type it. */
 export function BaseLocationForm({ initial }: { initial: Base }) {
   const [label, setLabel] = useState(initial.label ?? "");
   const [lat, setLat] = useState(initial.lat != null ? String(initial.lat) : "");
   const [lng, setLng] = useState(initial.lng != null ? String(initial.lng) : "");
+  const [pin, setPin] = useState(initial.pin ?? "");
+  const [finding, startFind] = useTransition();
+
+  function findPin() {
+    startFind(async () => {
+      const r = await findPlaceAction({ pin, place: label });
+      if (!r.ok) return setRes({ ok: false, error: r.error });
+      setLat(String(r.lat));
+      setLng(String(r.lng));
+      if (!label) setLabel(r.label);
+      setRes({ ok: true, message: `Found: ${r.label}. Press Save.` });
+    });
+  }
   const [res, setRes] = useState<OpResult | null>(null);
   const [locating, setLocating] = useState(false);
   const [pending, start] = useTransition();
@@ -38,7 +52,7 @@ export function BaseLocationForm({ initial }: { initial: Base }) {
   function save() {
     const a = Number(lat), b = Number(lng);
     if (!lat || !lng || !Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a) > 90 || Math.abs(b) > 180) return setRes({ ok: false, error: "Enter a valid latitude and longitude." });
-    start(async () => setRes(await runOp("setting.save", { key: "best_fit.base_location", value: { label, lat: a, lng: b } })));
+    start(async () => setRes(await runOp("setting.save", { key: "best_fit.base_location", value: { label, pin, lat: a, lng: b } })));
   }
 
   return (
@@ -46,6 +60,12 @@ export function BaseLocationForm({ initial }: { initial: Base }) {
       <button type="button" onClick={locate} disabled={locating} className="inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-royal px-4 text-sm font-semibold text-white hover:bg-royal-800 disabled:opacity-60">
         {locating ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <LocateFixed aria-hidden className="size-4" />} Use my current location (stand at the shop)
       </button>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1 text-sm"><span className="font-medium text-deep">Shop PIN code</span><input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="673002" className={`${inputClass} w-36`} /></label>
+        <button type="button" onClick={findPin} disabled={finding || pin.length !== 6} className="inline-flex h-11 items-center gap-2 rounded-lg border border-royal-200 px-4 text-sm font-semibold text-royal hover:bg-royal-50 disabled:opacity-60">
+          {finding ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <MapPin aria-hidden className="size-4" />} Find by PIN code
+        </button>
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm sm:col-span-3"><span className="font-medium text-deep">Address</span><input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={200} className={inputClass} /></label>
         <label className="flex flex-col gap-1 text-sm"><span className="font-medium text-deep">Latitude</span><input value={lat} onChange={(e) => setLat(e.target.value)} inputMode="decimal" className={inputClass} /></label>

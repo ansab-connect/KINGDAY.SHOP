@@ -35,6 +35,7 @@ export function CheckoutView({
   testMode,
   mode = "cart",
   initialMethod,
+  noCodVariants = [],
 }: {
   addresses: Address[];
   settings: Settings;
@@ -44,6 +45,8 @@ export function CheckoutView({
   mode?: "cart" | "buynow";
   /** From the product page: Buy now (online) or Cash on delivery. */
   initialMethod?: Method;
+  /** Variants whose category has cash on delivery switched off. */
+  noCodVariants?: string[];
 }) {
   const router = useRouter();
   const company = useCompany();
@@ -63,9 +66,12 @@ export function CheckoutView({
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [method, setMethod] = useState<Method>(
+  const codBlocked = items.some((i) => noCodVariants.includes(i.variantId));
+  const codOn = settings.codEnabled && !codBlocked;
+  const [picked, setMethod] = useState<Method>(
     initialMethod === "cod" && settings.codEnabled ? "cod" : onlineEnabled ? "razorpay" : "cod",
   );
+  const method: Method = picked === "cod" && !codOn && onlineEnabled ? "razorpay" : picked;
   // InitiateCheckout once per checkout page view.
   const started = useRef(false);
   useEffect(() => {
@@ -273,10 +279,10 @@ export function CheckoutView({
             <MethodOption
               checked={method === "cod"}
               onSelect={() => setMethod("cod")}
-              disabled={!settings.codEnabled}
+              disabled={!codOn}
               icon={<Banknote aria-hidden className="size-5 text-royal" />}
               title="Cash on delivery"
-              body={settings.codEnabled ? "Our team calls you to confirm the order and delivery date." : "Cash on delivery is paused right now."}
+              body={codOn ? "Our team calls you to confirm the order and delivery date." : codBlocked && settings.codEnabled ? "Not available for some items in your order. Please pay online or order on WhatsApp." : "Cash on delivery is paused right now."}
             />
             {(() => {
               const lines = items.map((i) => `• ${i.productName}${i.variantName ? ` (${i.variantName})` : ""} × ${i.quantity} = ${formatPaise(i.price * i.quantity)}`);
@@ -367,13 +373,13 @@ export function CheckoutView({
         <button
           type="button"
           onClick={place}
-          disabled={pending || !addressId || (method === "cod" && !settings.codEnabled)}
+          disabled={pending || !addressId || (method === "cod" && !codOn)}
           className="mt-4 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3.5 text-sm font-bold tracking-wide text-deep uppercase hover:bg-gold-300 disabled:opacity-60"
         >
           {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
           {pending ? (method === "razorpay" ? "Opening secure payment…" : "Placing order…") : method === "razorpay" ? <><Lock aria-hidden className="size-4" /> Pay {formatPaise(total)}</> : "Place order"}
         </button>
-        {!settings.codEnabled && !onlineEnabled ? <p className="mt-2 text-xs text-danger">Cash on delivery is paused. Please order on WhatsApp from your cart.</p> : null}
+        {!codOn && !onlineEnabled ? <p className="mt-2 text-xs text-danger">Cash on delivery is paused. Please order on WhatsApp from your cart.</p> : null}
       </aside>
     </div>
   );
