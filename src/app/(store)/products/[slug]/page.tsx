@@ -120,7 +120,7 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 next to Buy now instead, so the button stays near the top. */}
             <div className="mt-5 hidden flex-col gap-4 lg:flex">
               <VariantOptions variantTypes={product.variantTypes} />
-              <ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={warrantyLines} />
+              <ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={[]} />
             </div>
           </div>
 
@@ -148,7 +148,8 @@ async function ProductContent({ params }: Pick<PageProps<"/products/[slug]">, "p
                 prepaidPct={product.prepaidDiscountPct}
                 codPct={product.codDiscountPct}
                 settings={priceSettings}
-                mobileOptions={<><VariantOptions variantTypes={product.variantTypes} /><ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={warrantyLines} /></>}
+                warranties={warrantyLines}
+                mobileOptions={<><VariantOptions variantTypes={product.variantTypes} /><ProductFacts size={extras.size} variantSizes={extras.variantSizes} warranties={[]} /></>}
               />
             </div>
 

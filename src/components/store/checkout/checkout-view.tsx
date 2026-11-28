@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Banknote, CheckCircle2, CreditCard, Loader2, Lock, MapPin, Pencil, Plus, ShoppingBag, Zap } from "lucide-react";
+import { AlertCircle, Banknote, CheckCircle2, CreditCard, Loader2, Lock, MapPin, MessageCircle, Pencil, Plus, ShoppingBag, Zap } from "lucide-react";
 import { AddressForm } from "@/components/store/account/account-forms";
 import { CartLine } from "@/components/store/cart-line";
 import { openRazorpayCheckout } from "@/components/store/checkout/razorpay-checkout";
@@ -13,6 +13,8 @@ import type { Address } from "@/features/account/queries";
 import { formatPaise } from "@/lib/format";
 import { contentParams, track } from "@/lib/meta-pixel";
 import { cn } from "@/lib/utils";
+import { useCompany } from "@/components/company-provider";
+import { whatsappLink } from "@/config/storefront";
 
 type Settings = { flatShipping: number; freeShippingAbove: number | null; codEnabled: boolean; freeShippingPrepaid?: boolean };
 type Method = "razorpay" | "cod";
@@ -44,6 +46,7 @@ export function CheckoutView({
   initialMethod?: Method;
 }) {
   const router = useRouter();
+  const company = useCompany();
   const cartItems = useCart();
   const buyNowItems = useBuyNow();
   const buying = mode === "buynow";
@@ -275,6 +278,25 @@ export function CheckoutView({
               title="Cash on delivery"
               body={settings.codEnabled ? "Our team calls you to confirm the order and delivery date." : "Cash on delivery is paused right now."}
             />
+            {(() => {
+              const lines = items.map((i) => `• ${i.productName}${i.variantName ? ` (${i.variantName})` : ""} × ${i.quantity} = ${formatPaise(i.price * i.quantity)}`);
+              const addr = selected ? `${selected.full_name}, ${selected.phone}, ${[selected.line1, selected.line2, selected.landmark].filter(Boolean).join(", ")}, ${selected.city} ${selected.postal_code}` : "";
+              const msg = [
+                `Hi ${company.name}, I want to order:`,
+                ...lines,
+                `Total: ${formatPaise(total)}`,
+                coupon ? `Coupon: ${coupon}` : "",
+                addr ? `Deliver to: ${addr}` : "",
+                note ? `Note: ${note}` : "",
+                `— ${customer.name}${customer.code ? ` (${customer.code})` : ""}`,
+              ].filter(Boolean).join("\n");
+              const href = whatsappLink(msg, company.whatsapp);
+              return href ? (
+                <a href={href} target="_blank" rel="noopener" className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-[#128C7E] hover:underline">
+                  <MessageCircle aria-hidden className="size-4" /> Or order on WhatsApp
+                </a>
+              ) : null;
+            })()}
           </fieldset>
           {method === "razorpay" && testMode ? (
             <p className="mt-3 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">

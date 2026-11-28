@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/env";
-import { createClient } from "@/lib/supabase/client";
 
 /** Warranty and cycle size for cart/checkout lines (read-only, public data). */
 export type LineExtra = { warranty: string | null; cycle_size: string | null };
@@ -17,7 +16,7 @@ async function load(ids: string[]) {
     return;
   }
   const p = (async () => {
-    const { data } = await createClient().rpc("line_extras", { p_variants: missing });
+    const { data } = await (await import("@/lib/supabase/client")).createClient().rpc("line_extras", { p_variants: missing });
     for (const id of missing) cache.set(id, { warranty: null, cycle_size: null });
     for (const r of (data ?? []) as ({ variant_id: string } & LineExtra)[]) cache.set(r.variant_id, { warranty: r.warranty, cycle_size: r.cycle_size });
   })().catch(() => undefined);

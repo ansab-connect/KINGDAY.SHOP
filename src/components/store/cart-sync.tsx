@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { readCart, replaceCart, useCart, type CartItem } from "@/features/cart/cart-store";
 import { publicStorageUrl } from "@/lib/storage";
-import { createClient } from "@/lib/supabase/client";
+// The Supabase client (~70 KB) is loaded after the page is shown, not with it.
+const loadClient = () => import("@/lib/supabase/client").then((m) => m.createClient());
 
 const OWNER_KEY = "kingday.cart.owner";
 
@@ -37,9 +38,11 @@ export function CartSync() {
   // Load + merge whenever the signed-in account changes (sign-in, sign-out, switch).
   // Checked on every page change because sign-out happens on the server.
   useEffect(() => {
-    const supabase = createClient();
     let cancelled = false;
     (async () => {
+      await new Promise((r) => setTimeout(r, 1200));
+      if (cancelled) return;
+      const supabase = await loadClient();
       const { data: session } = await supabase.auth.getSession();
       const sessionUid = session.session?.user.id ?? null;
       if (cancelled || (ready.current && sessionUid === userId.current) || (!sessionUid && !userId.current && ready.current)) return;
@@ -113,8 +116,8 @@ export function CartSync() {
     if (snapshot === last.current) return;
     last.current = snapshot;
     const uid = userId.current;
-    const supabase = createClient();
     const timer = setTimeout(async () => {
+      const supabase = await loadClient();
       const keep = items.map((i) => i.variantId);
       if (items.length) {
         await supabase.from("cart_items").upsert(

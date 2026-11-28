@@ -3,7 +3,7 @@
 import { useCompany } from "@/components/company-provider";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, Lock, Mail, MessageCircle, Minus, Plus, ShoppingBag, Zap } from "lucide-react";
+import { Banknote, Lock, Mail, MessageCircle, Minus, Plus, ShoppingBag, ShieldCheck, Zap } from "lucide-react";
 import { L } from "@/components/i18n/lang";
 import { Price } from "@/components/store/price";
 import { WhatsAppIcon } from "@/components/store/whatsapp-icon";
@@ -41,7 +41,7 @@ type Props = {
  * a pre-filled order message; the cart is kept in the browser. Prices shown are
  * display-only: online checkout (Phase 8) re-reads them from the database.
  */
-export function PurchasePanel({ productId, name, shortDescription, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings, mobileOptions }: Props & { mobileOptions?: React.ReactNode }) {
+export function PurchasePanel({ productId, name, shortDescription, fallbackImage = null, whatsappNumber, productUrl, prepaidPct, codPct, settings, mobileOptions, warranties = [] }: Props & { mobileOptions?: React.ReactNode; warranties?: string[] }) {
   const { variants, variant } = useVariantSelection();
   const company = useCompany();
   // Quantity resets to 1 whenever a different variant is chosen (picker lives under the photos).
@@ -207,6 +207,7 @@ export function PurchasePanel({ productId, name, shortDescription, fallbackImage
       ) : null}
 
       {shortDescription ? <p className="text-base leading-relaxed text-muted-foreground">{shortDescription}</p> : null}
+      {warranties.length ? <p className="-mt-2 flex items-center gap-1.5 text-sm font-medium text-deep"><ShieldCheck aria-hidden className="size-4 text-success" />{warranties.join(" · ")}</p> : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <button

@@ -16,7 +16,6 @@ import {
   type HeroTheme,
   type SceneKey,
 } from "@/features/marketing/hero-theme-config";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -60,8 +59,8 @@ export function HeroStage({ theme, characters, className, children, split = fals
     if (characters) return;
     // Characters live in the account's metadata: read from the local session, no extra request.
     let alive = true;
-    createClient()
-      .auth.getSession()
+    import("@/lib/supabase/client")
+      .then((m) => m.createClient().auth.getSession())
       .then(({ data }) => {
         if (alive) setMine(data.session ? charactersFromMetadata(data.session.user.user_metadata) : []);
       })

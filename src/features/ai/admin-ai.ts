@@ -122,3 +122,29 @@ export async function aiAnalystAction(input: { question: string }): Promise<Resu
   if (!res.ok) return { ok: false, error: failMsg(res.error) };
   return { ok: true, text: res.text.replace(/\*\*/g, "").trim() };
 }
+
+// ---------------------------------------------------------------- Website advisor (Super Admin)
+
+/** One-click review: business numbers + system health → practical suggestions. */
+export async function aiWebsiteAdviceAction(input: { health: string }): Promise<Result> {
+  const me = await getCurrentUser();
+  if (!me?.roles.includes("super_admin")) return { ok: false, error: "Super Admin only." };
+  const health = z.string().max(4000).safeParse(input.health);
+  if (!health.success) return { ok: false, error: "Could not read the health numbers." };
+  const res = await geminiGenerate({
+    system: [
+      "You advise the owner of KING DAY, a small kids' ride-on and toy shop with a service department (BEST FIT) in Kozhikode, Kerala, about their website and business.",
+      "Use ONLY the data below. Never invent numbers. The owner is not technical: use simple words.",
+      "Give the top suggestions, most important first, in three groups: 'Sales & products', 'Website & catalogue', 'System & limits'. Each group up to 4 bullets starting with '- ', each a specific action. Plain text, no markdown headings or bold.",
+      "",
+      await businessSnapshot(),
+      "SYSTEM HEALTH",
+      health.data,
+    ].join("\n"),
+    messages: [{ role: "user", text: "Review my website and business and tell me what to do next." }],
+    maxTokens: 2048,
+    temperature: 0.3,
+  });
+  if (!res.ok) return { ok: false, error: failMsg(res.error) };
+  return { ok: true, text: res.text.replace(/\*\*/g, "").trim() };
+}

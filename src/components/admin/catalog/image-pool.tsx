@@ -28,6 +28,8 @@ type Pool = {
   usage: Map<string, string[]>;
   /** Gallery images of one variant (null = shared), in order. */
   galleryOf: (variantId: string | null) => AdminProductImage[];
+  /** Saved variants, for "Use for…" on each photo. */
+  variants: [string, string][];
   refresh: () => Promise<void>;
 };
 
@@ -95,6 +97,7 @@ export function ImagePoolProvider({
       loading,
       usage,
       galleryOf: (variantId) => images.filter((i) => (i.variant_id ?? null) === variantId).sort((a, b) => a.position - b.position),
+      variants: [...variantLabels.entries()],
       refresh,
     };
   }, [files, images, loading, productId, productName, refresh, variantLabels]);
@@ -109,8 +112,25 @@ export function TemporaryImageGallery() {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const router = useRouter();
+  const [assigning, startAssign] = useTransition();
   if (!pool) return null;
   const { files, usage, loading, productId } = pool;
+
+  /** "Use for: Red" on a photo adds it to that variant's photos (or the main photos). */
+  function assignTo(path: string, target: string) {
+    const variantId = target === "main" ? null : target;
+    const label = variantId ? (pool!.variants.find(([id]) => id === variantId)?.[1] ?? "") : "";
+    const current = pool!.galleryOf(variantId).map((i) => i.storage_path);
+    if (current.includes(path)) return;
+    if (current.length >= GALLERY_MAX) return setNote({ kind: "error", text: `Up to ${GALLERY_MAX} photos per variant.` });
+    startAssign(async () => {
+      const r = await assignVariantImages({ productId, variantId, paths: [...current, path], alt: `${pool!.productName} ${label}`.trim() });
+      if (!r.ok) return setNote({ kind: "error", text: r.error });
+      setNote({ kind: "success", text: `Photo added to ${variantId ? label : "main photos"}.` });
+      router.refresh();
+    });
+  }
   const unused = files.filter((f) => !usage.has(f.path));
 
   async function upload(list: FileList) {
@@ -199,6 +219,17 @@ export function TemporaryImageGallery() {
                   ) : (
                     <span className="rounded bg-muted px-1.5 py-0.5 text-[0.7rem] font-semibold text-muted-foreground">Not assigned</span>
                   )}
+                  <select
+                    value=""
+                    disabled={assigning}
+                    onChange={(e) => e.target.value && assignTo(f.path, e.target.value)}
+                    aria-label="Use this photo for"
+                    className="mt-1 h-8 w-full rounded-md border bg-white px-1.5 text-xs font-medium text-deep"
+                  >
+                    <option value="">Use for…</option>
+                    <option value="main">Main photos</option>
+                    {pool.variants.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                  </select>
                 </div>
               </li>
             );

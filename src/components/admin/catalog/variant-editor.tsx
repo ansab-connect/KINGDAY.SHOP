@@ -325,7 +325,12 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
                 ))}
               </ul>
             ) : (
-              <p className="rounded-lg bg-white p-3 text-xs text-muted-foreground">Add a type, e.g. Speed Type or Colour.</p>
+              <div className="flex flex-col gap-2 rounded-lg bg-white p-3">
+                <button type="button" onClick={() => addType("Colour")} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-royal px-3 text-sm font-semibold text-white hover:bg-royal-800">
+                  <Plus aria-hidden className="size-4" /> Colours only
+                </button>
+                <p className="text-xs text-muted-foreground">Most jeeps &amp; cars: one variant per colour. Or add another type, e.g. Speed Type.</p>
+              </div>
             )}
             {types.length < MAX_TYPES ? (
               <AddTypeButton label="Add Variant Type" options={optionTypes.filter((o) => !types.some((t) => same(t, o)))} onAdd={(n) => addType(n)} />
@@ -395,6 +400,14 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
           </section>
         </div>
       ) : (
+        <>
+        <button
+          type="button"
+          onClick={() => { onEnabledChange(true); addType("Colour"); }}
+          className="inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border border-royal-200 bg-royal-50 px-3 text-sm font-semibold text-royal hover:bg-royal-100"
+        >
+          <Plus aria-hidden className="size-4" /> Sell in colours (Red, Black…)
+        </button>
         <CombinationsTable
           title="Variants"
           rows={rows}
@@ -412,6 +425,7 @@ function VariantEditorInner({ enabled, onEnabledChange, types, onTypesChange, ro
           valuesFor={() => []}
           onReorder={reorderCombos}
         />
+        </>
       )}
 
       <p className="flex items-start gap-2 rounded-xl bg-royal-50/70 px-4 py-3 text-sm text-royal-800">
