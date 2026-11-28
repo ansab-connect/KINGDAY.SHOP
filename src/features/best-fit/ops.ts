@@ -5,6 +5,7 @@ import { CATALOG_TAG } from "@/features/catalog/cache-tags";
 import { getCurrentUser } from "@/features/auth/session";
 import { queuePushDispatch } from "@/features/push/send";
 import { isSupabaseConfigured } from "@/lib/env";
+import { geocodePin } from "@/lib/geocode";
 import { optimiseRoute, roadDistance, routingProvider, type Point } from "@/lib/routing";
 import { createClient } from "@/lib/supabase/server";
 
@@ -127,18 +128,20 @@ export async function runOp(op: string, values: V): Promise<OpResult> {
     const booking = String(v.booking_id ?? "");
     if (!UUID.test(booking)) return { ok: false, error: "Invalid booking." };
     const [{ data: b }, base] = await Promise.all([
-      supabase.from("service_bookings").select("latitude, longitude").eq("id", booking).maybeSingle(),
+      supabase.from("service_bookings").select("latitude, longitude, pin_code, town").eq("id", booking).maybeSingle(),
       baseLocation(),
     ]);
-    const bk = b as { latitude: number | null; longitude: number | null } | null;
-    if (!bk?.latitude || !bk.longitude) return { ok: false, error: "The customer did not share a map location. Enter the verified distance manually." };
+    const bk = b as { latitude: number | null; longitude: number | null; pin_code: string | null; town: string | null } | null;
+    const byPin = (!bk?.latitude || !bk.longitude) && bk?.pin_code ? await geocodePin(bk.pin_code, bk.town ?? "") : null;
+    if (byPin && bk) Object.assign(bk, { latitude: byPin.lat, longitude: byPin.lng });
+    if (!bk?.latitude || !bk.longitude) return { ok: false, error: "No map location or PIN code from the customer. Enter the verified distance manually." };
     if (!base) return { ok: false, error: "Set the exact KING DAY base coordinates in Service Configuration first." };
     const r = await roadDistance(base, { lat: bk.latitude, lng: bk.longitude });
     if (!r.ok) return { ok: false, error: r.message };
     const { error } = await supabase.rpc("set_estimated_distance", { p_booking: booking, p_km: r.km, p_source: routingProvider });
     if (error) return { ok: false, error: message(error) };
     refresh();
-    return { ok: true, message: `Estimated road distance: ${r.km} km (about ${r.minutes} min).` };
+    return { ok: true, message: `Estimated road distance${byPin ? ` (from PIN ${bk.pin_code})` : ""}: ${r.km} km (about ${r.minutes} min).` };
   }
 
   // ---- route plan: stops in the optimised order, legs from the provider

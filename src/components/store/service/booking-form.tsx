@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bike, Camera, CarFront, Check, CheckCircle2, Clock, FileText, Home, Images, Loader2, MapPin, Package, Phone, ShieldCheck, Store, Wrench, X, type LucideIcon } from "lucide-react";
 import { inputClass } from "@/components/admin/form/fields";
 import { L } from "@/components/i18n/lang";
 import { useLang } from "@/components/i18n/language-switcher";
 import { createServiceBookingAction } from "@/features/service/actions";
-import { estimateVisitAction, type VisitEstimateResult } from "@/features/service/estimate";
 import { MAX_PHOTOS, SERVICE_MEDIA_BUCKET } from "@/features/service/constants";
 import { optimizeImage, randomFileId } from "@/lib/image-optimize";
 import { createClient } from "@/lib/supabase/client";
@@ -105,6 +104,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
   const [centre, setCentre] = useState("");
   const [address, setAddress] = useState(defaults.address);
   const [town, setTown] = useState("");
+  const [pinCode, setPinCode] = useState("");
   const [instructions, setInstructions] = useState("");
   const [location, setLocation] = useState<LatLng | null>(null);
   const [name, setName] = useState(defaults.name);
@@ -144,7 +144,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
     if (busy) return;
     // A voice note still recording is finished first, so it is never left out.
     const voice = (await voiceCtl.current?.finish()) ?? null;
-    const missing = !known && (name.trim().length < 2 || mobile.trim().length < 7) ? "Enter your name and mobile number." : !category ? "Choose your product." : fromKingDay === null ? "Tell us where you bought it." : !serviceType ? "Choose the service you need." : complaint.trim().length < 5 && !voice ? "Describe the problem or record a voice note." : !mode ? "Choose where you want the service." : modeKind === "centre" && !centre ? "Choose a service centre." : modeKind === "visit" && address.trim().length < 5 ? "Enter the service address." : null;
+    const missing = !known && (name.trim().length < 2 || mobile.trim().length < 7) ? "Enter your name and mobile number." : !category ? "Choose your product." : fromKingDay === null ? "Tell us where you bought it." : !serviceType ? "Choose the service you need." : complaint.trim().length < 5 && !voice ? "Describe the problem or record a voice note." : !mode ? "Choose where you want the service." : modeKind === "centre" && !centre ? "Choose a service centre." : modeKind === "visit" && address.trim().length < 5 ? "Enter the service address." : modeKind === "visit" && !/^\d{6}$/.test(pinCode) ? "Enter your 6-digit PIN code." : null;
     if (missing) {
       setError(missing);
       return;
@@ -189,7 +189,7 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
         purchase_details: fromKingDay && purchase ? `KING DAY order ${purchase.orderNumber} · ${purchase.productName}` : "",
         product_name: fromKingDay && purchase ? purchase.productName : productName,
         complaint, voice_path: voicePath, voice_duration_seconds: voice?.seconds ?? null, photo_paths: photoPaths, purchase_invoice_path: billPath,
-        service_mode: mode, service_centre_id: modeKind === "centre" ? centre : "", address: modeKind === "visit" ? address : "", town, instructions,
+        service_mode: mode, service_centre_id: modeKind === "centre" ? centre : "", address: modeKind === "visit" ? address : "", town, instructions, pin_code: modeKind === "visit" ? pinCode : "",
         latitude: modeKind === "visit" ? (location?.lat ?? null) : null, longitude: modeKind === "visit" ? (location?.lng ?? null) : null,
         client_key: clientKey.current,
       });
@@ -335,9 +335,9 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
               <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} maxLength={500} autoComplete="street-address" className={cn(inputClass, "h-auto py-2")} />
             </Field></div>
             <Field label={<L en="Town / place" ml="സ്ഥലം" />}><input value={town} onChange={(e) => setTown(e.target.value)} maxLength={80} className={inputClass} /></Field>
+            <Field label={<L en="PIN code" ml="പിൻ കോഡ്" />} required><input value={pinCode} onChange={(e) => setPinCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="postal-code" placeholder="673002" className={inputClass} /></Field>
             <Field label={<L en="Note for the technician (optional)" ml="ടെക്നീഷ്യന് കുറിപ്പ് (ഐച്ഛികം)" />}><input value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={500} placeholder={ml ? "ഉദാ: ഗേറ്റിനടുത്ത് വിളിക്കുക" : "e.g. Call at the gate"} className={inputClass} /></Field>
-            <div className="sm:col-span-2"><LocationPicker value={location} onChange={setLocation} /></div>
-            {location ? <div className="sm:col-span-2"><VisitEstimate location={location} /></div> : null}
+            <div className="sm:col-span-2"><LocationPicker value={location} onChange={setLocation} onPin={(p) => setPinCode((cur) => cur || p)} /></div>
           </div>
         ) : modeKind === "centre" ? (
           <div role="radiogroup" className="flex flex-col gap-2">
@@ -362,28 +362,5 @@ export function BookingForm({ userId, defaults, purchases, categories, types, mo
         {busy ? (stage ?? "…") : <L en="Book service" ml="സർവീസ് ബുക്ക് ചെയ്യുക" />}
       </button>
     </form>
-  );
-}
-
-/** Approximate road distance and inspection charge for a home visit (final uses the verified distance). */
-function VisitEstimate({ location }: { location: LatLng }) {
-  const [state, setState] = useState<{ key: string; r: VisitEstimateResult } | null>(null);
-  const key = `${location.lat.toFixed(4)},${location.lng.toFixed(4)}`;
-  useEffect(() => {
-    let alive = true;
-    void estimateVisitAction({ lat: location.lat, lng: location.lng }).then((r) => alive && setState({ key, r }));
-    return () => {
-      alive = false;
-    };
-  }, [key, location.lat, location.lng]);
-  const r = state?.key === key ? state.r : null;
-  if (!r) return <p className="text-xs text-muted-foreground"><L en="Calculating distance…" ml="ദൂരം കണക്കാക്കുന്നു…" /></p>;
-  if (!r.ok) return null;
-  return (
-    <p className="rounded-xl bg-[#F4EEFA] px-4 py-3 text-sm text-[#1A0F2E]">
-      <L en="Distance from KING DAY" ml="KING DAY-ൽ നിന്നുള്ള ദൂരം" />: <span className="font-semibold">≈ {r.km} km</span>
-      {r.chargePaise != null ? <> · <L en="Inspection charge about" ml="പരിശോധനാ ചാർജ് ഏകദേശം" /> <span className="font-semibold">₹{(r.chargePaise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></> : null}
-      <span className="mt-1 block text-xs text-muted-foreground"><L en="Approximate. The final amount uses the distance our technician confirms." ml="ഏകദേശ തുക. ടെക്നീഷ്യൻ ഉറപ്പിക്കുന്ന ദൂരം അനുസരിച്ചാണ് അന്തിമ തുക." /></span>
-    </p>
   );
 }

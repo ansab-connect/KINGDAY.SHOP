@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { queuePushDispatch } from "@/features/push/send";
 import { formatMobile, normalizeMobile } from "@/features/customer/mobile";
@@ -103,6 +104,9 @@ export async function createServiceBookingAction(input: unknown): Promise<Bookin
           : "Couldn't save the booking. Please try again.";
     return { ok: false, error: msg };
   }
+  // PIN code for the staff distance estimate (customers don't see distances).
+  const pin = String((input as { pin_code?: unknown })?.pin_code ?? "").replace(/\D/g, "");
+  if (/^\d{6}$/.test(pin) && data) await createAdminClient().from("service_bookings").update({ pin_code: pin }).eq("booking_code", String(data));
   refresh();
   queuePushDispatch();
   return { ok: true, code: data as string };

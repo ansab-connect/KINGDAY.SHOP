@@ -34,19 +34,29 @@ export function BaseLocationForm({ initial }: { initial: Base }) {
   function locate() {
     if (!navigator.geolocation) return setRes({ ok: false, error: "This browser can't share location. Type the numbers instead." });
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
+    // Keep watching up to 15 s and use the most accurate GPS reading (the first one is often rough).
+    let best: GeolocationPosition | null = null;
+    const finish = () => {
+      navigator.geolocation.clearWatch(id);
+      clearTimeout(timer);
+      setLocating(false);
+      if (!best) return setRes({ ok: false, error: "Location permission was not given. Allow it, or use the PIN code." });
+      setLat(best.coords.latitude.toFixed(6));
+      setLng(best.coords.longitude.toFixed(6));
+      const acc = Math.round(best.coords.accuracy);
+      setRes(acc > 100 ? { ok: false, error: `Only a rough location (about ${acc} m). Turn on GPS and try outside, or use the PIN code.` } : { ok: true, message: `Location found (accuracy about ${acc} m). Press Save.` });
+    };
+    const id = navigator.geolocation.watchPosition(
       (p) => {
-        setLat(p.coords.latitude.toFixed(6));
-        setLng(p.coords.longitude.toFixed(6));
-        setLocating(false);
-        setRes({ ok: true, message: `Location found (accuracy about ${Math.round(p.coords.accuracy)} m). Press Save.` });
+        if (!best || p.coords.accuracy < best.coords.accuracy) best = p;
+        if (p.coords.accuracy <= 20) finish();
       },
-      () => {
-        setLocating(false);
-        setRes({ ok: false, error: "Location permission was not given. Allow it, or type the numbers." });
+      (e) => {
+        if (e.code === e.PERMISSION_DENIED) finish();
       },
-      { enableHighAccuracy: true, timeout: 20000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
     );
+    const timer = setTimeout(finish, 15000);
   }
 
   function save() {

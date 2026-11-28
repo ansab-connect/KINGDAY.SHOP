@@ -3,12 +3,13 @@ import { OpButton, OpForm } from "@/components/best-fit/op-form";
 import { DataTable, Panel, Status, km, rupees, when } from "@/components/best-fit/ui";
 import { can, getCurrentUser } from "@/features/auth/session";
 import { getGroups, getPeople, personName, techOptions } from "@/features/best-fit/queries";
+import { geocodePin } from "@/lib/geocode";
 import { roadDistance } from "@/lib/routing";
 import { createClient } from "@/lib/supabase/server";
 
 type B = {
   id: string; booking_code: string; service_mode: string; service_centre_id: string | null; status: string; latitude: number | null; longitude: number | null;
-  estimated_distance_km: number | null; estimated_distance_source: string | null; verified_distance_km: number | null; verified_at: string | null;
+  pin_code: string | null; estimated_distance_km: number | null; estimated_distance_source: string | null; verified_distance_km: number | null; verified_at: string | null;
   instructions: string | null; town: string | null; priority: string; purchase_invoice_path: string | null; category_label: string | null; service_type_label: string | null;
 };
 
@@ -17,7 +18,7 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
   const supabase = await createClient();
   const me = await getCurrentUser();
   const [{ data: bd }, { data: hist }, { data: pis }, { data: wos }, { data: inv }, people, groups] = await Promise.all([
-    supabase.from("service_bookings").select("id, booking_code, service_mode, service_centre_id, status, latitude, longitude, estimated_distance_km, estimated_distance_source, verified_distance_km, verified_at, instructions, town, priority, purchase_invoice_path, category_label, service_type_label").eq("id", bookingId).maybeSingle(),
+    supabase.from("service_bookings").select("id, booking_code, service_mode, service_centre_id, status, latitude, longitude, pin_code, estimated_distance_km, estimated_distance_source, verified_distance_km, verified_at, instructions, town, priority, purchase_invoice_path, category_label, service_type_label").eq("id", bookingId).maybeSingle(),
     supabase.from("service_distance_history").select("id, kind, old_km, new_km, source, reason, created_at").eq("booking_id", bookingId).order("created_at", { ascending: false }),
     supabase.from("inspection_pre_invoices").select("id, invoice_number, status, distance_km, slab_code, rate_paise, charge_paise, total_paise, amount_paid, balance, payment_status").eq("booking_id", bookingId).order("created_at", { ascending: false }),
     supabase.from("work_orders").select("id, work_order_number, technician_id, group_id, status, scheduled_date, scheduled_slot, created_at").eq("booking_id", bookingId).order("created_at", { ascending: false }),
@@ -43,7 +44,8 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
   const { data: baseRow } = await supabase.from("store_settings").select("value").eq("key", "best_fit.base_location").maybeSingle();
   const bv = (baseRow as { value: { lat: number | null; lng: number | null } } | null)?.value;
   const base = bv?.lat != null && bv?.lng != null ? { lat: Number(bv.lat), lng: Number(bv.lng) } : null;
-  const pin = b.latitude != null && b.longitude != null ? { lat: b.latitude, lng: b.longitude } : null;
+  const byPin = (b.latitude == null || b.longitude == null) && b.pin_code ? await geocodePin(b.pin_code, b.town ?? "") : null;
+  const pin = b.latitude != null && b.longitude != null ? { lat: b.latitude, lng: b.longitude } : byPin;
   const live = home && base && pin && b.estimated_distance_km == null && b.verified_distance_km == null ? await roadDistance(base, pin) : null;
   const liveKm = live?.ok ? live.km : null;
   const calcKm = b.verified_distance_km ?? b.estimated_distance_km ?? liveKm;
@@ -57,6 +59,7 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
           <div><dt className="text-muted-foreground">Service mode</dt><dd className="font-medium text-deep">{home ? "Home service (technician visit)" : "Nearby service centre"}</dd></div>
           {centre ? <div><dt className="text-muted-foreground">Centre</dt><dd className="text-deep">{centre.name} · {centre.address}{centre.working_hours ? ` · ${centre.working_hours}` : ""}</dd></div> : null}
           {b.town ? <div><dt className="text-muted-foreground">Town / district</dt><dd className="text-deep">{b.town}</dd></div> : null}
+          {b.pin_code ? <div><dt className="text-muted-foreground">PIN code</dt><dd className="text-deep">{b.pin_code}</dd></div> : null}
           {b.instructions ? <div><dt className="text-muted-foreground">Instructions</dt><dd className="whitespace-pre-line text-deep">{b.instructions}</dd></div> : null}
           {invoiceUrl ? <div><dt className="text-muted-foreground">KING DAY bill</dt><dd><a href={invoiceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-royal">Open attachment</a></dd></div> : null}
         </dl>
@@ -65,7 +68,7 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
       {home ? (
         <Panel title="Road distance" description="Billing uses only the verified one-way road distance.">
           <dl className="mb-3 grid grid-cols-2 gap-2 text-sm">
-            <div><dt className="text-muted-foreground">Estimated</dt><dd className="font-semibold text-deep">{km(b.estimated_distance_km ?? liveKm)}{b.estimated_distance_source ? <span className="block text-xs font-normal text-muted-foreground">{b.estimated_distance_source}</span> : liveKm != null ? <span className="block text-xs font-normal text-muted-foreground">Road route from the shop (about {live?.ok ? live.minutes : 0} min) · not saved yet</span> : null}</dd></div>
+            <div><dt className="text-muted-foreground">Estimated</dt><dd className="font-semibold text-deep">{km(b.estimated_distance_km ?? liveKm)}{b.estimated_distance_source ? <span className="block text-xs font-normal text-muted-foreground">{b.estimated_distance_source}</span> : liveKm != null ? <span className="block text-xs font-normal text-muted-foreground">Road route from the shop{byPin ? ` to PIN ${b.pin_code}` : ""} (about {live?.ok ? live.minutes : 0} min) · not saved yet</span> : null}</dd></div>
             <div><dt className="text-muted-foreground">Verified</dt><dd className="font-semibold text-deep">{km(b.verified_distance_km)}{b.verified_at ? <span className="block text-xs font-normal text-muted-foreground">{when(b.verified_at)}</span> : null}</dd></div>
           </dl>
           {calcKm != null && preview?.charge_paise != null ? (
