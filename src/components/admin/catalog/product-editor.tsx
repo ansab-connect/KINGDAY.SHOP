@@ -115,6 +115,26 @@ export function ProductEditor({
     });
   });
   const types = variantsOn ? variantTypes : [];
+  // After saving, new rows pick up their saved id (matched by SKU) so photos can be added
+  // straight away and a second save updates them instead of adding duplicates.
+  const savedVariants = product?.variants;
+  const [syncedFrom, setSyncedFrom] = useState(savedVariants);
+  if (syncedFrom !== savedVariants) {
+    setSyncedFrom(savedVariants);
+    if (savedVariants?.length) setVariants((rows) => {
+      const taken = new Set(rows.map((r) => r.id).filter(Boolean));
+      let changed = false;
+      const next = rows.map((r) => {
+        if (r.id) return r;
+        const m = savedVariants.find((s) => !taken.has(s.id) && s.sku.trim().toLowerCase() === r.sku.trim().toLowerCase());
+        if (!m) return r;
+        taken.add(m.id);
+        changed = true;
+        return { ...r, id: m.id, on_hand: m.on_hand, opening_stock: String(m.on_hand ?? 0) };
+      });
+      return changed ? next : rows;
+    });
+  }
   const [attributes, setAttributes] = useState(
     product?.attributes.length ? product.attributes.map((a) => ({ key: nextKey(), ...a })) : [{ key: nextKey(), name: "", value: "" }],
   );
