@@ -73,7 +73,7 @@ export async function aiSeoAction(input: { name: string; category?: string; shor
   }
   const name = String(input.name ?? "").trim().slice(0, 160);
   if (name.length < 3) return { ok: false, error: "Type the product name first." };
-  const res = await geminiGenerate({
+  const ask = (search: boolean) => geminiGenerate({
     system: [
       "You are an SEO expert for KING DAY, a kids' ride-on, bicycle and toy shop in Kozhikode (Calicut), Kerala, India, selling online across India.",
       "Search Google for what people in India and Kerala search for right now to buy this kind of product, and use those trending search words naturally.",
@@ -82,16 +82,32 @@ export async function aiSeoAction(input: { name: string; category?: string; shor
       "Reply exactly as two lines: 'TITLE: ...' then 'DESCRIPTION: ...'.",
     ].join(" "),
     messages: [{ role: "user", text: [`Product: ${name}`, input.category ? `Category: ${String(input.category).slice(0, 80)}` : "", input.short ? `About: ${String(input.short).slice(0, 300)}` : ""].filter(Boolean).join(". ") }],
-    search: true,
+    search,
     maxTokens: 1024,
     temperature: 0.4,
   });
-  if (!res.ok) return { ok: false, error: failMsg(res.error) };
-  const clean = res.text.replace(/\*\*/g, "");
+  // Google-search answers have a smaller free limit: try with search, then without, then
+  // fall back to a ready-made pattern so the button always fills the fields.
+  let res = await ask(true);
+  if (!res.ok && res.error !== "not_configured") res = await ask(false);
+  const clean = res.ok ? res.text.replace(/\*\*/g, "") : "";
   const title = clean.match(/TITLE:\s*(.+)/i)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
   const description = clean.match(/DESCRIPTION:\s*(.+)/i)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
-  if (!title || !description) return { ok: false, error: "The AI didn't answer. Please try again." };
+  if (!title || !description) return { ok: true, ...seoPattern(name, input.category, input.short) };
   return { ok: true, title: title.slice(0, 70), description: description.slice(0, 170) };
+}
+
+/** SEO without AI: name first, then shop and place words people search for. */
+function seoPattern(name: string, category?: string, short?: string): { title: string; description: string } {
+  const cut = (t: string, n: number) => (t.length <= n ? t : `${t.slice(0, n - 1).replace(/\s+\S*$/, "")}…`);
+  const tail = " | Best Price | KING DAY";
+  const title = name.length + tail.length <= 60 ? `${name}${tail}` : cut(`${name} | KING DAY`, 60);
+  const first = (short ?? "").split(/(?<=[.!?])\s/)[0]?.trim() ?? "";
+  const description = cut(
+    `Buy ${name}${category ? ` (${category})` : ""} online at KING DAY, Kozhikode. ${first ? `${first.replace(/[.!?]$/, "")}. ` : ""}Best price and fast delivery across Kerala and India.`,
+    160,
+  );
+  return { title, description };
 }
 
 // ---------------------------------------------------------------- Business analyst

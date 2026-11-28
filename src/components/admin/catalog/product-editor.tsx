@@ -647,7 +647,7 @@ export function ProductEditor({
 
         <div id="sec-seo" className="scroll-mt-24">
           <FormSection title="7. Search listing (Google)" description="Optional. Leave empty to use the product name and short description.">
-            {aiEnabled ? <SeoButton name={basics.name} short={basics.short_description} category={categories.find((c) => c.id === basics.category_id)?.name} onDone={(t, d) => { setB("seo_title", t); setB("seo_description", d); }} /> : null}
+            <SeoButton name={basics.name} short={basics.short_description} category={categories.find((c) => c.id === basics.category_id)?.name} onDone={(t, d) => { setB("seo_title", t); setB("seo_description", d); }} />
             <TextField id="p-seo-title" label="SEO title" maxLength={70} value={basics.seo_title} error={errors.seo_title} onChange={(v) => setB("seo_title", v)} />
             <TextAreaField id="p-seo-desc" label="SEO description" rows={2} maxLength={170} value={basics.seo_description} error={errors.seo_description} onChange={(v) => setB("seo_description", v)} />
           </FormSection>

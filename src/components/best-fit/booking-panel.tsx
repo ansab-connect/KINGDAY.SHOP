@@ -83,6 +83,12 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
               {pin ? (
                 base ? <OpButton op="distance.estimate" values={{ booking_id: b.id }} label={b.estimated_distance_km == null ? "Save estimated distance" : "Re-check road distance"} tone="neutral" /> : null
               ) : <p className="text-xs text-muted-foreground">No map pin from the customer. Enter the distance below after checking.</p>}
+              {b.estimated_distance_km != null || b.verified_distance_km != null ? (
+                <div className="flex flex-wrap gap-2">
+                  {b.estimated_distance_km != null ? <OpButton op="distance.clear" values={{ booking_id: b.id, kind: "estimated" }} label={`Delete estimated km (${km(b.estimated_distance_km)})`} tone="danger" confirmText="Delete the estimated distance?" /> : null}
+                  {b.verified_distance_km != null && !openPi ? <OpButton op="distance.clear" values={{ booking_id: b.id, kind: "verified" }} label={`Delete verified km (${km(b.verified_distance_km)})`} tone="danger" confirmText="Delete the verified distance?" /> : null}
+                </div>
+              ) : null}
               <details className="text-sm">
                 <summary className="cursor-pointer font-semibold text-royal">Edit estimated km</summary>
                 <div className="mt-2"><OpForm op="distance.estimate.set" hidden={{ booking_id: b.id }} columns={2} submitLabel="Save estimated km" initial={{ km: b.estimated_distance_km ?? liveKm ?? "" }}
@@ -93,11 +99,11 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
                   <summary className="cursor-pointer font-semibold text-royal">Edit verified km ({km(b.verified_distance_km)})</summary>
                   <p className="mt-1 text-xs text-muted-foreground">The unpaid pre-invoice is cancelled and a new one is issued with the new km.</p>
                   <div className="mt-2"><OpForm op="distance.change" hidden={{ booking_id: b.id }} columns={2} submitLabel="Change distance" initial={{ km: b.verified_distance_km ?? "" }}
-                    fields={[{ name: "km", label: "Correct one-way km", type: "number", required: true, step: "0.01" }, { name: "reason", label: "Reason for change", required: true }]} /></div>
+                    fields={[{ name: "km", label: "Correct one-way km", type: "number", required: true, step: "0.01" }, { name: "reason", label: "Note (optional)" }]} /></div>
                 </details>
               ) : (
                 <OpForm op="distance.verify" hidden={{ booking_id: b.id }} columns={2} submitLabel="Save verified distance"
-                  fields={[{ name: "km", label: "Actual one-way km", type: "number", required: true, step: "0.01" }, { name: "reason", label: b.verified_distance_km != null ? "Reason for change" : "Note (optional)", required: b.verified_distance_km != null }]} />
+                  fields={[{ name: "km", label: "Actual one-way km", type: "number", required: true, step: "0.01" }, { name: "reason", label: "Note (optional)" }]} />
               )}
             </div>
           ) : null}
@@ -106,7 +112,8 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
               <summary className="cursor-pointer font-semibold text-royal">Distance history ({(hist ?? []).length})</summary>
               <ul className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
                 {((hist ?? []) as { id: number; kind: string; old_km: number | null; new_km: number; source: string | null; reason: string | null; created_at: string }[]).map((h) => (
-                  <li key={h.id}>{when(h.created_at)} · {h.kind}: {h.old_km != null ? `${h.old_km} → ` : ""}{h.new_km} km{h.source ? ` · ${h.source}` : ""}{h.reason ? ` · “${h.reason}”` : ""}</li>
+                  <li key={h.id} className="flex flex-wrap items-center gap-2">{when(h.created_at)} · {h.kind}: {h.old_km != null ? `${h.old_km} → ` : ""}{h.new_km} km{h.source ? ` · ${h.source}` : ""}{h.reason ? ` · “${h.reason}”` : ""}
+                    {manage ? <OpButton op="distance.history.delete" values={{ id: h.id }} label="Delete" tone="danger" confirmText="Delete this history line?" /> : null}</li>
                 ))}
               </ul>
             </details>

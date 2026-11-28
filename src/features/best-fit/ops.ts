@@ -38,6 +38,8 @@ const TABLES: Record<string, TableOp> = {
 type RpcOp = { fn: string; args: (v: V) => V; push?: boolean; ok?: string };
 const RPCS: Record<string, RpcOp> = {
   "setting.save": { fn: "save_best_fit_setting", args: (v) => ({ p_key: v.key, p_value: v.value }) },
+  "distance.clear": { fn: "clear_booking_distance", args: (v) => ({ p_booking: v.booking_id, p_kind: v.kind }), ok: "Distance deleted." },
+  "distance.history.delete": { fn: "delete_distance_history", args: (v) => ({ p_id: Number(v.id) }), ok: "Deleted." },
   "distance.verify": { fn: "set_verified_distance", args: (v) => ({ p_booking: v.booking_id, p_km: v.km, p_reason: v.reason ?? null }) },
   "preinvoice.create": { fn: "create_inspection_pre_invoice", args: (v) => ({ p_booking: v.booking_id }), push: true, ok: "Pre-invoice created." },
   "preinvoice.void": { fn: "void_inspection_pre_invoice", args: (v) => ({ p_id: v.id, p_reason: v.reason }) },
@@ -151,12 +153,11 @@ export async function runOp(op: string, values: V): Promise<OpResult> {
     const reason = String(v.reason ?? "").trim();
     if (!UUID.test(booking)) return { ok: false, error: "Invalid booking." };
     if (!(kmNew >= 0 && kmNew <= 2000)) return { ok: false, error: "Enter a valid distance." };
-    if (reason.length < 3) return { ok: false, error: "Give a reason for the change." };
     const { data: open } = await supabase.from("inspection_pre_invoices").select("id, amount_paid").eq("booking_id", booking).eq("status", "issued").maybeSingle();
     const pi = open as { id: string; amount_paid: number } | null;
     if (pi?.amount_paid) return { ok: false, error: "The customer already paid this pre-invoice, so the distance can't be changed here. Record a refund or adjust it on the final invoice." };
     if (pi) {
-      const { error } = await supabase.rpc("void_inspection_pre_invoice", { p_id: pi.id, p_reason: `Distance changed: ${reason}` });
+      const { error } = await supabase.rpc("void_inspection_pre_invoice", { p_id: pi.id, p_reason: `Distance changed to ${kmNew} km${reason ? `: ${reason}` : ""}` });
       if (error) return { ok: false, error: message(error) };
     }
     const { error: e2 } = await supabase.rpc("set_verified_distance", { p_booking: booking, p_km: kmNew, p_reason: reason });

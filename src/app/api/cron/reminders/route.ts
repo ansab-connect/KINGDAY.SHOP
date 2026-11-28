@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
+import { runCleanup } from "@/features/data/temporary";
 import { dispatchPush } from "@/features/push/send";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -22,7 +23,9 @@ export async function GET(request: NextRequest) {
     // Unpaid online orders older than 30 minutes release their reserved stock.
     const { data: expired } = await admin.rpc("expire_unpaid_orders");
     const push = await dispatchPush();
-    return NextResponse.json({ reminders: data ?? 0, expiredOrders: expired ?? 0, ...push });
+    // Temporary files: cleaned on the date set in Admin → Data (only files already downloaded).
+    const cleanup = await runCleanup(admin).catch(() => ({ ran: false, message: "cleanup failed" }));
+    return NextResponse.json({ reminders: data ?? 0, expiredOrders: expired ?? 0, ...push, cleanup: cleanup.message });
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
