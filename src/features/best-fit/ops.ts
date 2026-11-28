@@ -144,6 +144,42 @@ export async function runOp(op: string, values: V): Promise<OpResult> {
     return { ok: true, message: `Estimated road distance${byPin ? ` (from PIN ${bk.pin_code})` : ""}: ${r.km} km (about ${r.minutes} min).` };
   }
 
+  // ---- edit km after a pre-invoice exists: void the unpaid pre-invoice, save the new km, re-issue it
+  if (op === "distance.change") {
+    const booking = String(v.booking_id ?? "");
+    const kmNew = Number(v.km);
+    const reason = String(v.reason ?? "").trim();
+    if (!UUID.test(booking)) return { ok: false, error: "Invalid booking." };
+    if (!(kmNew >= 0 && kmNew <= 2000)) return { ok: false, error: "Enter a valid distance." };
+    if (reason.length < 3) return { ok: false, error: "Give a reason for the change." };
+    const { data: open } = await supabase.from("inspection_pre_invoices").select("id, amount_paid").eq("booking_id", booking).eq("status", "issued").maybeSingle();
+    const pi = open as { id: string; amount_paid: number } | null;
+    if (pi?.amount_paid) return { ok: false, error: "The customer already paid this pre-invoice, so the distance can't be changed here. Record a refund or adjust it on the final invoice." };
+    if (pi) {
+      const { error } = await supabase.rpc("void_inspection_pre_invoice", { p_id: pi.id, p_reason: `Distance changed: ${reason}` });
+      if (error) return { ok: false, error: message(error) };
+    }
+    const { error: e2 } = await supabase.rpc("set_verified_distance", { p_booking: booking, p_km: kmNew, p_reason: reason });
+    if (e2) return { ok: false, error: message(e2) };
+    if (pi) {
+      const { error: e3 } = await supabase.rpc("create_inspection_pre_invoice", { p_booking: booking });
+      if (e3) return { ok: false, error: `Distance saved, but the new pre-invoice failed: ${message(e3)}. Create it again from the booking.` };
+    }
+    refresh();
+    return { ok: true, message: pi ? `Distance changed to ${kmNew} km and a new pre-invoice was issued.` : `Distance changed to ${kmNew} km.` };
+  }
+
+  // ---- manual estimated km (when the map/PIN estimate is wrong)
+  if (op === "distance.estimate.set") {
+    const booking = String(v.booking_id ?? "");
+    const kmNew = Number(v.km);
+    if (!UUID.test(booking) || !(kmNew >= 0 && kmNew <= 2000)) return { ok: false, error: "Enter a valid distance." };
+    const { error } = await supabase.rpc("set_estimated_distance", { p_booking: booking, p_km: kmNew, p_source: "Entered by staff" });
+    if (error) return { ok: false, error: message(error) };
+    refresh();
+    return { ok: true, message: `Estimated distance set to ${kmNew} km.` };
+  }
+
   // ---- route plan: stops in the optimised order, legs from the provider
   if (op === "route.build") return buildRoute(v);
 

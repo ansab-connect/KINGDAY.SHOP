@@ -83,7 +83,19 @@ export async function BookingOpsPanel({ bookingId }: { bookingId: string }) {
               {pin ? (
                 base ? <OpButton op="distance.estimate" values={{ booking_id: b.id }} label={b.estimated_distance_km == null ? "Save estimated distance" : "Re-check road distance"} tone="neutral" /> : null
               ) : <p className="text-xs text-muted-foreground">No map pin from the customer. Enter the distance below after checking.</p>}
-              {openPi ? <p className="text-xs text-muted-foreground">Void the pre-invoice to change the verified distance.</p> : (
+              <details className="text-sm">
+                <summary className="cursor-pointer font-semibold text-royal">Edit estimated km</summary>
+                <div className="mt-2"><OpForm op="distance.estimate.set" hidden={{ booking_id: b.id }} columns={2} submitLabel="Save estimated km" initial={{ km: b.estimated_distance_km ?? liveKm ?? "" }}
+                  fields={[{ name: "km", label: "Estimated one-way km", type: "number", required: true, step: "0.01" }]} /></div>
+              </details>
+              {openPi ? (
+                <details className="text-sm">
+                  <summary className="cursor-pointer font-semibold text-royal">Edit verified km ({km(b.verified_distance_km)})</summary>
+                  <p className="mt-1 text-xs text-muted-foreground">The unpaid pre-invoice is cancelled and a new one is issued with the new km.</p>
+                  <div className="mt-2"><OpForm op="distance.change" hidden={{ booking_id: b.id }} columns={2} submitLabel="Change distance" initial={{ km: b.verified_distance_km ?? "" }}
+                    fields={[{ name: "km", label: "Correct one-way km", type: "number", required: true, step: "0.01" }, { name: "reason", label: "Reason for change", required: true }]} /></div>
+                </details>
+              ) : (
                 <OpForm op="distance.verify" hidden={{ booking_id: b.id }} columns={2} submitLabel="Save verified distance"
                   fields={[{ name: "km", label: "Actual one-way km", type: "number", required: true, step: "0.01" }, { name: "reason", label: b.verified_distance_km != null ? "Reason for change" : "Note (optional)", required: b.verified_distance_km != null }]} />
               )}
