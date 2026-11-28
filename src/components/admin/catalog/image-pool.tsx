@@ -383,3 +383,56 @@ export function SelectImagesButton({ variantId, label, className }: { variantId:
     </>
   );
 }
+
+/** Every uploaded photo as a small tile right under "Images for Red": tap to add or remove, saved at once. */
+export function InlineImagePicker({ variantId, label }: { variantId: string | null; label: string }) {
+  const pool = useImagePool();
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (!pool || !pool.files.length) return null;
+  const current = pool.galleryOf(variantId).map((i) => i.storage_path);
+
+  function toggle(path: string) {
+    setError(null);
+    const on = current.includes(path);
+    if (!on && current.length >= GALLERY_MAX) return setError(`Up to ${GALLERY_MAX} photos.`);
+    const paths = on ? current.filter((p) => p !== path) : [...current, path];
+    start(async () => {
+      const r = await assignVariantImages({ productId: pool!.productId, variantId, paths, alt: `${pool!.productName} ${variantId ? label : ""}`.trim() });
+      if (!r.ok) return setError(r.error);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-dashed border-royal-200 bg-royal-50/40 p-2">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-deep">
+        {pending ? <Loader2 aria-hidden className="size-3.5 animate-spin" /> : <Images aria-hidden className="size-3.5 text-royal" />}
+        Tap the photos of {label || "this variant"} (tap again to remove)
+      </p>
+      <ul className="flex flex-wrap gap-2">
+        {pool.files.map((f) => {
+          const n = current.indexOf(f.path);
+          return (
+            <li key={f.path}>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => toggle(f.path)}
+                aria-pressed={n >= 0}
+                aria-label={n >= 0 ? `Photo ${n + 1} of ${label}. Tap to remove` : `Add photo to ${label}`}
+                className={cn("relative block size-16 overflow-hidden rounded-lg border-2 bg-muted disabled:opacity-70", n >= 0 ? "border-royal ring-2 ring-royal-100" : "border-transparent opacity-80 hover:border-royal-200 hover:opacity-100")}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnail */}
+                <img src={urlOf(f.path)} alt="" loading="lazy" className="size-full object-cover" />
+                {n >= 0 ? <span className="absolute top-1 left-1 grid size-5 place-items-center rounded-full bg-royal text-[0.65rem] font-bold text-white">{n + 1}</span> : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
+    </div>
+  );
+}

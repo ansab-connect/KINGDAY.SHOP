@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { moveItem, sortableClass, useDragSort } from "@/components/admin/catalog/drag-sort";
-import { SelectImagesButton } from "@/components/admin/catalog/image-pool";
+import { InlineImagePicker, SelectImagesButton } from "@/components/admin/catalog/image-pool";
 import { ProductImages } from "@/components/admin/catalog/product-images";
 import { inputClass } from "@/components/admin/form/fields";
 import type { AdminProductImage } from "@/features/catalog/admin-repo";
@@ -1115,6 +1115,7 @@ function ComboRow({
                   <p className="text-sm font-medium text-deep">Images for {label}</p>
                   {product && v.id ? <SelectImagesButton variantId={v.id} label={label} /> : null}
                 </div>
+                {product && v.id ? <InlineImagePicker variantId={v.id} label={label} /> : null}
                 {product && v.id ? (
                   <ProductImages
                     key={`${v.id}-${ownImages.map((x) => x.id).join(",")}`}
